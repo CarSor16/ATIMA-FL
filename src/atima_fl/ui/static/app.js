@@ -3,6 +3,31 @@ let catalog, defaults, token, datasetTasks = {};
 let previousLabelTask = "";
 let mode="simple";
 const $ = id => document.getElementById(id);
+
+// The UI theme is a local presentation preference; it never enters experiment plans.
+let theme = "light";
+try {
+  const saved = localStorage.getItem("atima-theme");
+  theme = saved === "light" || saved === "dark" ? saved
+    : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+} catch {
+  // Private browsing or restricted storage must not prevent the UI from loading.
+}
+function setTheme(next, persist = false) {
+  theme = next === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+  const text = uiText(theme === "dark" ? "Light mode" : "Dark mode");
+  const button = $("theme-toggle");
+  if (button) {
+    button.setAttribute("aria-label", text);
+    button.setAttribute("title", text);
+    $("theme-label").textContent = text;
+    $("theme-symbol").textContent = theme === "dark" ? "☀" : "☾";
+  }
+  if (persist) {
+    try { localStorage.setItem("atima-theme", theme); } catch {}
+  }
+}
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
 const titles = {dataset:"Dataset",partition:"Partizione",model:"Modello",optimizer:"Ottimizzatore",loss:"Loss",metrics:"Metriche",attack:"Attacco",aggregator:"Aggregazione"};
 function componentLabel(component,key){return component.translations?.[currentLanguage]?.[key] || component[key];}
@@ -16,7 +41,7 @@ function refreshLanguage(){
   $("component-list").replaceChildren();
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Scientific source");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
-  $("language").value=currentLanguage;setMode(mode);
+  $("language").value=currentLanguage;setTheme(theme);setMode(mode);
 }
 function node(tag, text, cls) { const el=document.createElement(tag); if(text!==undefined)el.textContent=uiText(text); if(cls)el.className=cls; return el; }
 function selectedTaskInfo() {
@@ -182,6 +207,8 @@ async function initialize(){
   const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
   for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
 }
+setTheme(theme);
+$("theme-toggle").addEventListener("click",()=>setTheme(theme === "dark" ? "light" : "dark", true));
 initialize().catch(error=>{$("catalog-status").textContent=uiText("Catalog unavailable");$("messages").append(node("p",error.message,"error"));});
 
 function recommendations(c){
