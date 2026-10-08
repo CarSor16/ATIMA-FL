@@ -66,6 +66,7 @@ def password_ssh(settings, script):
         )
         stdin, stdout, stderr = client.exec_command("python3 -", timeout=20)
         stdin.write(script)
+        stdin.flush()
         stdin.channel.shutdown_write()
         output = stdout.read(12 * 1024 * 1024 + 1).decode("utf-8")
         code = stdout.channel.recv_exit_status()
