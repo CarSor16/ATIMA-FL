@@ -390,3 +390,16 @@ fields fail closed (a result without enough provenance is not presumed compatibl
 The individual reports remain visible. Changing model architecture or seed on
 otherwise identical data is allowed for **descriptive** analysis only, with an
 explicit warning; these differences must not be interpreted as attack causality.
+
+
+### Shared responsive visual design
+
+All four live GUI pages (Designer, Components, Results, Guide) use one responsive
+navigation shell and theme token system. The original ▲ was replaced by
+\`brand-mark.svg\`, a first-party, scalable shield/federated-network symbol.
+The browser favicon uses the same icon. The Components page has client-side
+search over the **actual** loaded registry, Results summary counts derive from
+imported run metadata, and the Guide has shortcuts to existing functional pages.
+Page transitions preserve unsaved designer state. Light/dark and English/Italian
+preferences are retained, and mobile navigation remains keyboard-accessible.
+No fabricated metrics, training runs, cluster calls or credentials are added.

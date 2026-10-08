@@ -404,3 +404,51 @@ def test_manual_comparison_fails_closed_for_mismatched_dataset_metadata(gui):
     assert 'return;' in javascript.split('if(!validation.compatible)', 1)[1].split('const a=testMetrics', 1)[0]
     assert 'Comparison blocked · incompatible experiment data' in javascript
     assert 'id="manual-comparison-output"' in index
+
+
+
+def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
+    _, url = gui
+    page = urlopen(url + "/").read().decode("utf-8")
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    styles = urlopen(url + "/style.css").read().decode("utf-8")
+    translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+    with urlopen(url + "/brand-mark.svg") as response:
+        logo = response.read().decode("utf-8")
+        assert response.headers.get_content_type() == "image/svg+xml"
+    assert 'viewBox="0 0 96 96"' in logo
+    assert "federated clients" in logo
+    assert '<span class="mark" aria-hidden="true">▲</span>' not in page
+    assert 'class="brand-mark" src="/brand-mark.svg"' in page
+    assert 'rel="icon" type="image/svg+xml" href="/brand-mark.svg"' in page
+    assert 'href="#main-content"' in page
+    assert 'id="page-glyph"' in page
+    assert 'id="quick-new-experiment"' in page
+    assert 'id="component-search"' in page
+    assert 'id="results-overview"' in page
+    assert 'data-page-target="results"' in page
+    assert 'aria-current="page"' in page
+    assert 'const PAGE_META=' in script
+    assert 'function navigateTo(page,focusHeading=false)' in script
+    assert 'function updateResultsOverview(values)' in script
+    assert 'catalog[kind]||[]).filter(component=>' in script
+    assert 'query?" "+uiText("for search")' in script
+    assert 'renderComponentCatalog();' in script
+    assert 'localStorage.setItem("atima-theme", theme)' in script
+    assert 'const saved = localStorage.getItem("atima-theme")' in script
+    assert ':root[data-theme="dark"]' in styles
+    assert '.results-overview' in styles
+    assert '.step-shortcuts' in styles
+    assert '@media(max-width:780px)' in styles
+    assert 'prefers-reduced-motion' in styles
+    assert '"Search components": "Cerca componenti"' in translations
+
+
+def test_shared_page_asset_access_denies_unknown_and_external_host(gui):
+    _, url = gui
+    with pytest.raises(HTTPError) as missing:
+        urlopen(url + "/not-an-asset.svg")
+    assert missing.value.code == 404
+    with pytest.raises(HTTPError) as wrong_origin:
+        urlopen(Request(url + "/brand-mark.svg", headers={"Host": "external.example"}))
+    assert wrong_origin.value.code == 403
