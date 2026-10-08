@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "atima-fl"
+version = "0.2.0"
+description = "A modular experiment layer for federated learning attacks and defenses, built on Flower"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = ["numpy==2.2.6", "tomli-w>=1.2,<2"]
+
+[project.optional-dependencies]
+training = ["torch==2.8.0", "pandas==2.3.3", "pyarrow==21.0.0", "h5py==3.16.0", "scikit-learn==1.8.0"]
+flower = ["flwr[simulation]==1.36.0"]
+analysis = ["matplotlib>=3.9,<4", "h5py==3.16.0"]
+dev = ["pytest>=8.3,<9", "ruff>=0.13,<1"]
+
+[project.scripts]
+atima = "atima_fl.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/atima_fl"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "examples", "docs", ".github", ".gitignore", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

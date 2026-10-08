@@ -1,0 +1,62 @@
+[experiment]
+name = "update_scaling_DATE"
+dataset_root = "/path/to/prepared/edge-iiot"
+output_root = "/path/to/results"
+seed = 2026
+clients = 10
+rounds = 50
+local_epochs = 3
+batch_size = 128
+learning_rate = 0.001
+input_dim = 60
+num_classes = 5
+dataset = "edge_iiot"
+partition = "iid"
+model = "mlp"
+optimizer = "adam"
+loss = "cross_entropy"
+metrics = "classification"
+attack = "update_scaling"
+malicious_clients = [
+    0,
+    1,
+]
+attack_start = 10
+attack_end = 50
+aggregation = "fedavg"
+defenses = []
+minimum_rounds = 30
+patience = 10
+min_delta = 0.001
+recall_floor = 0.5
+coverage_window = 5
+cpu_budget = 48
+client_cpus = 4
+client_gpu_fraction = 0.5
+paired_clean = "/path/to/results/Baseline_DATE"
+paired_rounds = 0
+plugin_directory = ""
+
+[experiment.dataset_params]
+
+[experiment.partition_params]
+
+[experiment.model_params]
+hidden = [
+    64,
+    32,
+]
+
+[experiment.optimizer_params]
+weight_decay = 0.0
+
+[experiment.loss_params]
+label_smoothing = 0.0
+
+[experiment.metrics_params]
+probability_clip = 1e-07
+
+[experiment.attack_params]
+factor = 5.0
+
+[experiment.aggregation_params]
