@@ -15,6 +15,7 @@ training = ["torch==2.8.0", "pandas==2.3.3", "pyarrow==21.0.0", "h5py==3.16.0", 
 flower = ["flwr[simulation]==1.36.0"]
 analysis = ["matplotlib>=3.9,<4", "h5py==3.16.0"]
 dev = ["pytest>=8.3,<9", "ruff>=0.13,<1"]
+cluster = ["keyring>=25,<27", "paramiko>=3.4,<5"]
 
 [project.scripts]
 atima = "atima_fl.cli:main"
