@@ -106,3 +106,34 @@ def test_gui_exports_composed_defense_study_without_launch(gui):
             "adaptive_clipping",
             "coordinate_winsorization",
         ]
+
+
+def test_gui_task_catalog_label_dimensions_and_unavailable_local_inspection(gui):
+    _, url = gui
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    tasks = json.load(urlopen(url + "/api/dataset-tasks"))["edge_iiot"]
+    assert {name: spec["num_classes"] for name, spec in tasks.items()} == {
+        "prepared_5": 5, "binary": 2, "family_6": 6, "fine_15": 15
+    }
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    initial = json.load(urlopen(url + "/api/defaults"))
+    initial.update(dataset_params={"task": "binary"}, num_classes=2, name="Binary_fixture")
+    checked = json.load(urlopen(Request(
+        url + "/api/validate", json.dumps(initial).encode(), headers=headers
+    )))
+    assert checked["config"]["dataset_params"]["task"] == "binary"
+    assert checked["config"]["num_classes"] == 2
+    mismatch = dict(initial, num_classes=5)
+    with pytest.raises(HTTPError) as caught:
+        urlopen(Request(
+            url + "/api/validate", json.dumps(mismatch).encode(), headers=headers
+        ))
+    assert caught.value.code == 422
+    # The GUI refuses to invent labels when its process cannot read the prepared root.
+    with pytest.raises(HTTPError) as caught:
+        urlopen(Request(
+            url + "/api/inspect-dataset", json.dumps(initial).encode(), headers=headers
+        ))
+    assert caught.value.code == 422
+    assert b"inspect-labels" in urlopen(url + "/").read()
+    assert b"selectedTaskInfo" in urlopen(url + "/app.js").read()
