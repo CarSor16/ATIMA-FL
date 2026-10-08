@@ -162,6 +162,18 @@ components use `atima ui --plugins PATH`. No central component-name dispatch is
 needed. Plugins are trusted Python code; only load code you have reviewed.
 See [the component contract](docs/COMPONENTS.md) and [attack mechanisms](docs/ATTACKS.md).
 
+**Model and dataset discovery.** The registry discovers implementations in
+`src/atima_fl/components/models/*.py` and `datasets/*.py`, or the corresponding
+subfolders of an optional trusted plugin directory. Selecting a model's ID invokes
+that file's `build` hook, while selecting a dataset's ID invokes its `open` hook
+during data-dependent operations. Datasets can optionally provide `task_catalog`
+to populate the UI with reference class names and dimensions; this metadata is
+available even without downloaded data. It does **not** verify class presence in
+real files. `dataset_root` is still the execution cluster's actual prepared-data
+directory, verified by preflight. The simplified UI displays selected defense
+stages in a deterministic order; stage order remains editable in an exported TOML
+if a specific scientific protocol requires it.
+
 ## Select and compare defenses
 
 Choose multiple ordered preprocessing stages in Simple mode; tune their parameters
