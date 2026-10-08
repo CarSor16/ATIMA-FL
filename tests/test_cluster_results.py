@@ -135,7 +135,8 @@ def test_stored_password_path_is_selected_without_shell_or_password_logs(tmp_pat
     outcome = sync_cluster_results(tmp_path)
     assert outcome["imported"] == 1
     assert len(invoked) == 1
-    assert "python3" in invoked[0][1]
+    assert "import json" in invoked[0][1]
+    assert "validation_history.json" in invoked[0][1]
 
 
 def test_password_ssh_returns_none_without_stored_credential(monkeypatch):
@@ -146,3 +147,123 @@ def test_password_ssh_returns_none_without_stored_credential(monkeypatch):
     assert password_ssh(
         {"ssh_host": "cluster.example.edu", "ssh_user": "researcher"}, "print('ok')"
     ) is None
+
+
+
+def test_import_round_histories_and_make_verified_model_pairs(tmp_path):
+    from atima_fl.ui.app import results
+
+    config(tmp_path)
+    identity = {"engine": "same-source"}
+    runtime = {"python": "3.12", "device": "cpu"}
+    classes = ["benign", "dos"]
+    runs = []
+    for name, attack, model, pair, legacy in [
+        ("Baseline", "none", "mlp", "pair-1", False),
+        ("LabelFlip", "label_flip", "mlp", "pair-1", False),
+        ("Baseline_CNN", "none", "lopez_cnn", "pair-2", True),
+        ("Wrong_source", "alie", "mlp", "pair-1", True),
+    ]:
+        manifest = {
+            "status": "complete", "last_valid_round": 2, "pair_id": pair,
+            "source_identity": identity if name != "Wrong_source" else {"engine": "different"},
+            "runtime": runtime,
+            "config": {"attack": attack, "model": model},
+            "dataset_audit": {"classes": classes},
+        }
+        record = {
+            "id": name, "manifest": manifest,
+            "final_metrics": {"test": {
+                "accuracy": 0.8, "macro_f1": 0.7,
+                "per_class": {"benign": {"recall": 0.9}, "dos": {"recall": 0.6}},
+                "confusion_matrix": [[9, 1], [4, 6]]
+            }},
+        }
+        if not legacy:
+            record["validation_history"] = [
+                {"round": 1, "accuracy": 0.5, "macro_f1": 0.4, "recall": [0.9, 0.3],
+                 "metadata": {"secret": "must not be imported"}},
+                {"round": 2, "accuracy": 0.8, "macro_f1": 0.7, "recall": [0.9, 0.6]},
+            ]
+        runs.append(record)
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps(runs))
+
+    imported = sync_cluster_results(tmp_path, runner=runner)
+    assert imported["imported"] == 4
+    assert "validation_history.json" in imported["files"]
+    file = tmp_path / "results/LabelFlip/validation_history.json"
+    data = json.loads(file.read_text())
+    assert [row["round"] for row in data] == [1, 2]
+    assert "metadata" not in file.read_text()
+    assert not (tmp_path / "results/LabelFlip/trajectory.h5").exists()
+    current = {row["id"]: row for row in results(tmp_path)}
+    assert current["LabelFlip"]["baseline_id"] == "Baseline"
+    assert current["Wrong_source"]["baseline_id"] is None
+    assert len(current["LabelFlip"]["history"]) == 2
+    assert current["Baseline_CNN"]["history"] == []
+
+
+@pytest.mark.parametrize("history", [
+    [{"round": 2, "macro_f1": 0.5}, {"round": 1, "macro_f1": 0.4}],
+    [{"round": 1, "macro_f1": 2.0}],
+    [{"round": 1, "recall": [0.5, -0.1]}],
+    [{"round": 1, "macro_f1": float("nan")}],
+    {"round": 1},
+    [{"round": True}],
+])
+def test_invalid_history_rejected_without_partial_result_import(tmp_path, history):
+    config(tmp_path)
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps([{
+            "id": "Clean", "manifest": {"status": "complete", "last_valid_round": 2},
+            "final_metrics": {}, "validation_history": history,
+        }]))
+
+    with pytest.raises(ValueError):
+        sync_cluster_results(tmp_path, runner=runner)
+    assert not (tmp_path / "results").exists()
+
+
+def test_reimport_removes_stale_validation_history(tmp_path):
+    config(tmp_path)
+    records = []
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps([{
+            "id": "Reused", "manifest": {"status": "complete", "last_valid_round": 1},
+            "final_metrics": {},
+            **({"validation_history": [{"round": 1, "macro_f1": 0.7}]} if not records else {}),
+        }]))
+
+    sync_cluster_results(tmp_path, runner=runner)
+    file = tmp_path / "results/Reused/validation_history.json"
+    assert file.is_file()
+    records.append(1)
+    sync_cluster_results(tmp_path, runner=runner)
+    assert not file.exists()
+
+
+def test_results_api_returns_compact_histories_and_verified_pair_id(tmp_path):
+    from atima_fl.ui.app import results
+    root = tmp_path / "results"
+    for name, attack, source in [("Clean", "none", "v1"), ("Attack", "alie", "v1"),
+                                 ("Unmatched", "alie", "v2")]:
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "manifest.json").write_text(json.dumps({
+            "status": "complete", "pair_id": "paired", "last_valid_round": 1,
+            "source_identity": {"version": source}, "runtime": {"device": "cpu"},
+            "config": {"attack": attack, "model": "mlp"},
+        }))
+        (folder / "validation_history.json").write_text(json.dumps([
+            {"round": 1, "macro_f1": 0.6, "accuracy": 0.7,
+             "per_class": {"benign": {"recall": 0.2}}, "recall": [0.8, 0.4]}
+        ]))
+    values = {v["id"]: v for v in results(tmp_path)}
+    assert values["Attack"]["baseline_id"] == "Clean"
+    assert values["Unmatched"]["baseline_id"] is None
+    assert values["Clean"]["history"] == [{"round": 1, "accuracy": 0.7,
+                                              "macro_f1": 0.6, "recall": [0.8, 0.4]}]

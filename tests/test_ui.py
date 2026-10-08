@@ -337,3 +337,24 @@ def test_readable_label_selector_and_grouped_component_catalog(gui):
     assert '"Data & partitions": "Dati e partizioni"' in translations
     assert '"Reference labels · not verified against cluster data"' in translations
 
+
+
+
+def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    assert 'id="result-comparisons"' in html
+    assert "function renderResults(values)" in script
+    assert "function roundChart(value,baseline)" in script
+    assert "function confusionSection(value)" in script
+    assert "function classMetricsSection(value, baseline)" in script
+    assert "function deltaScore(value, reference, percent=true)" in script
+    assert "value.baseline_id" in script
+    assert 'metricSelect.value="macro_f1"' in script
+    assert "createElementNS" in script
+    assert "JSON.stringify(value.metrics,null,2)" in script
+    assert "innerHTML" not in script
+    assert ".confusion-matrix" in css
+    assert ".round-chart" in css
