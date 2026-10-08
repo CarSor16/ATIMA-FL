@@ -80,6 +80,15 @@ class Handler(BaseHTTPRequestHandler):
                         "token": self.server.token,
                     },
                 )
+            if path == "/api/dataset-tasks":
+                registry = Registry(self.server.plugins)
+                tasks = {}
+                for component in registry.catalog()["dataset"]:
+                    plugin = registry.get("dataset", component["id"])
+                    hook = plugin.hooks.get("task_catalog")
+                    if hook:
+                        tasks[component["id"]] = hook()
+                return self.respond(200, tasks)
             if path == "/api/defaults":
                 config = ExperimentConfig(
                     output_root=str(self.server.workspace / "results"),
@@ -128,6 +137,16 @@ class Handler(BaseHTTPRequestHandler):
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
+            if self.path == "/api/inspect-dataset":
+                registry = config.registry()
+                plugin = registry.get("dataset", config.dataset)
+                dataset = plugin.hooks["open"](
+                    config, registry.parameters("dataset", config.dataset, config.dataset_params)
+                )
+                inspect = getattr(dataset, "inspect", None)
+                if inspect is None:
+                    raise ValueError(f"Dataset {config.dataset} does not provide label inspection")
+                return self.respond(200, inspect())
             if self.path == "/api/validate":
                 warnings = []
                 if config.minimum_rounds > config.rounds:
