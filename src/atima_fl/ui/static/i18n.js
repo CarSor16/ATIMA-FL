@@ -2,9 +2,7 @@
 const UI_TRANSLATIONS = {
   "Dark mode": "Modalità scura",
   "Light mode": "Modalità chiara",
-  "Move up": "Sposta su",
-  "Move down": "Sposta giù",
-  "Choose multiple stages and their order. Parameters are available in Advanced.": "Scegli più stadi e il loro ordine. I parametri sono nella modalità Avanzata.",
+  "Select the defenses to apply. They run in the displayed order; parameters are available in Advanced.": "Seleziona le difese da applicare. Vengono eseguite nell’ordine mostrato; i parametri sono disponibili in modalità Avanzata.",
   "Suggested protections for this attack": "Protezioni candidate per questo attacco",
   "Enable an attack to see candidate protections.": "Attiva un attacco per vedere le protezioni candidate.",
   "Candidates to test, not guaranteed solutions. Effects depend on non-IID data and the malicious fraction in each server group.": "Candidate da testare, senza garanzie. Gli effetti dipendono dai dati non-IID e dalla frazione malevola in ciascun gruppo di server.",
