@@ -38,7 +38,7 @@ def deployment_defaults(workspace):
         raise ValueError(
             "deployment_defaults.json must contain only dataset_root and output_root"
         )
-    if any(not isinstance(value, str) or not value.strip() or "\\x00" in value for value in values.values()):
+    if any(not isinstance(value, str) or not value.strip() or chr(0) in value for value in values.values()):
         raise ValueError("Deployment paths must be non-empty strings without null bytes")
     return values
 
