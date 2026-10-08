@@ -31,6 +31,84 @@ function setTheme(next, persist = false) {
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
 const titles = {dataset:"Dataset",partition:"Partizione",model:"Modello",optimizer:"Ottimizzatore",loss:"Loss",metrics:"Metriche",attack:"Attacco",aggregator:"Aggregazione"};
 function componentLabel(component,key){return component.translations?.[currentLanguage]?.[key] || component[key];}
+
+const CATALOG_GROUPS = [
+  {title:"Data & partitions",kinds:[["dataset","Datasets"],["partition","Partitions"]]},
+  {title:"Models & learning",kinds:[["model","Models"],["optimizer","Optimizers"],["loss","Loss functions"],["metrics","Metrics"]]},
+  {title:"Attacks & protections",kinds:[["attack","Attacks"],["defense","Defenses"],["aggregator","Aggregation methods"]]}
+];
+const TASK_TITLES = {
+  prepared_5:["Prepared dataset · 5 classes","Dataset preparato · 5 classi"],
+  binary:["Binary detection · 2 classes","Rilevamento binario · 2 classi"],
+  family_6:["Attack families · 6 classes","Famiglie di attacco · 6 classi"],
+  fine_15:["Detailed attacks · 15 classes","Attacchi dettagliati · 15 classi"]
+};
+const FRIENDLY_LABELS_IT = {
+  Normal:"Traffico normale",Attack:"Traffico di attacco",
+  "DoS/DDoS":"Denial of Service (DoS/DDoS)",
+  "Information Gathering":"Raccolta di informazioni",
+  MITM:"Intercettazione (MITM)",Injection:"Attacchi injection",
+  benign:"Traffico normale",dos:"Denial of Service",
+  infog:"Raccolta informazioni",inject:"Injection"
+};
+function readableClassName(raw){
+  if(currentLanguage==="it" && FRIENDLY_LABELS_IT[raw])return FRIENDLY_LABELS_IT[raw];
+  return String(raw).replace(/_/g," ");
+}
+function readableTaskName(task,info){
+  const translated=TASK_TITLES[task];
+  return translated?translated[currentLanguage==="it"?1:0]:
+    String(task).replace(/_/g," ")+" · "+(info?.num_classes ?? "?")+" "+uiText("classes");
+}
+function refreshTaskOptions(){
+  const dataset=$("dataset")?.value;
+  const task=$("dataset_params")?.querySelector('[data-param="task"]');
+  if(task)for(const option of task.options)
+    option.textContent=readableTaskName(option.value,datasetTasks[dataset]?.[option.value]);
+  if($("attack")?.value==="label_flip"){
+    const info=selectedTaskInfo().info;
+    if(info)for(const name of ["source_class","destination_class"]){
+      const select=$("attack_params")?.querySelector('[data-param="'+name+'"]');
+      if(select?.tagName==="SELECT")for(const option of select.options)
+        option.textContent=option.value+" · "+readableClassName(info.class_names[Number(option.value)]);
+    }
+  }
+}
+function renderComponentCatalog(){
+  const root=$("component-list");
+  root.replaceChildren();
+  for(const [index,group] of CATALOG_GROUPS.entries()){
+    const section=node("details",undefined,"catalog-group");
+    section.open=index===0;
+    const heading=node("summary",undefined,"catalog-group-heading");
+    const total=group.kinds.reduce((n,[kind])=>n+(catalog[kind]?.length||0),0);
+    heading.append(node("strong",group.title),node("span",total+" "+uiText("components"),"catalog-count"));
+    section.append(heading);
+    const subgroups=node("div",undefined,"catalog-subgroups");
+    for(const [kind,title] of group.kinds){
+      const items=catalog[kind]||[];
+      if(!items.length)continue;
+      const subgroup=node("details",undefined,"catalog-subgroup");
+      const summary=node("summary",undefined,"catalog-subheading");
+      summary.append(node("strong",title),node("span",String(items.length),"catalog-count"));
+      subgroup.append(summary);
+      const grid=node("div",undefined,"catalog-grid");
+      for(const component of items){
+        const card=node("article",undefined,"card catalog-component");
+        card.append(node("h3",componentLabel(component,"title")),node("p",componentLabel(component,"description")));
+        for(const url of component.references||[]){
+          const link=node("a","Scientific source");link.href=url;
+          link.target="_blank";link.rel="noopener";
+          card.append(link);
+        }
+        grid.append(card);
+      }
+      subgroup.append(grid);subgroups.append(subgroup);
+    }
+    section.append(subgroups);root.append(section);
+  }
+}
+
 function refreshLanguage(){
   localizeDocument();
   for(const entries of Object.values(groups))for(const [kind,field] of entries){
@@ -40,8 +118,9 @@ function refreshLanguage(){
   for(const component of catalog.defense){const input=$("defense-"+component.id);input.parentElement.lastChild.nodeValue=" "+componentLabel(component,"title");}
   for(const block of $("defense-components").children){const component=catalog.defense.find(c=>c.id===block.dataset.defense);block.querySelector(".defense-name").textContent=componentLabel(component,"title");}
   updateDefensePipeline();
-  $("component-list").replaceChildren();
-  for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Scientific source");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
+  refreshTaskOptions();
+  updateTaskUi();
+  renderComponentCatalog();
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
   $("language").value=currentLanguage;setTheme(theme);setMode(mode);
 }
@@ -62,7 +141,17 @@ function updateTaskUi() {
   }
   $("num_classes").value=String(info.num_classes);
   $("num_classes").readOnly=true;
-  target.textContent=`${task}: ${info.num_classes} classes — ${info.class_names.map((name,id)=>id+" · "+name).join(" | ")}. Reference mapping only; inspect data to verify availability.`;
+  target.replaceChildren();
+  target.append(node("strong",readableTaskName(task,info),"task-title"),
+    node("span","Reference labels · not verified against cluster data","task-note"));
+  const list=node("div",undefined,"task-label-grid");
+  for(const [index,source] of info.class_names.entries()){
+    const pill=node("span",undefined,"task-label-pill");
+    pill.title=source;
+    pill.append(node("span",String(index),"label-index"),node("span",readableClassName(source),"label-name"));
+    list.append(pill);
+  }
+  target.append(list);
   if(previousLabelTask!==$("dataset").value+":"+task){
     previousLabelTask=$("dataset").value+":"+task;
     const attack=catalog?.attack?.find(item=>item.id===$("attack")?.value);
@@ -81,8 +170,8 @@ function parameterFields(component, target, values={}) {
     const label=node("label",schema.description || key);
     let input;
     const labelNames=component.id==="label_flip" && ["source_class","destination_class"].includes(key) ? selectedTaskInfo().info?.class_names : null;
-    if(labelNames) { input=node("select"); for(let i=0;i<labelNames.length;i++) { const option=node("option",i+" · "+labelNames[i]);option.value=String(i);input.append(option); } }
-    else if(schema.choices) { input=node("select"); for(const choice of schema.choices) { const option=node("option",String(choice)); option.value=String(choice); input.append(option); } }
+    if(labelNames) { input=node("select"); for(let i=0;i<labelNames.length;i++) { const option=node("option",i+" · "+readableClassName(labelNames[i]));option.value=String(i);input.append(option); } }
+    else if(schema.choices) { input=node("select"); for(const choice of schema.choices) { const option=node("option",key==="task"?readableTaskName(choice,datasetTasks[component.id]?.[choice]):String(choice)); option.value=String(choice); input.append(option); } }
     else { input=node("input"); input.type=["integer","number"].includes(schema.type)?"number":"text"; if(input.type==="number") { input.step=schema.type==="integer"?"1":"any"; if(schema.minimum!==undefined)input.min=schema.minimum; if(schema.maximum!==undefined)input.max=schema.maximum; } }
     const value=values[key]===undefined?schema.default:values[key]; input.value=schema.type==="array"?JSON.stringify(value):String(value);
     input.dataset.param=key; input.dataset.type=schema.type; label.append(input); target.append(label);
@@ -333,7 +422,7 @@ async function initialize(){
   $("attack-enabled").addEventListener("change",()=>{if($("attack-enabled").checked && $("attack").value==="none"){const choice=catalog.attack.find(c=>c.id!=="none");if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}}});
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});
   initializeDefenses();
-  for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Fonte scientifica");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
+  renderComponentCatalog();
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
   $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("inspect-labels").addEventListener("click",inspectLabels);

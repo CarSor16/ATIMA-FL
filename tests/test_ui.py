@@ -313,3 +313,27 @@ def test_gui_exports_symbolic_cluster_dataset_root_without_local_data(gui):
     index = urlopen(url + "/").read().decode("utf-8")
     assert 'placeholder="env:ATIMA_EDGE_IIOT_ROOT"' in index
     assert "No local data is needed to export a plan." in index
+
+def test_readable_label_selector_and_grouped_component_catalog(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+
+    assert 'id="component-list" class="catalog-accordion"' in html
+    assert 'id="dataset-label-preview" class="task-label-preview"' in html
+    assert "function renderComponentCatalog()" in script
+    assert 'node("details",undefined,"catalog-group")' in script
+    assert 'node("details",undefined,"catalog-subgroup")' in script
+    assert '"defense","Defenses"' in script
+    assert "function readableTaskName(task,info)" in script
+    assert "function readableClassName(raw)" in script
+    assert 'node("span",String(index),"label-index")' in script
+    assert 'option.value=String(choice)' in script
+    assert 'option.value=String(i)' in script
+    assert '.task-label-pill' in css
+    assert '.catalog-subgroup' in css
+    assert '"Data & partitions": "Dati e partizioni"' in translations
+    assert '"Reference labels · not verified against cluster data"' in translations
+
