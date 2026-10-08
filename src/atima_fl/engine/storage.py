@@ -4,13 +4,7 @@ import os
 import numpy as np
 import h5py
 from atima_fl.core.numerics import check_arrays
-
-
-def atomic_json(path, value):
-    path = Path(path)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + chr(10), encoding="utf-8")
-    os.replace(temporary, path)
+from atima_fl.core.io import atomic_json as atomic_json
 
 
 def raw_path(run, round_id, client):

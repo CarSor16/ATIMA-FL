@@ -4,7 +4,7 @@ from pathlib import Path, PurePosixPath
 import json
 import zipfile
 from dataclasses import replace
-from .storage import atomic_json
+from atima_fl.core.io import atomic_json
 
 
 def save_plan(config, workspace):
