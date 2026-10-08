@@ -220,3 +220,29 @@ PLUGIN = Component(
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+def test_gui_exports_symbolic_cluster_dataset_root_without_local_data(gui):
+    _, url = gui
+    response = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": response["token"]}
+    config = json.load(urlopen(url + "/api/defaults"))
+    config.update(
+        name="ClusterSymbolic_fixture",
+        dataset_root="env:ATIMA_EDGE_IIOT_ROOT",
+        dataset_params={"task": "binary"},
+        num_classes=2,
+    )
+    body = json.dumps(config).encode("utf-8")
+    validated = json.load(urlopen(Request(
+        url + "/api/validate", body, headers=headers
+    )))
+    assert validated["config"]["dataset_root"] == "env:ATIMA_EDGE_IIOT_ROOT"
+    assert validated["checks"]["dataset"] == "not_checked"
+    created = json.load(urlopen(Request(url + "/api/plans", body, headers=headers)))
+    with zipfile.ZipFile(io.BytesIO(urlopen(url + created["download"]).read())) as archive:
+        toml = archive.read("experiment.toml").decode("utf-8")
+        assert 'dataset_root = "env:ATIMA_EDGE_IIOT_ROOT"' in toml
+    index = urlopen(url + "/").read().decode("utf-8")
+    assert 'placeholder="env:ATIMA_EDGE_IIOT_ROOT"' in index
+    assert "No local data is needed to export a plan." in index
