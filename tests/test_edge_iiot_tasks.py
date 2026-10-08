@@ -129,3 +129,37 @@ def test_label_mapping_rejects_unknown_and_retains_reference_identity():
     assert project_labels(["Normal", "MITM"], "family_6").tolist() == [0, 3]
     with pytest.raises(ValueError, match="unknown source labels"):
         project_labels(["unknown"], "fine_15")
+
+
+def test_cluster_dataset_reference_resolves_only_when_dataset_is_opened(
+    prepared, monkeypatch, tmp_path
+):
+    # No prepared dataset must be accessible to the Windows web designer.
+    from atima_fl.core.dataset_paths import resolve_dataset_root
+
+    symbolic = "env:ATIMA_EDGE_IIOT_ROOT"
+    config = ExperimentConfig(
+        dataset_root=symbolic,
+        dataset_params={"task": "binary"},
+        num_classes=2,
+    ).validate()
+    assert config.resolved()["dataset_root"] == symbolic
+
+    monkeypatch.delenv("ATIMA_EDGE_IIOT_ROOT", raising=False)
+    with pytest.raises(ValueError, match="ATIMA_EDGE_IIOT_ROOT is not set"):
+        open_dataset(config)
+    monkeypatch.setenv("ATIMA_EDGE_IIOT_ROOT", str(prepared))
+    resolved = open_dataset(config)
+    assert resolved.reader.root == prepared.resolve()
+    assert resolved.audit()["task"] == "binary"
+
+    monkeypatch.setenv("ATIMA_EDGE_IIOT_ROOT", str(tmp_path / "missing"))
+    with pytest.raises(ValueError, match="does not exist"):
+        resolve_dataset_root(symbolic)
+    monkeypatch.setenv("ATIMA_EDGE_IIOT_ROOT", "relative/dataset")
+    with pytest.raises(ValueError, match="absolute"):
+        resolve_dataset_root(symbolic)
+    with pytest.raises(ValueError, match="Invalid dataset reference"):
+        resolve_dataset_root("env:HOME")
+    with pytest.raises(ValueError, match="Invalid dataset reference"):
+        resolve_dataset_root("env:ATIMA_EDGE_IIOT_ROOT;rm -rf /")
