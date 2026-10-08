@@ -77,6 +77,15 @@ prepared dataset directory. See [Edge-IIoT task documentation](docs/EDGE_IIOT_TA
 The existing Dirichlet plugin reads **already-saved alpha=0.5 shards**, not
 new arbitrary non-IID partitions.
 
+When preparing a plan without local data, the Edge-IIoT dataset path may be
+`env:ATIMA_EDGE_IIOT_ROOT` instead of a local or cluster-specific absolute path.
+The exported TOML retains that reference. Inside the **cluster's allocated job**,
+set `ATIMA_EDGE_IIOT_ROOT` to the verified, absolute prepared-data directory
+before `bash run_cluster.sh preflight`. It is not resolved during web validation,
+and does not automatically download or preprocess datasets. The older research
+repository's NF-V2 CSV configurations are separate from this Edge-IIoT Parquet
+plugin. See [cluster dataset sources and migration](docs/CLUSTER_DATASET_SOURCES.md).
+
 ## Aggregation topology
 
 `servers=1` preserves ordinary central aggregation. For `servers>1`, clients
