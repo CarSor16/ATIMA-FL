@@ -160,6 +160,47 @@ records the exact active stage order; disabled stages are excluded. Changing
 the UI order changes the scientific preprocessing pipeline, so record it
 as an experimental variable.
 
+## Read-only cluster results synchronization
+
+**Workspace Results** can now import run summaries directly from the university
+cluster using your workstation's existing **OpenSSH** credentials. This feature
+is opt-in and does not connect on startup. Put a local-only
+`cluster_connection.json` in the **same ATIMA workspace** used for
+`deployment_defaults.json`:
+
+```json
+{
+  "ssh_host": "YOUR_REAL_CLUSTER_SSH_HOST",
+  "ssh_user": "YOUR_CLUSTER_LOGIN",
+  "remote_results_root": "/nas/home/gruppo-8/repo-gruppo-8/ATIMA-FL/results"
+}
+```
+
+Replace the SSH hostname and username with verified login details. The results
+directory above is the project's documented intended output location, not a
+claim that experiment results currently exist there. This JSON must **never**
+be committed to GitHub or contain passwords, tokens or private keys.
+
+1. Check normal SSH access from Windows first (`ssh YOUR_CLUSTER_LOGIN@YOUR_REAL_CLUSTER_SSH_HOST`).
+   The host key must already be trusted in your OpenSSH `known_hosts`; use
+   an SSH key or an agent, not password prompts in the ATIMA app.
+2. Make sure VPN / university network access is available and the cluster's
+   login node permits SSH. The cluster does not need GPU allocations just
+   to read result summaries, but it must be reachable.
+3. Open **Workspace Results → Import summaries from cluster**. ATIMA invokes
+   the local `ssh` executable with strict host-key checking and noninteractive
+   authentication. It reads at most 100 run directories, never writes remotely,
+   and imports only `manifest.json` and `final_metrics.json` into local
+   `workspace/results/<experiment>/`. Local experiment files are not deleted.
+4. **Refresh local results** reads the downloaded summary copies.
+
+This is not a remote file browser or a mounted filesystem; it does not pull
+`trajectory.h5`, client artifacts or prepared datasets. Full paired
+trajectory analysis still requires importing the appropriate HDF5 artifacts
+separately using an approved university transfer method. Failures show a
+generic error rather than exposing SSH stderr. There is no SSH password
+storage, remote command configuration, reverse connection or background poll.
+
 ## Workflow
 
 1. Choose components, seed, dataset paths and resource budget in the designer.
