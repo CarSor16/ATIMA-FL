@@ -1,5 +1,6 @@
 "use strict";
 let catalog, defaults, token, datasetTasks = {};
+let clusterDatasetInventory = null;
 let previousLabelTask = "";
 let chosenComparison = {first: null, second: null};
 let mode="simple";
@@ -84,11 +85,17 @@ const CATALOG_GROUPS = [
   {title:"Attacks & protections",kinds:[["attack","Attacks"],["defense","Defenses"],["aggregator","Aggregation methods"]]}
 ];
 const TASK_TITLES = {
-  prepared_5:["Prepared dataset · 5 classes","Dataset preparato · 5 classi"],
-  binary:["Binary detection · 2 classes","Rilevamento binario · 2 classi"],
-  family_6:["Attack families · 6 classes","Famiglie di attacco · 6 classi"],
-  fine_15:["Detailed attacks · 15 classes","Attacchi dettagliati · 15 classi"]
+  prepared_5:["Edge-IIoT · 5 classes · Prepared macro-classes","Edge-IIoT · 5 classi · Macroclassi preparate"],
+  binary:["Edge-IIoT · 2 classes · Binary","Edge-IIoT · 2 classi · Binario"],
+  family_6:["Edge-IIoT · 6 classes · Attack families","Edge-IIoT · 6 classi · Famiglie di attacco"],
+  fine_15:["Edge-IIoT · 15 classes · Detailed attacks","Edge-IIoT · 15 classi · Tipi di attacco"]
 };
+const NF_DATASETS = [
+  ["nf_cicids2018","NF-CSE-CIC-IDS2018-v2"],
+  ["nf_unsw_nb15","NF-UNSW-NB15-v2"],
+  ["nf_botiot","NF-BoT-IoT-v2"],
+  ["nf_toniot","NF-ToN-IoT-v2"]
+];
 const FRIENDLY_LABELS_IT = {
   Normal:"Traffico normale",Attack:"Traffico di attacco",
   "DoS/DDoS":"Denial of Service (DoS/DDoS)",
@@ -109,8 +116,14 @@ function readableTaskName(task,info){
 function refreshTaskOptions(){
   const dataset=$("dataset")?.value;
   const task=$("dataset_params")?.querySelector('[data-param="task"]');
-  if(task)for(const option of task.options)
+  if(task)for(const option of task.options){
     option.textContent=readableTaskName(option.value,datasetTasks[dataset]?.[option.value]);
+    if(dataset==="edge_iiot"){
+      const allowed=clusterDatasetInventory?.datasets?.edge_iiot?.task_availability?.[option.value];
+      option.disabled=Boolean(allowed && !allowed.available && option.value!==task.value);
+      if(allowed && !allowed.available)option.textContent+=" · "+uiText("Unavailable on cluster");
+    }
+  }
   if($("attack")?.value==="label_flip"){
     const info=selectedTaskInfo().info;
     if(info)for(const name of ["source_class","destination_class"]){
@@ -120,6 +133,76 @@ function refreshTaskOptions(){
     }
   }
 }
+
+function addResearchDatasetOptions(){
+  // Visible reference options are disabled until a compatible, audited ATIMA
+  // data plugin exists. An NF-V2 raw CSV cannot be passed to the Edge plugin.
+  const select=$("dataset");
+  const group=document.createElement("optgroup");
+  group.label=uiText("NF-V2 datasets · not yet executable");
+  for(const [,title] of NF_DATASETS){
+    for(const variant of ["Binary · 2 classes","Macro-classes · based on source Attack labels"]){
+      const option=node("option",title+" · "+variant+" · "+uiText("Adapter required"));
+      option.disabled=true;
+      option.value="";
+      group.append(option);
+    }
+  }
+  select.append(group);
+}
+function renderClusterDatasetInventory(){
+  const target=$("cluster-dataset-inventory");
+  target.replaceChildren();
+  if(!clusterDatasetInventory)return;
+  const records=clusterDatasetInventory.datasets||{};
+  for(const [key,title] of [["edge_iiot","Edge-IIoT"],
+      ...NF_DATASETS]){
+    const info=records[key];
+    const card=node("article",undefined,"dataset-inventory-item");
+    card.append(node("strong",title));
+    if(!info){
+      card.append(node("p","Path not configured in cluster workspace.","task-note"));
+      if(key!=="edge_iiot")
+        card.append(node("p","Binary (2 classes) · Macro-classes (Attack column) · adapter required.","task-note"));
+    }else{
+      card.append(node("p",info.found?"File or prepared directory found on cluster.":
+        "Configured path not found on cluster.","task-note"));
+      if(key==="edge_iiot"){
+        const labels=info.prepared_classes;
+        if(labels?.length)card.append(node("p","Prepared labels: "+labels.join(", "),"task-note"));
+        if(info.source_complete){
+          card.append(node("p","All split fine_label columns inspected · "+
+            info.rows_scanned+" records.","task-note"));
+          const available=Object.entries(info.task_availability||{}).filter(([,state])=>state.available)
+            .map(([name])=>readableTaskName(name,datasetTasks.edge_iiot?.[name]));
+          card.append(node("p","Verified tasks: "+(available.join(" · ")||"none"),"task-note"));
+        }else card.append(node("p","Fine-label projections not verified; check remote Python pandas/pyarrow.","task-note"));
+      }else{
+        card.append(node("p","Binary (2 classes) and source Attack macro-labels; training adapter not installed.","task-note"));
+        if(info.source_labels?.length)
+          card.append(node("p","Observed in first "+info.rows_scanned+" rows: "+
+            info.source_labels.join(", "),"task-note"));
+      }
+      if(info.note)card.append(node("p",info.note,"task-note"));
+    }
+    target.append(card);
+  }
+}
+async function discoverClusterDatasets(){
+  const button=$("discover-cluster-datasets"),message=$("cluster-dataset-message");
+  button.disabled=true;
+  message.textContent=uiText("Reading dataset metadata from the cluster over SSH…");
+  try{
+    clusterDatasetInventory=await request("/api/discover-cluster-datasets",{});
+    renderClusterDatasetInventory();
+    refreshTaskOptions();
+    updateTaskUi();
+    message.textContent=uiText("Cluster dataset metadata loaded. No dataset files transferred.");
+  }catch(error){
+    message.textContent=uiText("Cluster metadata inspection unavailable")+": "+error.message;
+  }finally{button.disabled=false;}
+}
+
 function renderComponentCatalog(){
   const query=String($("component-search")?.value||"").trim().toLocaleLowerCase();
   let visible=0;
@@ -180,6 +263,11 @@ function refreshLanguage(){
   updateDefensePipeline();
   refreshTaskOptions();
   updateTaskUi();
+  const nfGroup=$("dataset")?.querySelector("optgroup");
+  if(nfGroup){nfGroup.label=uiText("NF-V2 datasets · not yet executable");
+    for(const option of nfGroup.children)if(option.value==="")option.textContent=uiText(option.textContent);
+  }
+  renderClusterDatasetInventory();
   renderComponentCatalog();
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
   $("language").value=currentLanguage;setTheme(theme);setMode(mode);
@@ -203,8 +291,14 @@ function updateTaskUi() {
   $("num_classes").value=String(info.num_classes);
   $("num_classes").readOnly=true;
   target.replaceChildren();
+  const inspected=clusterDatasetInventory?.datasets?.[$("dataset").value];
+  const state=inspected?.task_availability?.[task];
+  const verified=Boolean(inspected?.source_complete && state?.available);
+  const note=verified?"Labels checked against training/validation/test on cluster":
+    state&&!state.available?"Task not supported by observed source labels on cluster":
+    "Reference label names only · inspect the cluster to verify";
   target.append(node("strong",readableTaskName(task,info),"task-title"),
-    node("span","Reference labels · not verified against cluster data","task-note"));
+    node("span",note,"task-note"));
   const list=node("div",undefined,"task-label-grid");
   for(const [index,source] of info.class_names.entries()){
     const pill=node("span",undefined,"task-label-pill");
@@ -907,6 +1001,7 @@ async function initialize(){
   defaults.name="Baseline_MLP";
   for(const [key,value] of Object.entries(defaults))if($(key))$(key).value=Array.isArray(value)?value.join(","):value;
   for(const [target,entries] of Object.entries(groups))for(const [kind,field] of entries)selection(kind,field,$(target));
+  addResearchDatasetOptions();
   $("malicious-count").value=defaults.malicious_clients.length;
   $("attack-enabled").checked=defaults.attack!=="none";
   $("mode-simple").addEventListener("click",()=>setMode("simple"));$("mode-advanced").addEventListener("click",()=>setMode("advanced"));
@@ -917,6 +1012,7 @@ async function initialize(){
     }
     updateExperimentName();
   });
+  $("discover-cluster-datasets").addEventListener("click",discoverClusterDatasets);
   $("auto-experiment-name").addEventListener("change",()=>{updateExperimentName();preview();});
   updateExperimentName();
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});

@@ -568,3 +568,15 @@ input[type=checkbox]{min-height:initial;accent-color:var(--teal)}
   .header-tools .language-label{gap:7px}
   .header-tools .language-label select{min-width:100px}
 }
+
+
+/* Data catalog: real executable Edge tasks; non-runnable NF-V2 reference choices. */
+#dataset optgroup{font-weight:700;color:var(--muted)}
+#dataset option:disabled{color:var(--muted)}
+.dataset-inspect-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
+.dataset-inspect-actions .secondary{margin:0;width:auto;min-width:170px}
+.dataset-inventory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;margin:12px 0}
+.dataset-inventory-item{min-width:0;border:1px solid var(--line);background:var(--surface-raised);border-radius:10px;padding:14px}
+.dataset-inventory-item strong{display:block;font-size:13px;color:var(--ink);margin-bottom:8px}
+.dataset-inventory-item p{font-size:11px;color:var(--muted);line-height:1.6;margin:5px 0;overflow-wrap:anywhere}
+@media(max-width:600px){.dataset-inspect-actions .secondary{width:100%}}
