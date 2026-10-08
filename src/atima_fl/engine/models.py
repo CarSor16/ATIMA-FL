@@ -27,9 +27,11 @@ def set_arrays(model, values):
     import torch
 
     check_arrays(values, arrays(model))
-    model.load_state_dict(
-        {key: torch.from_numpy(value.copy()) for key, value in zip(model.state_dict(), values)}
-    )
+    # Preserve PyTorch's per-module version metadata (including BatchNorm).
+    state = model.state_dict()
+    for key, value in zip(state, values):
+        state[key] = torch.from_numpy(np.asarray(value).copy())
+    model.load_state_dict(state)
 
 
 def train(global_arrays, x, y, config, client, round_id, device):

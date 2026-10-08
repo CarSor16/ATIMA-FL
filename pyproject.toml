@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atima-fl"
-version = "0.5.1"
+version = "0.5.2"
 description = "A modular experiment layer for federated learning attacks and defenses, built on Flower"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
