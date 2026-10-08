@@ -15,6 +15,10 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -e . pytest
       - run: python -m pytest tests/test_ui.py -q
+      - name: Validate browser JavaScript syntax
+        run: |
+          node --check src/atima_fl/ui/static/app.js
+          node --check src/atima_fl/ui/static/i18n.js
       - name: Bootstrap and diagnose Windows launcher
         if: runner.os == 'Windows'
         shell: pwsh
