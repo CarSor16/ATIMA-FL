@@ -47,6 +47,19 @@ with no malicious clients; re-enabling restores the selected attack settings.
 An attack from round 3 through 5 poisons those rounds only. From round 6 the
 clients stop new poisoning; previous effects can persist in global weights.
 
+## Edge-IIoT classification and label inspection
+
+The Edge-IIoT dataset plugin supports the unchanged legacy `prepared_5` mapping,
+plus `binary` (2 labels), `family_6` (Normal + five attack families), and
+`fine_15` (Normal + fourteen attack types). The latter views are derived only
+from retained, **verified** `fine_label` metadata. A missing/unknown class
+causes an explicit error rather than inventing examples. The local web designer
+shows the task mapping and can inspect the actual label distribution per split
+and persisted client; inspection requires that the GUI process can access the
+prepared dataset directory. See [Edge-IIoT task documentation](docs/EDGE_IIOT_TASKS.md).
+The existing Dirichlet plugin reads **already-saved alpha=0.5 shards**, not
+new arbitrary non-IID partitions.
+
 ## Aggregation topology
 
 `servers=1` preserves ordinary central aggregation. For `servers>1`, clients
