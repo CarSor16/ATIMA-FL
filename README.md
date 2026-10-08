@@ -15,11 +15,28 @@ git clone https://github.com/CarSor16/ATIMA-FL.git
 cd ATIMA-FL
 ```
 
-Windows PowerShell:
+Windows (recommended): run `Avvia_ATIMA_FL.cmd` from the repository
+(or double-click the file). The launcher checks the Git revision, verifies
+Python 3.11/3.12, creates `.venv` if absent, installs the editable package
+when needed, and checks the ATIMA component registry and port 8765 before
+starting the local webapp. It **does not** change branches, remove files, stop
+existing processes, or open a public listener.
+
+```powershell
+.\Avvia_ATIMA_FL.cmd                  # check and start the local designer
+.\Avvia_ATIMA_FL.cmd -Doctor          # check/install only; do not start server
+.\Avvia_ATIMA_FL.cmd -Doctor -NoInstall # read-only environment diagnostics
+.\Avvia_ATIMA_FL.cmd -Port 8766       # choose another local port
+```
+
+The first launch needs Internet access to download basic dependencies. If an
+existing `.venv` is broken, the launcher reports it and never deletes it.
+Python may also be installed and launched manually:
+
 ```powershell
 py -3.12 -m venv .venv
-.venv\Scripts\python -m pip install -e .
-.venv\Scripts\atima ui --workspace ../ATIMA-workspace
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m atima_fl.cli ui --workspace ..\ATIMA-workspace
 ```
 
 Linux / macOS:
