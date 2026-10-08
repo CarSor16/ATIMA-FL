@@ -1,4 +1,5 @@
 from atima_fl.core.numerics import sha256_file
+from atima_fl.core.dataset_paths import resolve_dataset_root
 from atima_fl.core.contracts import Component, DataBatch
 from pathlib import Path
 import json
@@ -15,7 +16,7 @@ METADATA = ["source_row_id", "input_fingerprint", "fine_label", "target_id"]
 
 class _PreparedEdgeData:
     def __init__(self, config):
-        self.root = Path(config.dataset_root).resolve()
+        self.root = resolve_dataset_root(config.dataset_root)
         self.config = config
         schema = json.loads((self.root / "feature_schema.json").read_text())
         if schema["columns"] != FEATURES:
