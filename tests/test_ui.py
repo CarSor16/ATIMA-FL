@@ -162,3 +162,61 @@ def test_gui_theme_toggle_brand_and_assets(gui):
     assert 'button.setAttribute("aria-label", text)' in app
     assert '"Dark mode": "Modalità scura"' in translation
     assert '"Light mode": "Modalità chiara"' in translation
+
+
+def test_defense_controls_are_compact_and_preserve_stage_export_order(gui):
+    _, url = gui
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    page = urlopen(url + "/").read().decode("utf-8")
+    translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+    assert 'node("button","Move up")' not in script
+    assert 'node("button","Move down")' not in script
+    assert 'block.append(label,params)' in script
+    assert 'for(const block of $("defense-components").children)' in script
+    assert "They run in the displayed order" in page
+    assert "nell’ordine mostrato" in translations
+
+
+def test_new_dataset_plugin_and_its_reference_labels_are_discovered_without_data(tmp_path):
+    extra = tmp_path / "plugins"
+    dataset_folder = extra / "datasets"
+    dataset_folder.mkdir(parents=True)
+    (dataset_folder / "toy_network.py").write_text(
+        """
+from atima_fl.core.contracts import Component
+
+def catalog():
+    return {
+        "binary": {
+            "description": "Reference labels for a fictional dataset",
+            "num_classes": 2,
+            "class_names": ["Normal", "Attack"],
+        }
+    }
+
+PLUGIN = Component(
+    id="toy_network",
+    kind="dataset",
+    title="Toy network traffic",
+    description="Fixture plugin with reference labels, no data files.",
+    hooks={"open": lambda config, params: None, "task_catalog": catalog},
+)
+""",
+        encoding="utf-8",
+    )
+    server = create_server(tmp_path / "workspace", 0, plugins=extra)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        dataset_ids = {
+            item["id"] for item in json.load(urlopen(base + "/api/catalog"))["catalog"]["dataset"]
+        }
+        assert {"edge_iiot", "toy_network"} <= dataset_ids
+        tasks = json.load(urlopen(base + "/api/dataset-tasks"))
+        assert tasks["toy_network"]["binary"]["class_names"] == ["Normal", "Attack"]
+        assert tasks["toy_network"]["binary"]["num_classes"] == 2
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
