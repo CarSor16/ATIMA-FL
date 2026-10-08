@@ -498,3 +498,73 @@ input[type=checkbox]{min-height:initial;accent-color:var(--teal)}
   html{scroll-behavior:auto}
   .sidebar .nav{transition:none}
 }
+
+
+/* Compact polish: align the language control with other header actions. */
+.header-tools .language-label{
+  display:inline-flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  min-height:41px;
+  margin:0;
+  line-height:1.2;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:600;
+  color:var(--ink);
+}
+.header-tools .language-label select{
+  display:inline-block;
+  width:auto;
+  min-width:108px;
+  min-height:41px;
+  margin:0;
+  padding:8px 10px;
+  font-size:12px;
+  vertical-align:middle;
+}
+.header-tools{align-items:center;column-gap:11px;row-gap:9px}
+
+/* Components: consistent spacing from macro-category to subgroup to cards. */
+.catalog-accordion{gap:16px}
+.catalog-group-heading{padding:19px 22px}
+.catalog-group-heading strong{font-size:15px;line-height:1.4}
+.catalog-subgroups{
+  padding:18px 20px 22px;
+  gap:14px;
+  min-width:0;
+}
+.catalog-subgroup{min-width:0}
+.catalog-subheading{padding:16px 19px}
+.catalog-subheading strong{font-size:13px;line-height:1.4}
+.catalog-subgroup .catalog-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));
+  gap:14px;
+  padding:17px 18px 20px;
+  align-items:stretch;
+}
+.catalog-component{
+  min-width:0;
+  height:100%;
+  margin:0;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  border-radius:10px;
+}
+.catalog-component h3{font-size:14px;line-height:1.4;margin:0;overflow-wrap:anywhere}
+.catalog-component p{font-size:12px;line-height:1.65;margin:0;flex:1;overflow-wrap:anywhere}
+.catalog-component>a{margin-top:4px;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .catalog-group-heading{padding:16px}
+  .catalog-subgroups{padding:13px 12px 16px;gap:11px}
+  .catalog-subheading{padding:14px 15px}
+  .catalog-subgroup .catalog-grid{padding:14px;gap:11px}
+  .catalog-component{padding:15px}
+  .header-tools .language-label{gap:7px}
+  .header-tools .language-label select{min-width:100px}
+}

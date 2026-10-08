@@ -31,7 +31,7 @@ function setTheme(next, persist = false) {
 
 // Common shell shared by every page. Navigation preserves existing form state.
 const PAGE_META={
-  designer:{heading:"Design your experiment",subtitle:"Interchangeable components, a reproducible profile.",crumb:"DESIGNER"},
+  designer:{heading:"Create a federated learning security experiment",subtitle:"Configure an FL security experiment and export a reproducible TOML plan.",crumb:"DESIGNER"},
   components:{heading:"Components",subtitle:"Registered plugins and their capabilities.",crumb:"LIBRARY"},
   results:{heading:"Results",subtitle:"Compare experiments and model performance.",crumb:"ANALYTICS"},
   guide:{heading:"Guide",subtitle:"From configuration to research evidence.",crumb:"WORKFLOW"}

@@ -1,5 +1,9 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Create a federated learning security experiment": "Crea un esperimento di sicurezza per il Federated Learning",
+  "Choose the dataset, classification task, model, attack and defenses. Validate your setup, then export a ZIP with experiment.toml, plan.json and run_cluster.sh. Training runs separately on the cluster.": "Seleziona dataset, task di classificazione, modello, attacco e difese. Verifica la configurazione, poi esporta uno ZIP con experiment.toml, plan.json e run_cluster.sh. L'addestramento viene avviato separatamente sul cluster.",
+  "Configure an FL security experiment and export a reproducible TOML plan.": "Configura un esperimento di sicurezza FL ed esporta un piano TOML riproducibile.",
+  "Exports experiment.toml": "Esporta experiment.toml",
   "Skip to main content": "Vai al contenuto principale",
   "Primary navigation": "Navigazione principale",
   "WORKSPACE": "AREA DI LAVORO",

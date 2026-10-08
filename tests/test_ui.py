@@ -452,3 +452,33 @@ def test_shared_page_asset_access_denies_unknown_and_external_host(gui):
     with pytest.raises(HTTPError) as wrong_origin:
         urlopen(Request(url + "/brand-mark.svg", headers={"Host": "external.example"}))
     assert wrong_origin.value.code == 403
+
+
+
+def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+    title = "Create a federated learning security experiment"
+    assert f"<h2>{title}</h2>" in html
+    assert f'<h1 id="page-title">{title}</h1>' in html
+    assert "Build an experiment with confidence" not in html
+    assert "experiment.toml, plan.json and run_cluster.sh" in html
+    assert "Training runs separately on the cluster." in html
+    assert "Exports experiment.toml" in html
+    assert f'heading:"{title}"' in script
+    assert '"Exports experiment.toml": "Esporta experiment.toml"' in translations
+    assert f'"{title}": "Crea un esperimento di sicurezza per il Federated Learning"' in translations
+    assert '.header-tools .language-label{' in css
+    assert 'display:inline-flex;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
+    assert 'flex-direction:row;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
+    assert 'align-items:center;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
+    assert '.header-tools .language-label select{' in css
+    assert 'margin:0;' in css.split('.header-tools .language-label select{')[-1].split("}", 1)[0]
+    assert '.catalog-subgroups{' in css
+    assert 'padding:18px 20px 22px;' in css
+    assert 'padding:17px 18px 20px;' in css
+    assert 'grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));' in css
+    assert '@media(max-width:600px)' in css
