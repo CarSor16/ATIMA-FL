@@ -9,6 +9,22 @@ from atima_fl.engine.attacks import poison_update, prepare_training
 from atima_fl.engine.aggregation import aggregate
 
 
+@pytest.mark.parametrize("serializer", ["pickle", "cloudpickle"])
+def test_validated_configuration_crosses_process_boundary(serializer):
+    import importlib
+    import subprocess
+    import sys
+
+    c = ExperimentConfig(model_params={"hidden": [8, 4]}).validate()
+    payload = importlib.import_module(serializer).dumps(c)
+    assert b"atima_component_" not in payload
+    program = "import sys,pickle; c=pickle.loads(sys.stdin.buffer.read()); assert not hasattr(c,'_component_snapshot'); c.validate(); print(c.model_params['hidden'])"
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", program], input=payload, capture_output=True, check=True
+    )
+    assert result.stdout.decode().strip() == "[8, 4]"
+
+
 def test_one_file_discovery_removal_and_duplicate(tmp_path):
     folder = tmp_path / "aggregatori"
     folder.mkdir()

@@ -58,6 +58,17 @@ class ExperimentConfig:
             object.__setattr__(self, "_component_snapshot", Registry(self.plugin_directory or None))
         return self._component_snapshot
 
+    def __getstate__(self):
+        # A process receives plain configuration, never cached dynamic functions.
+        return asdict(self)
+
+    def __setstate__(self, state):
+        expected = {item.name for item in fields(self)}
+        if set(state) != expected:
+            raise ValueError("Serialized configuration fields differ from this version")
+        for key, value in state.items():
+            object.__setattr__(self, key, value)
+
     def validate(self, registry=None):
         registry = registry or Registry(self.plugin_directory or None)
         object.__setattr__(self, "_component_snapshot", registry)
