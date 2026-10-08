@@ -272,14 +272,8 @@ def test_production_rejects_cpu(dataset, tmp_path):
 def test_native_client_app_callback_routing(dataset, tmp_path, monkeypatch):
     import atima_fl.adapters.flower.client as module
 
-    original_train = module.train_local
-    # Explicit software mock only. Training remains CPU and is recorded as CPU.
-    monkeypatch.setattr(module.torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(
-        module,
-        "train_local",
-        lambda c, r, cid, round_id, g, d, device: original_train(c, r, cid, round_id, g, d, "cpu"),
-    )
+    # Exercise the actual explicit CPU ClientApp callback without a CUDA mock.
+    monkeypatch.setattr(module.torch.cuda, "is_available", lambda: False)
 
     class CallbackGrid(SoftwareGrid):
         def send_and_receive(self, messages, timeout):
@@ -296,6 +290,7 @@ def test_native_client_app_callback_routing(dataset, tmp_path, monkeypatch):
 
     c = ExperimentConfig(
         name="callback",
+        compute_device="cpu",
         dataset_root=str(dataset),
         output_root=str(tmp_path / "runs"),
         rounds=1,

@@ -50,6 +50,7 @@ class ExperimentConfig:
     recall_floor: float = 0.5
     coverage_window: int = 5
     cpu_budget: int = 48
+    compute_device: str = "cuda"
     client_cpus: int = 4
     client_gpu_fraction: float = 0.5
     paired_clean: str = ""
@@ -108,6 +109,8 @@ class ExperimentConfig:
             raise ValueError("Aggregation server count must be between 1 and total clients")
         if self.server_execution not in {"processes", "slurm_nodes"}:
             raise ValueError("Server execution must be processes or slurm_nodes")
+        if self.compute_device not in {"cpu", "cuda"}:
+            raise ValueError("Compute device must be explicitly cpu or cuda")
         if self.server_execution == "slurm_nodes" and self.servers < 2:
             raise ValueError("Physical multi-host aggregation requires at least two servers")
         assignment = self.server_assignment()

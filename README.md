@@ -97,7 +97,14 @@ Windows/macOS installation of the designer does not imply CUDA/Ray compatibility
 6. Export significant results and run `atima analyze --clean CLEAN --attack ATTACK --output ANALYSIS`.
 7. For independent seed pairs: `atima statistics --inputs ANALYSIS1/comparison.json ANALYSIS2/comparison.json ANALYSIS3/comparison.json --output STATISTICS`.
 
-No automatic CPU fallback. The launch verifies Slurm allocation and visible CUDA
+CPU experiments require an explicit `compute_device = "cpu"` profile. Ray then
+reserves zero GPUs and all server/client operations use CPU. GPU remains the
+default; missing CUDA never selects CPU automatically. If `scontrol` is absent,
+CPU execution requires a single-node Slurm allocation, valid task/node CPU
+environment values and sufficient process affinity; this evidence method is
+recorded in the manifest. A failed scheduler query is never silently ignored.
+
+No automatic CPU fallback. The GPU launch verifies Slurm allocation and visible CUDA
 devices. Experiments are capped at 50 rounds; clean early stopping monitors
 validation macro-F1 and class recall coverage. The paired attacked run uses the
 clean horizon to preserve the comparison. Numerical failure preserves the last

@@ -57,7 +57,7 @@ def runtime_identity(device, config):
     }
 
 
-def exchange(grid, node_ids, config, run, round_id, before, phase, counts):
+def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device):
     commands = ConfigRecord(
         {
             "config_json": json.dumps(config.resolved()),
@@ -86,6 +86,8 @@ def exchange(grid, node_ids, config, run, round_id, before, phase, counts):
         values = reply.content["arrays"].to_numpy_ndarrays()
         check_arrays(values, before)
         metadata = json.loads(reply.content["audit"]["metadata_json"])
+        if metadata.get("device") != device:
+            raise ValueError("Client device differs from selected experiment device")
         if metadata["client"] != cid or metadata["round"] != round_id:
             raise ValueError("Reply identity/round mismatch")
         if metadata["aggregation_server"] != config.server_assignment()[cid]:
@@ -103,18 +105,19 @@ def read_weights(file, path):
     return [file[path][key][...] for key in sorted(file[path])]
 
 
-def run_experiment(grid, config, device="cuda"):
+def run_experiment(grid, config, device=None):
     config.validate()
-    if device != "cuda":
+    device = config.compute_device if device is None else device
+    if device != config.compute_device:
         raise RuntimeError(
-            "Scientific experiments require CUDA; use internal software tests for CPU"
+            "Default experiments require CUDA; device must match the explicit configuration"
         )
-    if not torch.cuda.is_available():
+    if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU visible to ServerApp")
     from .launch import scheduler_allocation
 
     allocation = scheduler_allocation(config)
-    if torch.cuda.device_count() != allocation["scheduler_gpu_count"]:
+    if device == "cuda" and torch.cuda.device_count() != allocation["scheduler_gpu_count"]:
         raise RuntimeError("CUDA devices differ from scheduler allocation")
     if config.servers == 1:
         return _run_protocol(grid, config, device)
@@ -132,7 +135,7 @@ def run_experiment(grid, config, device="cuda"):
 
 
 def _run_protocol(grid, config, device, aggregation_pool=None):
-    """Internal entry for software fixtures; production entry enforces CUDA."""
+    """Shared scientific protocol; production entry verifies the selected allocation."""
     torch.use_deterministic_algorithms(True)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
@@ -206,9 +209,9 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
             ):
                 raise ValueError("Attack implementation changed during training")
             started = time.perf_counter()
-            local = exchange(grid, node_ids, config, run, round_id, before, "train", counts)
+            local = exchange(grid, node_ids, config, run, round_id, before, "train", counts, device)
             counts = {cid: local[cid]["count"] for cid in sorted(local)}
-            submitted = exchange(grid, node_ids, config, run, round_id, before, "submit", counts)
+            submitted = exchange(grid, node_ids, config, run, round_id, before, "submit", counts, device)
             clients = []
             for cid in sorted(local):
                 raw, _, extra = read_raw(raw_path(run, round_id, cid))

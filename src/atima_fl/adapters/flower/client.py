@@ -21,11 +21,11 @@ def handle_train(message: Message, context: Context):
     run = Path(command["run_dir"])
     before = message.content["arrays"].to_numpy_ndarrays()
     if command["phase"] == "train":
-        if not torch.cuda.is_available():
+        if config.compute_device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("ClientApp has no CUDA device; CPU fallback is forbidden")
         torch.set_num_threads(config.client_cpus)
         values, metadata = train_local(
-            config, run, client, round_id, before, open_dataset(config), "cuda"
+            config, run, client, round_id, before, open_dataset(config), config.compute_device
         )
     elif command["phase"] == "submit":
         counts = {int(k): int(v) for k, v in json.loads(command["counts_json"]).items()}
