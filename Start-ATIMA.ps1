@@ -83,7 +83,8 @@ try {
         "-c", "import sys; assert sys.version_info[:2] in ((3,11),(3,12)), 'ATIMA requires Python 3.11 or 3.12'; print('Python:', sys.version.split()[0])"
     ) -Description "Checking local Python"
 
-    $digest = (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash
+    $digest = & $venvPython -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())" $manifest
+    if ($LASTEXITCODE -ne 0 -or -not $digest) { throw "Unable to fingerprint pyproject.toml" }
     $expectedStamp = "$projectRoot|$digest"
     $needsInstall = -not (Test-Path -LiteralPath $stamp -PathType Leaf)
     if (-not $needsInstall) {
@@ -112,14 +113,19 @@ try {
         $Workspace = Join-Path (Split-Path -Parent $projectRoot) "ATIMA-workspace"
     }
     Write-Host "[ATIMA] Workspace: $Workspace"
-    $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
-    if ($listeners.Count -gt 0) {
-        $owners = ($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ", "
-        Write-Warning "Port $Port is in use by PID(s): $owners. The launcher will not stop these processes."
+    # Probe loopback binding without requiring optional Windows networking cmdlets.
+    $portProbe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    $portAvailable = $false
+    try {
+        $portProbe.Start()
+        $portAvailable = $true
+    } catch [System.Net.Sockets.SocketException] {
+        Write-Warning "Port $Port is already in use. The launcher will not stop another process."
         if (-not $Doctor) { throw "Stop the existing service or start with -Port <another-port>." }
-    } else {
-        Write-Host "[ATIMA] Port $Port available."
+    } finally {
+        if ($portAvailable) { $portProbe.Stop() }
     }
+    if ($portAvailable) { Write-Host "[ATIMA] Port $Port available." }
 
     if ($Doctor) {
         Write-Host "[ATIMA] Doctor checks completed. No server launched."
