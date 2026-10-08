@@ -3,6 +3,7 @@ from atima_fl.core.contracts import Component, DataBatch
 from pathlib import Path
 import json
 import numpy as np
+from atima_fl.core.label_taxonomy import TASK_CLASSES, task_catalog, project_labels, availability
 
 FEATURES = [
     f"p{packet:02d}_{field}"
@@ -22,7 +23,79 @@ class _PreparedEdgeData:
         self.mapping = json.loads((self.root / "label_mapping.json").read_text())
         if set(self.mapping.values()) != set(range(5)) or len(self.mapping) != 5:
             raise ValueError("Stable five-class mapping required")
-        self.classes = sorted(self.mapping, key=self.mapping.get)
+        self.task = config.parameters("dataset")["task"]
+        self.classes = (
+            sorted(self.mapping, key=self.mapping.get)
+            if self.task == "prepared_5" else list(TASK_CLASSES[self.task])
+        )
+
+    def targets(self, frame):
+        raw = frame.target_id.to_numpy(dtype=np.int64)
+        if not np.isin(raw, range(5)).all():
+            raise ValueError("Invalid legacy target_id values")
+        if self.task == "prepared_5":
+            return raw
+        return project_labels(frame.fine_label, self.task)
+
+    def inspect(self):
+        """Read label columns only. Does not change training files or assignments."""
+        import pandas as pd
+
+        frames = {}
+        for split in ("train", "validation", "test"):
+            file = self.root / f"{split}_scaled.parquet"
+            data = pd.read_parquet(file, columns=["fine_label", "target_id"])
+            frames[split] = data
+        observed = {
+            split: {str(label): int(count) for label, count in
+                    data.fine_label.astype(str).value_counts().sort_index().items()}
+            for split, data in frames.items()
+        }
+        source_labels = sorted(set().union(*(set(values) for values in observed.values())))
+        observed_train = list(frames["train"].fine_label.astype(str).unique())
+        statuses = {
+            task: availability(observed_train, source_labels, task)
+            for task in task_catalog()
+        }
+        statuses["prepared_5"]["available"] = (
+            set(frames["train"].target_id.unique()) == set(range(5))
+        )
+        label_counts = {}
+        if statuses[self.task]["available"]:
+            for split, data in frames.items():
+                target = self.targets(data)
+                counts = np.bincount(target, minlength=len(self.classes))
+                label_counts[split] = {
+                    name: int(count) for name, count in zip(self.classes, counts)
+                }
+        by_client = {}
+        location = partition_location(self.root, self.config)
+        for cid in range(self.config.clients):
+            file = location / "clients" / f"client_{cid:02d}.parquet"
+            labels = pd.read_parquet(file, columns=["fine_label", "target_id"])
+            if statuses[self.task]["available"]:
+                counts = np.bincount(self.targets(labels), minlength=len(self.classes))
+                by_client[str(cid)] = {
+                    name: int(count) for name, count in zip(self.classes, counts)
+                }
+            else:
+                by_client[str(cid)] = {
+                    str(name): int(count) for name, count in
+                    labels.fine_label.astype(str).value_counts().sort_index().items()
+                }
+        return {
+            "dataset": "edge_iiot",
+            "dataset_root": str(self.root),
+            "partition": self.config.partition,
+            "task": self.task,
+            "classes": self.classes,
+            "reference_tasks": task_catalog(sorted(self.mapping, key=self.mapping.get)),
+            "task_availability": statuses,
+            "observed_fine_labels": observed,
+            "mapped_class_counts": label_counts,
+            "per_client_counts": by_client,
+            "note": "Counts describe this prepared directory only, not the published dataset.",
+        }
 
     def read(self, path):
         import pandas as pd
@@ -31,8 +104,8 @@ class _PreparedEdgeData:
         if not set(FEATURES + METADATA) <= set(frame):
             raise ValueError("Missing features or original-label metadata")
         x = frame[FEATURES].to_numpy(dtype=np.float32)
-        y = frame.target_id.to_numpy(dtype=np.int64)
-        if not len(y) or not np.isfinite(x).all() or not np.isin(y, range(5)).all():
+        y = self.targets(frame)
+        if not len(y) or not np.isfinite(x).all():
             raise ValueError("Empty/invalid data")
         return frame, x, y
 
@@ -85,7 +158,7 @@ class _PreparedEdgeData:
             expected = indexed.loc[shard.source_row_id]
             if not np.array_equal(
                 x, expected[FEATURES].to_numpy(dtype=np.float32)
-            ) or not np.array_equal(y, expected.target_id.to_numpy()):
+            ) or not np.array_equal(y, self.targets(expected)):
                 raise ValueError("Shard/training content mismatch")
             counts[str(client)] = len(shard)
             hashes[f"client_{client}"] = sha256_file(shard_path)
@@ -97,7 +170,20 @@ class _PreparedEdgeData:
             "manifest.json",
         ):
             hashes[name] = sha256_file(self.root / name)
+        if self.task != "prepared_5":
+            inspected = availability(
+                frames["train"].fine_label.astype(str).unique().tolist(),
+                sorted(set().union(*(set(f.fine_label.astype(str)) for f in frames.values()))),
+                self.task,
+            )
+            if not inspected["available"]:
+                raise ValueError(
+                    f"Prepared dataset does not support {self.task}: "
+                    f"missing training classes {inspected['missing_train']}, "
+                    f"unknown labels {inspected['unknown_source_labels']}"
+                )
         return {
+            "task": self.task,
             "hashes": hashes,
             "rows": {k: len(v) for k, v in frames.items()},
             "client_counts": counts,
@@ -138,12 +224,21 @@ class EdgeDataset:
     def audit(self):
         return self.reader.audit()
 
+    def inspect(self):
+        return self.reader.inspect()
+
 
 def validate(config, params):
-    if config.input_dim != len(FEATURES) or config.num_classes != 5:
+    task = params["task"]
+    expected = 5 if task == "prepared_5" else len(TASK_CLASSES[task])
+    if config.input_dim != len(FEATURES) or config.num_classes != expected:
         raise ValueError(
-            "Prepared EdgeIIoT adapter expects 60 features and the preserved five-class mapping"
+            f"EdgeIIoT {task} requires 60 ordered features and num_classes={expected}"
         )
+
+
+def task_options():
+    return task_catalog()
 
 
 def open_dataset(config, params):
@@ -156,12 +251,19 @@ PLUGIN = Component(
     "edge_iiot",
     "dataset",
     "EdgeIIoT multiclass-logiat",
-    "Prepared dataset loader: 60 features, 5 classes; verifies splits/shards without changing source data.",
-    hooks={"validate": validate, "open": open_dataset},
+    "Prepared Edge-IIoT: legacy 5-class or verified binary/6-family/15-type label projection.",
+    parameters={
+        "task": {
+            "type": "string", "default": "prepared_5",
+            "choices": ["prepared_5", "binary", "family_6", "fine_15"],
+            "description": "Classification task (source labels required for 2/6/15)",
+        }
+    },
+    hooks={"validate": validate, "open": open_dataset, "task_catalog": task_options},
     translations={
         "it": {
             "title": "EdgeIIoT multiclass-logiat",
-            "description": "Loader dei dati preparati: 60 feature, 5 classi; verifica split/shard senza modificare i dati originali.",
+            "description": "Dati Edge-IIoT: 5 classi legacy o proiezioni verificate a 2/6/15 classi.",
         }
     },
 )
