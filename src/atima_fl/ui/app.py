@@ -182,6 +182,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                 "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
                 "/style.css": ("style.css", "text/css; charset=utf-8"),
+                "/brand-mark.svg": ("brand-mark.svg", "image/svg+xml"),
             }
             if path in assets:
                 name, kind = assets[path]

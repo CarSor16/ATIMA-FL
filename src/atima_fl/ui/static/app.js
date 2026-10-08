@@ -6,11 +6,10 @@ let mode="simple";
 const $ = id => document.getElementById(id);
 
 // The UI theme is a local presentation preference; it never enters experiment plans.
-let theme = "light";
+let theme = "dark";
 try {
   const saved = localStorage.getItem("atima-theme");
-  theme = saved === "light" || saved === "dark" ? saved
-    : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  theme = saved === "light" || saved === "dark" ? saved : "dark";
 } catch {
   // Private browsing or restricted storage must not prevent the UI from loading.
 }
@@ -29,6 +28,52 @@ function setTheme(next, persist = false) {
     try { localStorage.setItem("atima-theme", theme); } catch {}
   }
 }
+
+// Common shell shared by every page. Navigation preserves existing form state.
+const PAGE_META={
+  designer:{heading:"Design your experiment",subtitle:"Interchangeable components, a reproducible profile.",crumb:"DESIGNER"},
+  components:{heading:"Components",subtitle:"Registered plugins and their capabilities.",crumb:"LIBRARY"},
+  results:{heading:"Results",subtitle:"Compare experiments and model performance.",crumb:"ANALYTICS"},
+  guide:{heading:"Guide",subtitle:"From configuration to research evidence.",crumb:"WORKFLOW"}
+};
+function navigateTo(page,focusHeading=false){
+  const meta=PAGE_META[page];
+  if(!meta)return;
+  for(const button of document.querySelectorAll(".nav")){
+    const active=button.dataset.page===page;
+    button.classList.toggle("active",active);
+    if(active)button.setAttribute("aria-current","page");
+    else button.removeAttribute("aria-current");
+  }
+  for(const section of document.querySelectorAll(".page"))
+    section.classList.toggle("active",section.id===page);
+  $("page-title").textContent=uiText(meta.heading);
+  $("page-subtitle").textContent=uiText(meta.subtitle);
+  $("page-breadcrumb").textContent="ATIMA-FL / "+meta.crumb;
+  const icon=document.querySelector('.nav[data-page="'+page+'"] .nav-icon');
+  if(icon)$("page-glyph").replaceChildren(icon.cloneNode(true));
+  $("quick-new-experiment").classList.toggle("hidden",page==="designer");
+  if(page==="results")refreshResults();
+  if(focusHeading){
+    window.scrollTo({top:0,behavior:"auto"});
+    $("page-title").tabIndex=-1;
+    $("page-title").focus({preventScroll:true});
+  }
+}
+function updateResultsOverview(values){
+  const root=$("results-overview");root.replaceChildren();
+  const metrics=[
+    [values.length,"Imported runs","Local summaries only"],
+    [values.filter(run=>run.status==="complete").length,"Complete runs","Training finished"],
+    [values.filter(run=>run.baseline_id).length,"Verified pairs","Clean vs attacked"]
+  ];
+  for(const [count,title,detail] of metrics){
+    const item=node("article",undefined,"overview-tile");
+    item.append(node("span",title,"overview-label"),node("strong",String(count),"overview-number"),node("small",detail));
+    root.append(item);
+  }
+}
+
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
 const titles = {dataset:"Dataset",partition:"Partizione",model:"Modello",optimizer:"Ottimizzatore",loss:"Loss",metrics:"Metriche",attack:"Attacco",aggregator:"Aggregazione"};
 function componentLabel(component,key){return component.translations?.[currentLanguage]?.[key] || component[key];}
@@ -76,20 +121,30 @@ function refreshTaskOptions(){
   }
 }
 function renderComponentCatalog(){
+  const query=String($("component-search")?.value||"").trim().toLocaleLowerCase();
+  let visible=0;
   const root=$("component-list");
   root.replaceChildren();
   for(const [index,group] of CATALOG_GROUPS.entries()){
     const section=node("details",undefined,"catalog-group");
-    section.open=index===0;
+    section.open=Boolean(query)||index===0;
     const heading=node("summary",undefined,"catalog-group-heading");
     const total=group.kinds.reduce((n,[kind])=>n+(catalog[kind]?.length||0),0);
     heading.append(node("strong",group.title),node("span",total+" "+uiText("components"),"catalog-count"));
     section.append(heading);
     const subgroups=node("div",undefined,"catalog-subgroups");
     for(const [kind,title] of group.kinds){
-      const items=catalog[kind]||[];
+      const items=(catalog[kind]||[]).filter(component=>{
+        if(!query)return true;
+        const haystack=[component.id,component.title,component.description,
+          component.translations?.it?.title,component.translations?.it?.description,
+          title,group.title,...(component.threats||[])].filter(Boolean).join(" ").toLocaleLowerCase();
+        return haystack.includes(query);
+      });
       if(!items.length)continue;
+      visible+=items.length;
       const subgroup=node("details",undefined,"catalog-subgroup");
+      subgroup.open=Boolean(query);
       const summary=node("summary",undefined,"catalog-subheading");
       summary.append(node("strong",title),node("span",String(items.length),"catalog-count"));
       subgroup.append(summary);
@@ -106,8 +161,12 @@ function renderComponentCatalog(){
       }
       subgroup.append(grid);subgroups.append(subgroup);
     }
-    section.append(subgroups);root.append(section);
+    if(subgroups.children.length){section.append(subgroups);root.append(section);}
   }
+  const status=$("component-search-status");
+  if(status)status.textContent=uiText("Showing")+" "+visible+" "+uiText("components")+
+    (query?" "+uiText("for search")+" “"+query+"”":"")+".";
+  if(!visible)root.append(node("p","No components match your search.","catalog-empty"));
 }
 
 function refreshLanguage(){
@@ -439,6 +498,10 @@ async function inspectLabels(){
 async function refreshClusterStatus(){
   try {
     const status=await request("/api/cluster-status");
+    $("cluster-indicator").classList.toggle("configured",Boolean(status.configured));
+    $("side-connection-title").textContent=status.configured?"Cluster configured":"Local workspace";
+    $("side-connection-detail").textContent=status.configured?
+      "SSH settings present · import on demand":"SSH not configured in active workspace";
     $("cluster-status").textContent=status.configured
       ? `SSH configured for ${status.host}. Active workspace: ${status.workspace}. Import on demand.`
       : `Cluster not configured. ATIMA is looking for: ${status.config_path}`;
@@ -786,6 +849,7 @@ function renderResults(values){
   const target=$("results-list"),comparison=$("result-comparisons");
   target.replaceChildren();comparison.replaceChildren();
   const byId=new Map(values.map(item=>[item.id,item]));
+  updateResultsOverview(values);
   updateManualComparison(values);
   const paired=values.filter(item=>item.baseline_id && byId.has(item.baseline_id));
   if(paired.length){
@@ -836,7 +900,7 @@ async function refreshResults(){
   const target=$("results-list");target.replaceChildren();
   try{renderResults(await request("/api/results"));}
   catch(error){$("result-comparisons").replaceChildren();
-    $("manual-comparison-output").replaceChildren();target.append(node("p",error.message,"error"));}
+    $("manual-comparison-output").replaceChildren();$("results-overview").replaceChildren();target.append(node("p",error.message,"error"));}
 }
 async function initialize(){
   const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
@@ -873,8 +937,12 @@ async function initialize(){
     refreshManualFromChoices();
   });
   $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
-  const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
-  for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
+  $("component-search").addEventListener("input",renderComponentCatalog);
+  for(const button of document.querySelectorAll(".nav"))
+    button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
+  for(const button of document.querySelectorAll("[data-page-target]"))
+    button.addEventListener("click",()=>navigateTo(button.dataset.pageTarget,true));
+  $("quick-new-experiment").addEventListener("click",()=>navigateTo("designer",true));$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
 }
 setTheme(theme);
 $("theme-toggle").addEventListener("click",()=>setTheme(theme === "dark" ? "light" : "dark", true));
