@@ -72,10 +72,11 @@ def test_config_rejects_unsafe_connection_values(tmp_path, change):
 @pytest.mark.parametrize("name", ["../escape", ".hidden/escape", "-invalid", ".", ".."])
 def test_ssh_import_rejects_untrusted_experiment_names(tmp_path, name):
     config(tmp_path)
-    runner = lambda *a, **k: SimpleNamespace(
-        returncode=0,
-        stdout=json.dumps([{"id": name, "manifest": {"status": "complete"}, "final_metrics": {}}])
-    )
+    def runner(*args, **kwargs):
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps([{"id": name, "manifest": {"status": "complete"}, "final_metrics": {}}])
+        )
     with pytest.raises(ValueError):
         sync_cluster_results(tmp_path, runner=runner)
     assert not (tmp_path / "results").exists()
