@@ -15,6 +15,14 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -e . pytest
       - run: python -m pytest tests/test_ui.py -q
+      - name: Bootstrap and diagnose Windows launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\Avvia_ATIMA_FL.cmd -Doctor
+          if ($LASTEXITCODE -ne 0) { throw 'ATIMA launcher failed bootstrap' }
+          .\Avvia_ATIMA_FL.cmd -Doctor -NoInstall
+          if ($LASTEXITCODE -ne 0) { throw 'ATIMA launcher failed read-only checks' }
   scientific-software:
     runs-on: ubuntu-latest
     steps:
