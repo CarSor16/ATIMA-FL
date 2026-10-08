@@ -66,21 +66,26 @@ def results(workspace):
             "history": read_local_history(path.parent / "validation_history.json"),
             "baseline_id": None,
             "_identity": json.dumps(
-                [manifest.get("source_identity"), manifest.get("runtime")], sort_keys=True
-            ),
+                [manifest["source_identity"], manifest["runtime"]], sort_keys=True
+            ) if (
+                isinstance(manifest.get("source_identity"), dict)
+                and manifest["source_identity"]
+                and isinstance(manifest.get("runtime"), dict)
+                and manifest["runtime"]
+            ) else None,
         })
     # Only make comparisons between explicitly paired, complete runs from
     # identical software/runtime identities and with equal valid round caps.
     baselines = {}
     for value in values:
         if value["status"] == "complete" and value["config"].get("attack") == "none":
-            if value["pair_id"]:
+            if value["pair_id"] and value["_identity"]:
                 key = (value["pair_id"], value["_identity"], value["round"])
                 baselines.setdefault(key, []).append(value["id"])
     for value in values:
         if (
             value["status"] == "complete" and value["config"].get("attack") != "none"
-            and value["pair_id"]
+            and value["pair_id"] and value["_identity"]
         ):
             key = (value["pair_id"], value["_identity"], value["round"])
             candidates = baselines.get(key, [])

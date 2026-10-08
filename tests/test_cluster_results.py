@@ -267,3 +267,16 @@ def test_results_api_returns_compact_histories_and_verified_pair_id(tmp_path):
     assert values["Unmatched"]["baseline_id"] is None
     assert values["Clean"]["history"] == [{"round": 1, "accuracy": 0.7,
                                               "macro_f1": 0.6, "recall": [0.8, 0.4]}]
+
+
+def test_absent_source_identity_does_not_falsely_match_clean_run(tmp_path):
+    from atima_fl.ui.app import results
+    for name, attack in [("Clean", "none"), ("Attack", "alie")]:
+        folder = tmp_path / "results" / name
+        folder.mkdir(parents=True)
+        (folder / "manifest.json").write_text(json.dumps({
+            "status": "complete", "pair_id": "same", "last_valid_round": 3,
+            "config": {"attack": attack},
+        }))
+    runs = {row["id"]: row for row in results(tmp_path)}
+    assert runs["Attack"]["baseline_id"] is None

@@ -123,6 +123,7 @@ function refreshLanguage(){
   renderComponentCatalog();
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
   $("language").value=currentLanguage;setTheme(theme);setMode(mode);
+  if($("results").classList.contains("active"))refreshResults();
 }
 function node(tag, text, cls) { const el=document.createElement(tag); if(text!==undefined)el.textContent=uiText(text); if(cls)el.className=cls; return el; }
 function selectedTaskInfo() {

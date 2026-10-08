@@ -331,16 +331,16 @@ an open-source license.
 ### Results dashboard and per-round import
 
 **Results → Import results and validation histories** reads only
-\`manifest.json\`, \`final_metrics.json\`, and the compact numerical summaries
-from \`validation_history.json\` for each run. The remote read is bounded,
-non-interactive and does not transfer \`trajectory.h5\`, client artifacts,
+`manifest.json`, `final_metrics.json`, and the compact numerical summaries
+from `validation_history.json` for each run. The remote read is bounded,
+non-interactive and does not transfer `trajectory.h5`, client artifacts,
 datasets or model weights. Old runs without validation history are still
 displayed with final test metrics.
 
 The Results dashboard includes final test score cards, per-class metrics
 and confusion matrices, an overview of matched attack-vs-clean test deltas,
 and interactive per-round *validation* curves (including class recall).
-Baseline pairing requires complete runs with equal \`pair_id\`,
+Baseline pairing requires complete runs with equal `pair_id`,
 software/runtime identity and valid-round count; unmatched experiments
 are not automatically compared. The charts show validation history,
 not independent-seed statistics or test scores at every round.

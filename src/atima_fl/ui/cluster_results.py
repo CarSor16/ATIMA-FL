@@ -154,7 +154,7 @@ for file in sorted(base.glob("*/manifest.json"))[:101]:
     if len(out) >= 100:
         raise ValueError("More than 100 experiments: narrow remote results directory")
     folder = file.parent
-    if folder.is_symlink() or not folder.is_dir():
+    if folder.is_symlink() or not folder.is_dir() or file.is_symlink():
         continue
     if file.stat().st_size > 1048576:
         raise ValueError("Experiment manifest too large")
