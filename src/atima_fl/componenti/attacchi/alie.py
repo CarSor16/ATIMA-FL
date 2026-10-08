@@ -70,6 +70,7 @@ PLUGIN = Component(
     references=(
         "https://proceedings.neurips.cc/paper/2019/file/ec1c59141046cd1866bbbcdfb6ae31d4-Paper.pdf",
     ),
+    threats=("stealth_poisoning", "byzantine_update"),
     translations={
         "it": {
             "title": "ALIE",

@@ -24,6 +24,7 @@ PLUGIN = Component(
     {"strength": {"type": "number", "default": 1.0, "minimum": 0.000001}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    threats=("byzantine_update",),
     translations={
         "it": {
             "title": "Inversione del delta",

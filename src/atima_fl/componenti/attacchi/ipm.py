@@ -37,6 +37,7 @@ PLUGIN = Component(
     },
     {"validate": validate, "knowledge": statistical_knowledge, "transform": transform},
     references=("https://proceedings.mlr.press/v115/xie20a/xie20a.pdf",),
+    threats=("byzantine_update",),
     translations={
         "it": {
             "title": "IPM",

@@ -25,6 +25,17 @@ def main(argv=None):
     plan = commands.add_parser("plan", help="Export a profile and New Batch Job script")
     plan.add_argument("--config", required=True)
     plan.add_argument("--workspace", default="workspace")
+    study = commands.add_parser(
+        "defense-study", help="Export four matched conditions without training"
+    )
+    study.add_argument("--config", required=True)
+    study.add_argument("--workspace", default="workspace")
+    defense = commands.add_parser(
+        "compare-defenses", help="Compare protected/unprotected paired analyses"
+    )
+    defense.add_argument("--unprotected", required=True)
+    defense.add_argument("--protected", required=True)
+    defense.add_argument("--output", required=True)
     launch = commands.add_parser(
         "launch", help="Preflight or run inside an allocated Slurm GPU job"
     )
@@ -41,6 +52,11 @@ def main(argv=None):
     )
     stats.add_argument("--inputs", nargs="+", required=True)
     stats.add_argument("--output", required=True)
+    defense_stats = commands.add_parser(
+        "defense-statistics", help="Protection effects across independent seed quartets"
+    )
+    defense_stats.add_argument("--inputs", nargs="+", required=True)
+    defense_stats.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     if args.command == "catalog":
         print(json.dumps(Registry(args.plugins).catalog(), ensure_ascii=False, indent=2))
@@ -65,6 +81,14 @@ def main(argv=None):
         from .engine.plans import save_plan
 
         print(save_plan(ExperimentConfig.load(args.config), args.workspace))
+    elif args.command == "defense-study":
+        from .engine.plans import save_defense_study
+
+        print(save_defense_study(ExperimentConfig.load(args.config), args.workspace))
+    elif args.command == "compare-defenses":
+        from .engine.defense_analysis import compare_defenses
+
+        print(json.dumps(compare_defenses(args.unprotected, args.protected, args.output), indent=2))
     elif args.command == "launch":
         from .adapters.flower.launch import launch as run
 
@@ -77,6 +101,10 @@ def main(argv=None):
         from .engine.statistics import summarize
 
         print(json.dumps(summarize(args.inputs, args.output), indent=2))
+    elif args.command == "defense-statistics":
+        from .engine.statistics import summarize_defenses
+
+        print(json.dumps(summarize_defenses(args.inputs, args.output), indent=2))
 
 
 if __name__ == "__main__":

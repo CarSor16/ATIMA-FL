@@ -50,6 +50,7 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare},
     references=("https://arxiv.org/abs/2403.02983",),
+    threats=("data_poisoning", "coordinate_outlier", "byzantine_update"),
     translations={
         "it": {
             "title": "Perturbazione delle feature",

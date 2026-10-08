@@ -27,6 +27,7 @@ PLUGIN = Component(
     {"poison_rate": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1}},
     {"prepare": prepare},
     references=("https://arxiv.org/abs/2502.03801",),
+    threats=("data_poisoning", "byzantine_update"),
     translations={
         "it": {
             "title": "Etichette casuali",

@@ -83,6 +83,70 @@ class SoftwareGrid:
             )
 
 
+@pytest.mark.parametrize("attack_id", ["sign_flip", "model_replacement"])
+def test_full_four_condition_defense_analysis_and_mismatch_guard(
+    dataset, tmp_path, monkeypatch, attack_id
+):
+    from atima_fl.engine.analysis import compare
+    from atima_fl.engine.defense_analysis import compare_defenses
+
+    torch.set_num_threads(1)
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "mpl_cache"))
+    base = ExperimentConfig(
+        name="clean_unprotected",
+        dataset_root=str(dataset),
+        output_root=str(tmp_path / "runs"),
+        rounds=2,
+        minimum_rounds=2,
+        paired_rounds=2,
+        model_params={"hidden": [8, 4]},
+        local_epochs=1,
+        attack_start=2,
+    ).validate()
+    analyses = []
+    for protected in (False, True):
+        clean_config = replace(
+            base,
+            name=f"clean_{protected}",
+            defenses=(
+                {"id": "adaptive_clipping", "params": {}},
+                {"id": "coordinate_winsorization", "params": {}},
+            )
+            if protected
+            else (),
+            aggregation="geometric_median" if protected else "fedavg",
+        ).validate()
+        clean = _run_protocol(SoftwareGrid(), clean_config, "cpu")
+        attack_config = replace(
+            clean_config,
+            name=f"attack_{protected}",
+            attack=attack_id,
+            attack_params={"strength": 20.0} if attack_id == "sign_flip" else {},
+            paired_clean=str(clean),
+        )
+        attack = _run_protocol(SoftwareGrid(), attack_config, "cpu")
+        destination = tmp_path / f"analysis_{protected}"
+        compare(clean, attack, destination)
+        analyses.append(destination / "comparison.json")
+    result = compare_defenses(*analyses, tmp_path / "defense_effect")
+    assert result["attacked_test_macro_f1_recovery"] == pytest.approx(
+        result["protected"]["attacked_test"]["macro_f1"]
+        - result["unprotected"]["attacked_test"]["macro_f1"]
+    )
+    assert (tmp_path / "defense_effect/defense_effect.png").stat().st_size > 1000
+    if attack_id == "model_replacement":
+        assert result["backdoor_asr_reduction"] == pytest.approx(
+            result["unprotected"]["attacked_attack_metrics"]["asr_all_non_target"]
+            - result["protected"]["attacked_attack_metrics"]["asr_all_non_target"]
+        )
+    # A common seed alone is insufficient: modifying the topology invalidates attribution.
+    changed = json.loads(analyses[1].read_text())
+    changed["protocol"]["condition"]["servers"] = 2
+    analyses[1].write_text(json.dumps(changed))
+    with pytest.raises(ValueError, match="mismatch"):
+        compare_defenses(*analyses, tmp_path / "invalid")
+
+
 @pytest.mark.parametrize(
     "attack,knowledge",
     [

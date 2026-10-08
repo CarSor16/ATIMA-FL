@@ -57,7 +57,7 @@ function config() {
     value.malicious_clients=Array.from({length:n},(_,i)=>i);
   }
   if($("attack-until-end").checked)value.attack_end=value.rounds;
-  value.defenses=[];for(const component of catalog.defense)if($("defense-"+component.id).checked)value.defenses.push({id:component.id,params:readParams($("defense-params-"+component.id))});
+  value.defenses=[];for(const block of $("defense-components").children){const component=catalog.defense.find(c=>c.id===block.dataset.defense);if($("defense-"+component.id).checked)value.defenses.push({id:component.id,params:readParams($("defense-params-"+component.id))});}
   return value;
 }
 function controls() {
@@ -101,7 +101,7 @@ function preview(){
     $("topology-summary").dataset.placement=c.server_execution;
     const assignment=c.client_servers.length?c.client_servers:Array.from({length:c.clients},(_,i)=>i%c.servers);
     $("topology-summary").textContent=Array.from({length:c.servers},(_,sid)=>`Server ${sid}: ${currentLanguage==="en"?"clients":"client"} ${assignment.flatMap((server,cid)=>server===sid?[cid]:[]).join(", ")}`).join(" · ");
-    timeline(c);$("validation-status").textContent=uiText("Configuration needs validation");$("download").classList.add("hidden");$("messages").replaceChildren();
+    timeline(c);recommendations(c);$("validation-status").textContent=uiText("Configuration needs validation");$("download").classList.add("hidden");$("messages").replaceChildren();
   } catch(error){$("validation-status").textContent=error.message;$("download").classList.add("hidden");$("preview").textContent=(currentLanguage==="en"?"Incomplete configuration: ":"Configurazione incompleta: ")+error.message;}
 }
 async function request(path,body){const response=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json","X-ATIMA-Token":token},body:JSON.stringify(body)}:{});const result=await response.json();if(!response.ok)throw new Error(result.error || response.statusText);return result;}
@@ -117,12 +117,37 @@ async function initialize(){
   $("mode-simple").addEventListener("click",()=>setMode("simple"));$("mode-advanced").addEventListener("click",()=>setMode("advanced"));
   $("attack-enabled").addEventListener("change",()=>{if($("attack-enabled").checked && $("attack").value==="none"){const choice=catalog.attack.find(c=>c.id!=="none");if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}}});
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});
-  for(const component of catalog.defense){const label=node("label"),input=node("input");input.type="checkbox";input.id="defense-"+component.id;label.append(input,document.createTextNode(" "+componentLabel(component,"title")));const params=node("div",undefined,"fields");params.id="defense-params-"+component.id;parameterFields(component,params);$("defense-components").append(label,params);}
+  for(const component of catalog.defense){const label=node("label"),input=node("input");input.type="checkbox";input.id="defense-"+component.id;label.append(input,document.createTextNode(" "+componentLabel(component,"title")));const params=node("div",undefined,"fields");params.id="defense-params-"+component.id;parameterFields(component,params);const block=node("div",undefined,"defense-stage");block.dataset.defense=component.id;
+    const up=node("button","Move up"),down=node("button","Move down");up.type=down.type="button";
+    up.addEventListener("click",()=>{if(block.previousElementSibling)block.previousElementSibling.before(block);preview();});
+    down.addEventListener("click",()=>{if(block.nextElementSibling)block.nextElementSibling.after(block);preview();});
+    params.classList.add("advanced-only");block.append(label,up,down,params);$("defense-components").append(block);}
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Fonte scientifica");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("refresh-results").addEventListener("click",refreshResults);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);
   const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
   for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
 }
 initialize().catch(error=>{$("catalog-status").textContent=uiText("Catalog unavailable");$("messages").append(node("p",error.message,"error"));});
+
+function recommendations(c){
+  const target=$("defense-recommendations");target.replaceChildren();
+  if(c.attack==="none"){target.append(node("p","Enable an attack to see candidate protections."));return;}
+  const attack=catalog.attack.find(x=>x.id===c.attack);
+  target.append(node("p","Candidates to test, not guaranteed solutions. Effects depend on non-IID data and the malicious fraction in each server group."));
+  if(attack.threats?.some(t=>["stealth_poisoning","adaptive_poisoning"].includes(t)))target.append(node("p","This attack can evade robust aggregation; a suggested method is a test hypothesis, not a known cure.","warning"));
+  if(attack.threats?.includes("data_poisoning"))target.append(node("p","Server update defenses do not repair poisoned labels or features. Track recall for every class."));
+  for(const component of [...catalog.defense,...catalog.aggregator]){
+    if(!component.mitigates?.some(t=>attack.threats?.includes(t)))continue;
+    const card=node("article",undefined,"defense-candidate");
+    card.append(node("strong",componentLabel(component,"title")),node("p",componentLabel(component,"limitations")));
+    for(const reference of component.references){const link=node("a","Scientific source");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}
+    target.append(card);
+  }
+}
+async function saveStudy(){
+  $("messages").replaceChildren();
+  try{const result=await request("/api/defense-study",config());$("download").href=result.download;$("download").classList.remove("hidden");$("messages").append(node("p","Four-condition study exported. No training started. A common round cap disables stopping before that cap."));}
+  catch(error){$("messages").append(node("p",error.message,"error"));}
+}

@@ -32,6 +32,7 @@ PLUGIN = Component(
     {"relative_l2": {"type": "number", "default": 1.0, "minimum": 0}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    threats=("coordinate_outlier", "byzantine_update"),
     translations={
         "it": {
             "title": "Rumore gaussiano nel delta",

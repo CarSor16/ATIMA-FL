@@ -27,6 +27,11 @@ def compare(clean, attacked, destination):
 
     with h5py.File(clean / "trajectory.h5") as c, h5py.File(attacked / "trajectory.h5") as a:
         cp, ap = weights(c["initial"]), weights(a["initial"])
+        if len(cp) != len(ap) or any(not np.array_equal(x, y) for x, y in zip(cp, ap)):
+            raise ValueError("Pair initial weights differ")
+        initial_hash = hashlib.sha256(
+            b"".join(str((w.shape, str(w.dtype))).encode() + w.tobytes() for w in cp)
+        ).hexdigest()
         for r in range(1, min(cm["last_valid_round"], am["last_valid_round"]) + 1):
             key = f"rounds/round_{r:04d}"
             cg, ag = c[key], a[key]
@@ -99,6 +104,13 @@ def compare(clean, attacked, destination):
             "aud_definition": summary["aud_definition"],
             "pair_id": cm["pair_id"],
             "attack": am["config"]["attack"],
+            "clean_attack_metrics": cf.get("attack_metrics"),
+            "attacked_attack_metrics": af.get("attack_metrics"),
+        },
+        "protocol": {
+            "condition": condition,
+            "runtime": am["runtime"],
+            "initial_weights_sha256": initial_hash,
         },
         "rounds": rows,
     }

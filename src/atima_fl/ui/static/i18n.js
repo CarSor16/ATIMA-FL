@@ -1,5 +1,16 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Move up": "Sposta su",
+  "Move down": "Sposta giù",
+  "Choose multiple stages and their order. Parameters are available in Advanced.": "Scegli più stadi e il loro ordine. I parametri sono nella modalità Avanzata.",
+  "Suggested protections for this attack": "Protezioni candidate per questo attacco",
+  "Enable an attack to see candidate protections.": "Attiva un attacco per vedere le protezioni candidate.",
+  "Candidates to test, not guaranteed solutions. Effects depend on non-IID data and the malicious fraction in each server group.": "Candidate da testare, senza garanzie. Gli effetti dipendono dai dati non-IID e dalla frazione malevola in ciascun gruppo di server.",
+  "This attack can evade robust aggregation; a suggested method is a test hypothesis, not a known cure.": "Questo attacco può eludere l’aggregazione robusta; il suggerimento è un’ipotesi da testare, non una soluzione certa.",
+  "Server update defenses do not repair poisoned labels or features. Track recall for every class.": "Le difese sugli update non riparano etichette o feature avvelenate. Controlla il recall di ciascuna classe.",
+  "Export defense comparison study": "Esporta confronto delle difese",
+  "Four-condition study exported. No training started. A common round cap disables stopping before that cap.": "Studio a quattro condizioni esportato. Nessun training avviato. Il cap comune impedisce lo stopping prima di quel limite.",
+
   "Attack disabled; selection is preserved for later.": "Attacco disattivato; selezione conservata per riattivarlo.",
 "Aggregation server placement":"Posizionamento dei server di aggregazione",
 "Logical servers · processes in one job":"Server logici · processi nello stesso job",

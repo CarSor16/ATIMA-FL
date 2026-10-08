@@ -39,6 +39,7 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare},
     references=("https://arxiv.org/abs/2207.01982",),
+    threats=("data_poisoning", "byzantine_update"),
     translations={
         "it": {
             "title": "LabelFlip mirato",

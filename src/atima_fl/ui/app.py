@@ -7,7 +7,7 @@ import secrets
 from urllib.parse import urlparse, unquote
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
-from atima_fl.engine.plans import save_plan
+from atima_fl.engine.plans import save_plan, save_defense_study
 
 STATIC = Path(__file__).parent / "static"
 
@@ -152,14 +152,15 @@ class Handler(BaseHTTPRequestHandler):
                         },
                     },
                 )
-            if self.path == "/api/plans":
-                directory = save_plan(config, self.server.workspace)
+            if self.path in {"/api/plans", "/api/defense-study"}:
+                exporter = save_defense_study if self.path == "/api/defense-study" else save_plan
+                directory = exporter(config, self.server.workspace)
                 return self.respond(
                     201,
                     {
-                        "name": config.name,
+                        "name": directory.name,
                         "directory": str(directory),
-                        "download": f"/api/plans/{config.name}/plan.zip",
+                        "download": f"/api/plans/{directory.name}/plan.zip",
                     },
                 )
             return self.respond(404, {"error": "Not found"})

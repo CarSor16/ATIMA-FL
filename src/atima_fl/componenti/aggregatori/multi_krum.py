@@ -31,8 +31,14 @@ PLUGIN = Component(
         "select": {"type": "integer", "default": 3, "minimum": 1},
     },
     {"validate": validate, "aggregate": aggregate},
+    mitigates=("byzantine_update", "coordinate_outlier"),
+    limitations="Assumptions apply within each aggregation group. Non-IID honest updates, ALIE and adaptive Fang attacks can undermine robustness; validate the Byzantine bound locally.",
+    references=(
+        "https://proceedings.neurips.cc/paper/2017/hash/f4b9ec30ad9f68f89b29639786cb62ef-Abstract.html",
+    ),
     translations={
         "it": {
+            "limitations": "Le ipotesi valgono in ogni gruppo di aggregazione. Update onesti non-IID, ALIE e Fang adattivo possono compromettere la robustezza; verificare localmente il limite bizantino.",
             "title": "Multi-Krum",
             "description": "Media dei migliori m score in un solo passaggio.",
         }

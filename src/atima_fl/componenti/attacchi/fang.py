@@ -98,6 +98,7 @@ PLUGIN = Component(
     },
     {"validate": validate, "knowledge": statistical_knowledge, "transform": transform},
     references=("https://www.usenix.org/system/files/sec20-fang.pdf",),
+    threats=("adaptive_poisoning", "byzantine_update"),
     translations={
         "it": {
             "title": "Fang",

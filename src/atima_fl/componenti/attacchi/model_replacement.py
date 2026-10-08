@@ -116,6 +116,7 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare, "transform": transform, "evaluate": evaluate},
     references=("https://proceedings.mlr.press/v108/bagdasaryan20a.html",),
+    threats=("backdoor", "large_norm", "byzantine_update"),
     translations={
         "it": {
             "title": "ModelReplacement / Backdoor",

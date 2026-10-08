@@ -15,8 +15,12 @@ PLUGIN = Component(
     "Limits each delta norm before aggregation.",
     {"clip_norm": {"type": "number", "default": 10.0, "minimum": 0.000001}},
     {"apply": apply},
+    mitigates=("large_norm", "backdoor"),
+    limitations="Bounds update magnitude, not malicious intent. Low-norm and direction-only attacks can survive. Tune without test-set leakage; no DP guarantee.",
+    references=("https://arxiv.org/abs/1911.07963",),
     translations={
         "it": {
+            "limitations": "Limita la grandezza, non identifica intenti malevoli. Attacchi a norma bassa o solo direzionali possono passare. Soglia scelta senza usare il test; nessuna garanzia DP.",
             "title": "Clipping L2",
             "description": "Limita la norma di ciascun delta prima dell’aggregazione.",
         }

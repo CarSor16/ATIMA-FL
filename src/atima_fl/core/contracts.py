@@ -15,6 +15,9 @@ class Component:
     references: tuple[str, ...] = ()
     version: str = "1"
     translations: dict = field(default_factory=dict)
+    threats: tuple[str, ...] = ()
+    mitigates: tuple[str, ...] = ()
+    limitations: str = ""
 
     def public(self):
         return {
@@ -27,6 +30,9 @@ class Component:
             "version": self.version,
             "hooks": sorted(self.hooks),
             "translations": self.translations,
+            "threats": list(self.threats),
+            "mitigates": list(self.mitigates),
+            "limitations": self.limitations,
         }
 
 

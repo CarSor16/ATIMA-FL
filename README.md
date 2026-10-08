@@ -125,6 +125,21 @@ components use `atima ui --plugins PATH`. No central component-name dispatch is
 needed. Plugins are trusted Python code; only load code you have reviewed.
 See [the component contract](docs/COMPONENTS.md) and [attack mechanisms](docs/ATTACKS.md).
 
+## Select and compare defenses
+
+Choose multiple ordered preprocessing stages in Simple mode; tune their parameters
+in Advanced. Available stages are fixed L2 clipping, adaptive quantile clipping
+and coordinate median/MAD bounding. Choose one aggregator: FedAvg, median, trimmed
+mean, Krum, Multi-Krum or smoothed geometric median. Suggested protections come
+from plugin threat/mitigation metadata and display assumptions and scientific sources.
+
+**Export defense comparison study** prepares clean/attack runs both with and
+without protection, using a declared common round cap. It does not launch training.
+The CLI equivalents are `atima defense-study`, `atima compare-defenses` and
+`atima defense-statistics`. Compare attacked performance, clean utility, per-class
+recall and backdoor ASR where applicable; use independent matched seed quartets
+for uncertainty. See [the defense protocol and commands](docs/DEFENSES.md).
+
 ## Scientific scope
 
 Ten mechanisms: LabelFlip, ALIE, IPM, Fang, ModelReplacement/backdoor plus random

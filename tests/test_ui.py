@@ -79,3 +79,30 @@ def test_gui_validates_variable_population_and_server_groups(gui):
     with pytest.raises(HTTPError) as caught:
         urlopen(Request(url + "/api/validate", json.dumps(c).encode(), headers=headers))
     assert caught.value.code == 422
+
+
+def test_gui_exports_composed_defense_study_without_launch(gui):
+    _, url = gui
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    c = json.load(urlopen(url + "/api/defaults"))
+    c.update(
+        name="FlipAttack_fixture",
+        attack="sign_flip",
+        aggregation="median",
+        defenses=[
+            {"id": "adaptive_clipping", "params": {}},
+            {"id": "coordinate_winsorization", "params": {}},
+        ],
+    )
+    exported = json.load(
+        urlopen(Request(url + "/api/defense-study", json.dumps(c).encode(), headers=headers))
+    )
+    with zipfile.ZipFile(io.BytesIO(urlopen(url + exported["download"]).read())) as archive:
+        study = json.loads(archive.read("study.json"))
+        assert len(study["profiles"]) == 4
+        protected = json.loads(archive.read("plans/FlipAttack_fixture_AttackProtected/plan.json"))
+        assert [s["id"] for s in protected["config"]["defenses"]] == [
+            "adaptive_clipping",
+            "coordinate_winsorization",
+        ]

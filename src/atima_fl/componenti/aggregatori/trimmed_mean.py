@@ -26,8 +26,12 @@ PLUGIN = Component(
     "Removes k extremes from each side of every coordinate.",
     {"trim_count": {"type": "integer", "default": 2, "minimum": 0}},
     {"validate": validate, "aggregate": aggregate},
+    mitigates=("byzantine_update", "coordinate_outlier"),
+    limitations="Assumptions apply within each aggregation group. Non-IID honest updates, ALIE and adaptive Fang attacks can undermine robustness; validate the Byzantine bound locally.",
+    references=("https://proceedings.mlr.press/v80/yin18a.html",),
     translations={
         "it": {
+            "limitations": "Le ipotesi valgono in ogni gruppo di aggregazione. Update onesti non-IID, ALIE e Fang adattivo possono compromettere la robustezza; verificare localmente il limite bizantino.",
             "title": "Trimmed mean",
             "description": "Esclude k estremi per lato in ciascuna coordinata.",
         }

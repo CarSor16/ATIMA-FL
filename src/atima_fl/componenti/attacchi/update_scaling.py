@@ -22,6 +22,7 @@ PLUGIN = Component(
     {"factor": {"type": "number", "default": 5.0, "minimum": 1}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    threats=("large_norm", "byzantine_update"),
     translations={
         "it": {
             "title": "Amplificazione del delta",
