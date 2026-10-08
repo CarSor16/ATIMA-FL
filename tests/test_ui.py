@@ -164,17 +164,84 @@ def test_gui_theme_toggle_brand_and_assets(gui):
     assert '"Light mode": "Modalità chiara"' in translation
 
 
-def test_defense_controls_are_compact_and_preserve_stage_export_order(gui):
+def test_defense_pipeline_drag_and_keyboard_preserve_stage_export_order(gui):
     _, url = gui
     script = urlopen(url + "/app.js").read().decode("utf-8")
     page = urlopen(url + "/").read().decode("utf-8")
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+    styles = urlopen(url + "/style.css").read().decode("utf-8")
     assert 'node("button","Move up")' not in script
     assert 'node("button","Move down")' not in script
-    assert 'block.append(label,params)' in script
+    assert 'id="defense-picker"' in page
+    assert 'id="defense-components"' in page
+    assert 'id="defense-order-status"' in page
+    assert 'function initializeDefenses()' in script
+    assert 'function setDefenseEnabled(component, enabled, initialParams=null)' in script
+    assert 'grip.addEventListener("dragstart"' in script
+    assert 'block.addEventListener("drop"' in script
+    assert 'grip.addEventListener("keydown"' in script
+    assert 'event.key==="ArrowUp"' in script
+    assert 'event.key==="ArrowDown"' in script
     assert 'for(const block of $("defense-components").children)' in script
-    assert "They run in the displayed order" in page
-    assert "nell’ordine mostrato" in translations
+    assert 'value.defenses.push({id:component.id,params:readParams(' in script
+    assert 'Drag the grip to reorder' in page
+    assert '"Reorder defense": "Riordina difesa"' in translations
+    assert '.defense-stage.drop-before' in styles
+    assert '[data-theme="dark"] .defense-grip' in styles
+
+
+def test_local_deployment_paths_prefill_without_dataset_or_remote_access(gui):
+    server, url = gui
+    settings = server.workspace / "deployment_defaults.json"
+    payload = {
+        "dataset_root": "/unavailable-on-windows/example/prepared",
+        "output_root": "/cluster-only/output",
+    }
+    settings.write_text(json.dumps(payload), encoding="utf-8")
+    defaults = json.load(urlopen(url + "/api/defaults"))
+    assert defaults["dataset_root"] == payload["dataset_root"]
+    assert defaults["output_root"] == payload["output_root"]
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    defaults.update(
+        name="Deployment_defaults_fixture",
+        defenses=[
+            {"id": "coordinate_winsorization", "params": {}},
+            {"id": "norm_clipping", "params": {}},
+        ],
+    )
+    result = json.load(urlopen(Request(
+        url + "/api/validate", json.dumps(defaults).encode(), headers=headers
+    )))
+    assert result["checks"]["dataset"] == "not_checked"
+    assert result["config"]["dataset_root"] == payload["dataset_root"]
+    assert [d["id"] for d in result["config"]["defenses"]] == [
+        "coordinate_winsorization", "norm_clipping"
+    ]
+    exported = json.load(urlopen(Request(
+        url + "/api/plans", json.dumps(defaults).encode(), headers=headers
+    )))
+    import tomllib
+    with zipfile.ZipFile(io.BytesIO(urlopen(url + exported["download"]).read())) as archive:
+        toml = tomllib.loads(archive.read("experiment.toml").decode("utf-8"))
+    assert toml["experiment"]["dataset_root"] == payload["dataset_root"]
+    assert toml["experiment"]["output_root"] == payload["output_root"]
+    assert [d["id"] for d in toml["experiment"]["defenses"]] == [
+        "coordinate_winsorization", "norm_clipping"
+    ]
+    # The designer never resolves the remote paths or downloads prepared data.
+    assert not (server.workspace / "results").exists()
+
+
+def test_local_deployment_path_preset_rejects_unexpected_keys(gui):
+    server, url = gui
+    (server.workspace / "deployment_defaults.json").write_text(
+        json.dumps({"dataset_root": "/dataset", "secret": "not allowed"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(HTTPError) as caught:
+        urlopen(url + "/api/defaults")
+    assert caught.value.code == 422
 
 
 def test_new_dataset_plugin_and_its_reference_labels_are_discovered_without_data(tmp_path):
