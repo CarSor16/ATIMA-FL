@@ -141,7 +141,10 @@ def sync_cluster_results(workspace, runner=subprocess.run):
     """
     settings = connection_settings(workspace)
     if not settings:
-        raise ValueError("Set up cluster_connection.json in the local ATIMA workspace")
+        raise ValueError(
+            f"cluster_connection.json not found in active ATIMA workspace: "
+            f"{Path(workspace).resolve()}"
+        )
     root = settings["remote_results_root"]
     remote_script = f"""
 import json

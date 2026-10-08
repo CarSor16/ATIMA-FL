@@ -100,7 +100,11 @@ def test_web_status_endpoint_and_token_required_for_sync(tmp_path, monkeypatch):
     try:
         url = f"http://127.0.0.1:{server.server_port}"
         status = json.load(urlopen(url + "/api/cluster-status"))
-        assert status == {"configured": True, "host": "cluster.example.edu"}
+        assert status == {
+            "configured": True, "host": "cluster.example.edu",
+            "workspace": str(tmp_path.resolve()),
+            "config_path": str(tmp_path.resolve() / "cluster_connection.json"),
+        }
         with pytest.raises(HTTPError) as caught:
             urlopen(Request(
                 url + "/api/sync-cluster-results", data=b"{}",
@@ -280,3 +284,28 @@ def test_absent_source_identity_does_not_falsely_match_clean_run(tmp_path):
         }))
     runs = {row["id"]: row for row in results(tmp_path)}
     assert runs["Attack"]["baseline_id"] is None
+
+
+
+def test_missing_connection_error_shows_actual_active_workspace(tmp_path):
+    with pytest.raises(ValueError, match="cluster_connection.json not found") as exc:
+        sync_cluster_results(tmp_path, runner=lambda *args, **kwargs: None)
+    assert str(tmp_path.resolve()) in str(exc.value)
+
+
+def test_cluster_status_exposes_missing_config_location_not_secrets(tmp_path):
+    server = create_server(tmp_path, 0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}"
+        status = json.load(urlopen(url + "/api/cluster-status"))
+        assert status == {
+            "configured": False, "host": None,
+            "workspace": str(tmp_path.resolve()),
+            "config_path": str(tmp_path.resolve() / "cluster_connection.json"),
+        }
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()

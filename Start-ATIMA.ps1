@@ -109,10 +109,33 @@ try {
         "-c", "from atima_fl.core.configuration import ExperimentConfig; ExperimentConfig().validate(); print('ATIMA component registry: OK')"
     ) -Description "Checking package and component registry"
 
+    # Always reuse the workspace containing the existing cluster configuration.
+    # An explicit -Workspace takes precedence, followed by ATIMA_WORKSPACE.
+    $workspaceParent = Split-Path -Parent $projectRoot
+    $standardWorkspace = Join-Path $workspaceParent "ATIMA-workspace"
+    $existingWorkspace = Join-Path $workspaceParent "Workspace_ATIMA"
     if ([string]::IsNullOrWhiteSpace($Workspace)) {
-        $Workspace = Join-Path (Split-Path -Parent $projectRoot) "ATIMA-workspace"
+        if (-not [string]::IsNullOrWhiteSpace($env:ATIMA_WORKSPACE)) {
+            $Workspace = $env:ATIMA_WORKSPACE
+            Write-Host "[ATIMA] Workspace selected from ATIMA_WORKSPACE."
+        } elseif (
+            (Test-Path -LiteralPath (Join-Path $existingWorkspace "cluster_connection.json") -PathType Leaf) -and
+            -not (Test-Path -LiteralPath (Join-Path $standardWorkspace "cluster_connection.json") -PathType Leaf)
+        ) {
+            $Workspace = $existingWorkspace
+            Write-Host "[ATIMA] Reusing configured Workspace_ATIMA from previous sessions."
+        } else {
+            $Workspace = $standardWorkspace
+        }
     }
+    $Workspace = [System.IO.Path]::GetFullPath($Workspace)
     Write-Host "[ATIMA] Workspace: $Workspace"
+    $clusterConfigPath = Join-Path $Workspace "cluster_connection.json"
+    if (Test-Path -LiteralPath $clusterConfigPath -PathType Leaf) {
+        Write-Host "[ATIMA] Cluster connection file: found"
+    } else {
+        Write-Warning "Cluster connection file not found at: $clusterConfigPath"
+    }
     # Probe loopback binding without requiring optional Windows networking cmdlets.
     $portProbe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
     $portAvailable = $false

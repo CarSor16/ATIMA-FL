@@ -415,8 +415,8 @@ async function refreshClusterStatus(){
   try {
     const status=await request("/api/cluster-status");
     $("cluster-status").textContent=status.configured
-      ? `SSH configured for ${status.host}. Import on demand; no background connection.`
-      : "Not configured. Add cluster_connection.json to the ATIMA workspace with your SSH hostname, username, and remote results path.";
+      ? `SSH configured for ${status.host}. Active workspace: ${status.workspace}. Import on demand.`
+      : `Cluster not configured. ATIMA is looking for: ${status.config_path}`;
   }catch(error){$("cluster-status").textContent=error.message;}
 }
 async function syncClusterResults(){

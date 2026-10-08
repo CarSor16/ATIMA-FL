@@ -155,7 +155,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, config.resolved())
             if path == "/api/cluster-status":
                 settings = connection_settings(self.server.workspace)
-                return self.respond(200, {"configured": settings is not None, "host": settings["ssh_host"] if settings else None})
+                return self.respond(200, {
+                    "configured": settings is not None,
+                    "host": settings["ssh_host"] if settings else None,
+                    "workspace": str(self.server.workspace),
+                    "config_path": str(self.server.workspace / "cluster_connection.json"),
+                })
             if path == "/api/results":
                 return self.respond(200, results(self.server.workspace))
             if path.startswith("/api/plans/") and path.endswith("/plan.zip"):

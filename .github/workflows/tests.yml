@@ -30,6 +30,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'ATIMA launcher failed bootstrap' }
           .\Avvia_ATIMA_FL.cmd -Doctor -NoInstall
           if ($LASTEXITCODE -ne 0) { throw 'ATIMA launcher failed read-only checks' }
+      - name: Verify Windows launcher reuses existing configured workspace
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $previous = $env:ATIMA_WORKSPACE
+          $env:ATIMA_WORKSPACE = ''
+          $configured = Join-Path (Split-Path -Parent (Get-Location).Path) 'Workspace_ATIMA'
+          New-Item -ItemType Directory -Force -Path $configured | Out-Null
+          Set-Content -LiteralPath (Join-Path $configured 'cluster_connection.json') -Value '{}' -Encoding utf8
+          try {
+            $output = & .\Avvia_ATIMA_FL.cmd -Doctor -NoInstall 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw $output }
+            if (-not $output.Contains("[ATIMA] Workspace: $configured")) {
+              throw "Launcher did not reuse Workspace_ATIMA: $output"
+            }
+            $manual = & .\Avvia_ATIMA_FL.cmd -Doctor -NoInstall -Workspace $env:RUNNER_TEMP 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw $manual }
+            if (-not $manual.Contains("[ATIMA] Workspace: $env:RUNNER_TEMP")) {
+              throw "Explicit workspace was ignored: $manual"
+            }
+          } finally {
+            $env:ATIMA_WORKSPACE = $previous
+          }
   scientific-software:
     runs-on: ubuntu-latest
     steps:

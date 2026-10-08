@@ -214,6 +214,15 @@ $env:ATIMA_WORKSPACE = "N:\\Desktop\\tirocinio\\Test_Cluster\\Workspace_ATIMA"
 .\\.venv\\Scripts\\python.exe -m atima_fl.ui.cluster_credentials check
 ```
 
+On Windows, `Avvia_ATIMA_FL.cmd` automatically reuses an existing
+`../Workspace_ATIMA/cluster_connection.json` when
+`../ATIMA-workspace/cluster_connection.json` is absent. Explicit
+`-Workspace` overrides this discovery, while the optional
+`ATIMA_WORKSPACE` environment variable overrides the automatic defaults.
+The launcher prints its active workspace and whether the JSON exists;
+the Results page also shows the exact active workspace/config path.
+No credential files are copied or written during detection.
+
 The workspace must contain `cluster_connection.json` with the verified host,
 username, and read-only results directory. `set` asks for the password in
 a masked terminal prompt and stores it in the signed-in Windows user's
