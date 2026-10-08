@@ -170,8 +170,8 @@ declared. Shared files are not a privacy barrier.
 
 Update attacks modify trainable parameters only: model buffers such as BatchNorm
 running variance retain the local values. Raw and submitted updates are audited
-separately. Current model plugins are MLP and linear classifier; the historical
-CNN/transformer are preserved in previous project material, not claimed as ported.
+separately. Current model plugins are MLP, linear classifier and LopezCNN; the historical
+transformer is not claimed as ported or benchmarked.
 
 Tests on synthetic fixtures establish software behavior. Dataset accuracy,
 attack efficacy, GPU throughput and cross-platform execution require separate
