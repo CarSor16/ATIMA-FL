@@ -17,6 +17,7 @@ const UI_TRANSLATIONS = {
 "Physical servers · distinct Slurm nodes":"Server fisici · nodi Slurm distinti",
 "Multiple servers: group aggregation followed by a global coordinator. Choose local processes or distinct allocated Slurm nodes in Advanced. Dataset shards must match the client count.":"Più server: aggregazioni di gruppo, poi un coordinatore globale. In Avanzata scegli processi locali o nodi Slurm distinti allocati. Gli shard devono corrispondere al numero di client.",
 "This experiment name is already saved; choose a different name.":"Questo nome di esperimento è già salvato; scegli un nome diverso.",
+  "For Edge-IIoT, use env:ATIMA_EDGE_IIOT_ROOT to resolve the prepared dataset on the cluster. No local data is needed to export a plan.": "Per Edge-IIoT, usa env:ATIMA_EDGE_IIOT_ROOT per individuare il dataset preparato sul cluster. Non serve averlo sul PC per esportare il piano.",
   "Language": "Lingua",
   "Settings mode": "Modalità impostazioni",
   "Attack window": "Finestra dell’attacco",
