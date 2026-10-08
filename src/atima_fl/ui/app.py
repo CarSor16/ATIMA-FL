@@ -31,7 +31,7 @@ def deployment_defaults(workspace):
     if path.stat().st_size > 16 * 1024:
         raise ValueError("deployment_defaults.json exceeds 16 KiB")
     try:
-        values = json.loads(path.read_text(encoding="utf-8"))
+        values = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid deployment_defaults.json: {error}") from error
     if not isinstance(values, dict) or set(values) - {"dataset_root", "output_root"}:
