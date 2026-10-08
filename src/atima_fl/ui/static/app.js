@@ -196,10 +196,9 @@ async function initialize(){
   $("attack-enabled").addEventListener("change",()=>{if($("attack-enabled").checked && $("attack").value==="none"){const choice=catalog.attack.find(c=>c.id!=="none");if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}}});
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});
   for(const component of catalog.defense){const label=node("label"),input=node("input");input.type="checkbox";input.id="defense-"+component.id;label.append(input,document.createTextNode(" "+componentLabel(component,"title")));const params=node("div",undefined,"fields");params.id="defense-params-"+component.id;parameterFields(component,params);const block=node("div",undefined,"defense-stage");block.dataset.defense=component.id;
-    const up=node("button","Move up"),down=node("button","Move down");up.type=down.type="button";
-    up.addEventListener("click",()=>{if(block.previousElementSibling)block.previousElementSibling.before(block);preview();});
-    down.addEventListener("click",()=>{if(block.nextElementSibling)block.nextElementSibling.after(block);preview();});
-    params.classList.add("advanced-only");block.append(label,up,down,params);$("defense-components").append(block);}
+    // A stable, catalog-defined order keeps the pipeline deterministic.
+    // The TOML defense list remains the authoritative order for cluster runs.
+    params.classList.add("advanced-only");block.append(label,params);$("defense-components").append(block);}
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Fonte scientifica");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
