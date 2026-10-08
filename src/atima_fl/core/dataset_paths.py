@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 
-_ENV_REFERENCE = re.compile(r"env:(ATIMA_[A-Z][A-Z0-9_]*)\\Z")
+_ENV_REFERENCE = re.compile(r"env:(ATIMA_[A-Z][A-Z0-9_]*)\Z")
 
 
 def resolve_dataset_root(value):
