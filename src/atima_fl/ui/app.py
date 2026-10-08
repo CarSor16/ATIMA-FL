@@ -11,6 +11,7 @@ from atima_fl.engine.plans import save_plan, save_defense_study
 from atima_fl.ui.cluster_results import (
     connection_settings, read_local_history, sync_cluster_results,
 )
+from atima_fl.ui.cluster_datasets import discover_cluster_datasets
 
 STATIC = Path(__file__).parent / "static"
 
@@ -211,6 +212,10 @@ class Handler(BaseHTTPRequestHandler):
             ):
                 raise ValueError("Expected a JSON request within 1 MiB")
             body = json.loads(self.rfile.read(length))
+            if self.path == "/api/discover-cluster-datasets":
+                if body != {}:
+                    raise ValueError("Cluster dataset discovery takes no client-side parameters")
+                return self.respond(200, discover_cluster_datasets(self.server.workspace))
             if self.path == "/api/sync-cluster-results":
                 if body != {}:
                     raise ValueError("Cluster sync takes no client-side parameters")

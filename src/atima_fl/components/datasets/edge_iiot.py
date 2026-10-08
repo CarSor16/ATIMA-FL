@@ -250,19 +250,19 @@ def open_dataset(config, params):
 PLUGIN = Component(
     "edge_iiot",
     "dataset",
-    "EdgeIIoT multiclass-logiat",
-    "Prepared Edge-IIoT: legacy 5-class or verified binary/6-family/15-type label projection.",
+    "Edge-IIoT",
+    "Prepared Edge-IIoT: 2-class binary, 5-class prepared, 6-family or 15-type tasks; availability depends on source labels.",
     parameters={
         "task": {
             "type": "string", "default": "prepared_5",
             "choices": ["prepared_5", "binary", "family_6", "fine_15"],
-            "description": "Classification task (source labels required for 2/6/15)",
+            "description": "Classification task",
         }
     },
     hooks={"validate": validate, "open": open_dataset, "task_catalog": task_options},
     translations={
         "it": {
-            "title": "EdgeIIoT multiclass-logiat",
+            "title": "Edge-IIoT",
             "description": "Dati Edge-IIoT: 5 classi legacy o proiezioni verificate a 2/6/15 classi.",
         }
     },
