@@ -19,6 +19,30 @@ def child(root, name):
     return target
 
 
+def deployment_defaults(workspace):
+    """Load optional execution paths locally, never from tracked source.
+
+    These paths are configuration references, not proof that the remote data
+    exist. Validation/export on Windows must not read or mount cluster data.
+    """
+    path = Path(workspace) / "deployment_defaults.json"
+    if not path.is_file():
+        return {}
+    if path.stat().st_size > 16 * 1024:
+        raise ValueError("deployment_defaults.json exceeds 16 KiB")
+    try:
+        values = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid deployment_defaults.json: {error}") from error
+    if not isinstance(values, dict) or set(values) - {"dataset_root", "output_root"}:
+        raise ValueError(
+            "deployment_defaults.json must contain only dataset_root and output_root"
+        )
+    if any(not isinstance(value, str) or not value.strip() or "\\x00" in value for value in values.values()):
+        raise ValueError("Deployment paths must be non-empty strings without null bytes")
+    return values
+
+
 def results(workspace):
     values = []
     root = workspace / "results"
@@ -90,10 +114,12 @@ class Handler(BaseHTTPRequestHandler):
                         tasks[component["id"]] = hook()
                 return self.respond(200, tasks)
             if path == "/api/defaults":
-                config = ExperimentConfig(
-                    output_root=str(self.server.workspace / "results"),
-                    plugin_directory=str(self.server.plugins or ""),
-                )
+                values = {
+                    "output_root": str(self.server.workspace / "results"),
+                    "plugin_directory": str(self.server.plugins or ""),
+                }
+                values.update(deployment_defaults(self.server.workspace))
+                config = ExperimentConfig(**values)
                 return self.respond(200, config.resolved())
             if path == "/api/results":
                 return self.respond(200, results(self.server.workspace))
