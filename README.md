@@ -201,6 +201,34 @@ separately using an approved university transfer method. Failures show a
 generic error rather than exposing SSH stderr. There is no SSH password
 storage, remote command configuration, reverse connection or background poll.
 
+## Optional stored SSH password on Windows
+
+For password-only university SSH access, install the optional cluster packages
+and let Windows Credential Manager protect the existing account password:
+
+```powershell
+cd "N:\\Desktop\\tirocinio\\Test_Cluster\\ATIMA-FL"
+.\\.venv\\Scripts\\python.exe -m pip install -e '.[cluster]'
+$env:ATIMA_WORKSPACE = "N:\\Desktop\\tirocinio\\Test_Cluster\\Workspace_ATIMA"
+.\\.venv\\Scripts\\python.exe -m atima_fl.ui.cluster_credentials set
+.\\.venv\\Scripts\\python.exe -m atima_fl.ui.cluster_credentials check
+```
+
+The workspace must contain `cluster_connection.json` with the verified host,
+username, and read-only results directory. `set` asks for the password in
+a masked terminal prompt and stores it in the signed-in Windows user's
+Credential Manager vault, not in the repository, JSON or environment variables.
+`delete` removes it. In the webapp, **Workspace Results → Import summaries
+from cluster** automatically uses that stored credential via Paramiko if
+present, otherwise retaining the original key-based OpenSSH route.
+
+The SSH server fingerprint must already be trusted in the Windows OpenSSH
+`~/.ssh/known_hosts` file. ATIMA rejects unknown SSH server host keys.
+SSH password authentication may be disallowed by cluster policy. This
+integration imports result summaries only: it **does not** submit Slurm jobs
+or upload TOML files. Credential Manager protects at rest but processes
+running as the same Windows account may access the credential.
+
 ## Workflow
 
 1. Choose components, seed, dataset paths and resource budget in the designer.
