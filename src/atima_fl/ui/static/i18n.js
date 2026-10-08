@@ -1,5 +1,7 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Dark mode": "Modalità scura",
+  "Light mode": "Modalità chiara",
   "Move up": "Sposta su",
   "Move down": "Sposta giù",
   "Choose multiple stages and their order. Parameters are available in Advanced.": "Scegli più stadi e il loro ordine. I parametri sono nella modalità Avanzata.",
