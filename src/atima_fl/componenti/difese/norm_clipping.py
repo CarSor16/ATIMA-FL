@@ -11,8 +11,14 @@ def apply(matrix, params):
 PLUGIN = Component(
     "norm_clipping",
     "defense",
-    "Clipping L2",
-    "Limita la norma di ciascun delta prima dell’aggregazione.",
+    "L2 clipping",
+    "Limits each delta norm before aggregation.",
     {"clip_norm": {"type": "number", "default": 10.0, "minimum": 0.000001}},
     {"apply": apply},
+    translations={
+        "it": {
+            "title": "Clipping L2",
+            "description": "Limita la norma di ciascun delta prima dell’aggregazione.",
+        }
+    },
 )

@@ -15,6 +15,9 @@ class ExperimentConfig:
     output_root: str = "results"
     seed: int = 2026
     clients: int = 10
+    servers: int = 1
+    client_servers: tuple = ()
+    server_execution: str = "processes"
     rounds: int = 50
     local_epochs: int = 3
     batch_size: int = 128
@@ -77,6 +80,7 @@ class ExperimentConfig:
         integer_keys = (
             "seed",
             "clients",
+            "servers",
             "rounds",
             "local_epochs",
             "batch_size",
@@ -100,6 +104,19 @@ class ExperimentConfig:
             raise ValueError("Invalid seed/training dimensions")
         if self.num_classes < 2 or not 1 <= self.rounds <= 50:
             raise ValueError("Classification requires >=2 classes; experiments allow 1..50 rounds")
+        if not 1 <= self.servers <= self.clients:
+            raise ValueError("Aggregation server count must be between 1 and total clients")
+        if self.server_execution not in {"processes", "slurm_nodes"}:
+            raise ValueError("Server execution must be processes or slurm_nodes")
+        if self.server_execution == "slurm_nodes" and self.servers < 2:
+            raise ValueError("Physical multi-host aggregation requires at least two servers")
+        assignment = self.server_assignment()
+        if len(assignment) != self.clients or any(
+            type(sid) is not int or not 0 <= sid < self.servers for sid in assignment
+        ):
+            raise ValueError("Assign exactly one valid aggregation server to every client")
+        if set(assignment) != set(range(self.servers)):
+            raise ValueError("Every aggregation server requires at least one client")
         if not math.isfinite(self.learning_rate) or self.learning_rate <= 0:
             raise ValueError("Learning rate must be finite and positive")
         if min(self.minimum_rounds, self.patience, self.coverage_window, self.client_cpus) < 1:
@@ -110,7 +127,10 @@ class ExperimentConfig:
             or not 0 <= self.recall_floor <= 1
         ):
             raise ValueError("Invalid stopping thresholds")
-        if self.cpu_budget < self.client_cpus + 2 or not 0 < self.client_gpu_fraction <= 1:
+        if (
+            self.cpu_budget < self.client_cpus + self.servers + 1
+            or not 0 < self.client_gpu_fraction <= 1
+        ):
             raise ValueError("Invalid CPU/GPU resource budget")
         if any(
             type(cid) is not int or not 0 <= cid < self.clients for cid in self.malicious_clients
@@ -131,6 +151,25 @@ class ExperimentConfig:
             hook = registry.get(kind, identifier).hooks.get("validate")
             if hook:
                 hook(self, registry.parameters(kind, identifier, params))
+                if kind == "aggregator" and self.servers > 1:
+                    from dataclasses import replace
+
+                    for sid in range(self.servers):
+                        ids = [cid for cid, group in enumerate(assignment) if group == sid]
+                        group_config = replace(
+                            self,
+                            clients=len(ids),
+                            servers=1,
+                            client_servers=(),
+                            server_execution="processes",
+                            malicious_clients=tuple(
+                                i for i, cid in enumerate(ids) if cid in self.malicious_clients
+                            ),
+                        )
+                        try:
+                            hook(group_config, registry.parameters(kind, identifier, params))
+                        except ValueError as error:
+                            raise ValueError(f"Aggregation server {sid}: {error}") from error
         for defense in self.defenses:
             if set(defense) != {"id", "params"}:
                 raise ValueError("Defense stages require id and params")
@@ -138,6 +177,12 @@ class ExperimentConfig:
         if len({d["id"] for d in self.defenses}) != len(self.defenses):
             raise ValueError("Duplicate defense stage")
         return self
+
+    def server_assignment(self):
+        """Stable logical routing; explicit assignments override round-robin groups."""
+        return tuple(self.client_servers) or tuple(
+            cid % self.servers for cid in range(self.clients)
+        )
 
     def selections(self):
         return [
@@ -193,7 +238,7 @@ class ExperimentConfig:
         unknown = set(values) - {f.name for f in fields(cls)}
         if unknown:
             raise ValueError(f"Unknown experiment fields: {sorted(unknown)}")
-        for key in ("malicious_clients", "defenses"):
+        for key in ("malicious_clients", "defenses", "client_servers"):
             if key in values:
                 values[key] = tuple(values[key])
         return cls(**values).validate()

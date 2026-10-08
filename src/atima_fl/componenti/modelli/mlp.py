@@ -23,7 +23,13 @@ PLUGIN = Component(
     "mlp",
     "model",
     "MLP",
-    "Rete feed-forward ReLU senza BatchNorm; baseline 64→32.",
+    "Feed-forward ReLU network without BatchNorm; default 64→32.",
     {"hidden": {"type": "array", "default": [64, 32], "items": {"type": "integer", "minimum": 1}}},
     {"validate": validate, "build": build},
+    translations={
+        "it": {
+            "title": "MLP",
+            "description": "Rete feed-forward ReLU senza BatchNorm; baseline 64→32.",
+        }
+    },
 )

@@ -103,7 +103,7 @@ PLUGIN = Component(
     "model_replacement",
     "attack",
     "ModelReplacement / Backdoor",
-    "Trigger numerico e train-and-scale; la sostituzione esatta dipende dai delta benigni.",
+    "Numerical trigger and train-and-scale; exact replacement depends on benign deltas.",
     {
         "poison_rate": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1},
         "trigger_indices": {
@@ -116,4 +116,10 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare, "transform": transform, "evaluate": evaluate},
     references=("https://proceedings.mlr.press/v108/bagdasaryan20a.html",),
+    translations={
+        "it": {
+            "title": "ModelReplacement / Backdoor",
+            "description": "Trigger numerico e train-and-scale; la sostituzione esatta dipende dai delta benigni.",
+        }
+    },
 )

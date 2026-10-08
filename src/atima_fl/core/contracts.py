@@ -14,6 +14,7 @@ class Component:
     hooks: dict[str, Callable] = field(default_factory=dict, repr=False)
     references: tuple[str, ...] = ()
     version: str = "1"
+    translations: dict = field(default_factory=dict)
 
     def public(self):
         return {
@@ -25,6 +26,7 @@ class Component:
             "references": list(self.references),
             "version": self.version,
             "hooks": sorted(self.hooks),
+            "translations": self.translations,
         }
 
 

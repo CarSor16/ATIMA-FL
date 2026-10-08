@@ -18,6 +18,7 @@ def train_local(config, run, client, round_id, before, data, device):
     params = registry.parameters("attack", config.attack, config.attack_params)
     metadata = {
         "client": client,
+        "aggregation_server": config.server_assignment()[client],
         "round": round_id,
         "is_malicious": config.attack != "none" and client in config.malicious_clients,
         "attack": config.attack if context.active else "none",

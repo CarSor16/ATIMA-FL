@@ -85,7 +85,7 @@ PLUGIN = Component(
     "fang",
     "attack",
     "Fang",
-    "Crafting oracle per trimmed mean/median o Krum; trasferimenti dichiarati.",
+    "Oracle crafting for trimmed mean/median or Krum; transfers are declared.",
     {
         "knowledge": {"type": "string", "default": "oracle", "choices": ["oracle"]},
         "fang_variant": {
@@ -98,4 +98,10 @@ PLUGIN = Component(
     },
     {"validate": validate, "knowledge": statistical_knowledge, "transform": transform},
     references=("https://www.usenix.org/system/files/sec20-fang.pdf",),
+    translations={
+        "it": {
+            "title": "Fang",
+            "description": "Crafting oracle per trimmed mean/median o Krum; trasferimenti dichiarati.",
+        }
+    },
 )

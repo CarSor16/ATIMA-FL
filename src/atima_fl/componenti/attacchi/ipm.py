@@ -30,11 +30,17 @@ PLUGIN = Component(
     "ipm",
     "attack",
     "IPM",
-    "Delta opposto alla media benign oracle; adattamento al training multi-epoca.",
+    "Delta opposite to the oracle benign mean; adapted to multi-epoch training.",
     {
         "knowledge": {"type": "string", "default": "oracle", "choices": ["oracle"]},
         "ipm_epsilon": {"type": "number", "default": 0.5, "minimum": 0.000001},
     },
     {"validate": validate, "knowledge": statistical_knowledge, "transform": transform},
     references=("https://proceedings.mlr.press/v115/xie20a/xie20a.pdf",),
+    translations={
+        "it": {
+            "title": "IPM",
+            "description": "Delta opposto alla media benign oracle; adattamento al training multi-epoca.",
+        }
+    },
 )

@@ -53,3 +53,25 @@ expects the existing 60-feature, five-class prepared parquet representation and
 persisted IID or Dirichlet alpha=0.5 shards. It does not synthesize partitions.
 CNN/transformer migration, multiattack groups and alpha=0.1 are future work.
 No dataset or previous scientific result ships with the repository.
+
+## Central and hierarchical topology
+
+Clients apply data poisoning during local training and update poisoning before
+submission. The Flower coordinator routes submitted deltas by `client_servers`.
+With one server the original aggregator executes once. With several servers it
+executes independently in every group, including the selected defense pipeline;
+the coordinator combines resulting deltas by original group sample mass.
+
+Local mode uses spawned processes. Physical mode launches one Slurm task per node
+through `adapters/slurm/aggregation.py`. Numeric NPZ transport uses no pickle.
+Rank, input digest, output digest and distinct hostnames are verified before any
+server result is accepted. Partial/failed transport payloads remain for diagnosis;
+successful temporary payloads are removed after verification. This requires a
+shared filesystem and Python environment. It does not provide separate network
+links or privacy isolation. Real multi-node scheduling remains a cluster check.
+
+Pairing includes topology and routing. Each group must satisfy its aggregator's
+minimum population constraints. Robust guarantees apply to group adversaries,
+not merely the federation-wide malicious count. Attacks currently retain their
+declared federation-wide estimator/collusion scope; Fang-style pooled crafting
+transfers to grouped aggregation rather than being a new group-aware optimizer.

@@ -23,7 +23,13 @@ PLUGIN = Component(
     "trimmed_mean",
     "aggregator",
     "Trimmed mean",
-    "Esclude k estremi per lato in ciascuna coordinata.",
+    "Removes k extremes from each side of every coordinate.",
     {"trim_count": {"type": "integer", "default": 2, "minimum": 0}},
     {"validate": validate, "aggregate": aggregate},
+    translations={
+        "it": {
+            "title": "Trimmed mean",
+            "description": "Esclude k estremi per lato in ciascuna coordinata.",
+        }
+    },
 )

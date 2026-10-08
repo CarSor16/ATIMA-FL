@@ -27,9 +27,15 @@ def transform(context):
 PLUGIN = Component(
     "gaussian_noise",
     "attack",
-    "Rumore gaussiano nel delta",
-    "Aggiunge una direzione gaussiana al delta con budget L2 relativo; non è rumore sui dati.",
+    "Gaussian delta noise",
+    "Adds a Gaussian direction to the delta with a relative L2 budget; this does not corrupt training data.",
     {"relative_l2": {"type": "number", "default": 1.0, "minimum": 0}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    translations={
+        "it": {
+            "title": "Rumore gaussiano nel delta",
+            "description": "Aggiunge una direzione gaussiana al delta con budget L2 relativo; non è rumore sui dati.",
+        }
+    },
 )

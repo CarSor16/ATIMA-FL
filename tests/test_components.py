@@ -9,6 +9,60 @@ from atima_fl.engine.attacks import poison_update, prepare_training
 from atima_fl.engine.aggregation import aggregate
 
 
+def test_hierarchical_sample_weights_routing_and_spawned_workers():
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+    from atima_fl.engine.aggregation import aggregate_topology
+
+    c = ExperimentConfig(clients=6, servers=2, client_servers=(0, 0, 0, 0, 1, 1)).validate()
+    updates = [[np.array([float(i), 2 * float(i)], dtype=np.float32)] for i in range(6)]
+    counts = [1, 3, 2, 7, 1, 11]
+    expected, _ = aggregate(updates, counts, c)
+    serial, audit = aggregate_topology(updates, counts, c)
+    with ProcessPoolExecutor(
+        max_workers=2, mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
+        parallel, _ = aggregate_topology(updates, counts, c, pool)
+    np.testing.assert_allclose(serial[0], expected[0], rtol=1e-6)
+    np.testing.assert_array_equal(parallel[0], serial[0])
+    assert audit["servers"][0]["clients"] == [0, 1, 2, 3]
+    assert [s["original_samples"] for s in audit["servers"]] == [13, 12]
+    assert audit["coordinator"] == "sample_weighted_server_deltas"
+
+
+def test_group_defenses_and_robust_aggregation_are_applied_before_coordinator():
+    from atima_fl.engine.aggregation import aggregate_topology
+
+    c = ExperimentConfig(
+        clients=6,
+        servers=2,
+        aggregation="median",
+        client_servers=(0, 0, 0, 1, 1, 1),
+        defenses=({"id": "norm_clipping", "params": {"clip_norm": 10.0}},),
+    ).validate()
+    updates = [[np.array([float(i)], dtype=np.float32)] for i in [0, 2, 100, 4, 6, 100]]
+    result, audit = aggregate_topology(updates, [1] * 6, c)
+    np.testing.assert_array_equal(result[0], [4.0])
+    assert all(len(s["aggregation"]["defense_stages"]) == 1 for s in audit["servers"])
+
+
+def test_attack_window_inclusive_and_unselected_clients_never_attack():
+    c = ExperimentConfig(
+        clients=8,
+        servers=2,
+        attack="sign_flip",
+        malicious_clients=(2, 5, 7),
+        attack_start=3,
+        attack_end=5,
+    ).validate()
+    assert c.server_assignment() == (0, 1, 0, 1, 0, 1, 0, 1)
+    for cid in range(c.clients):
+        for rid in range(1, 8):
+            assert AttackContext(c, cid, rid).active == (cid in (2, 5, 7) and 3 <= rid <= 5)
+    clean = replace(c, attack="none", attack_params={}, malicious_clients=()).validate()
+    assert not any(AttackContext(clean, cid, 4).active for cid in range(8))
+
+
 @pytest.mark.parametrize("serializer", ["pickle", "cloudpickle"])
 def test_validated_configuration_crosses_process_boundary(serializer):
     import importlib
@@ -59,6 +113,13 @@ def test_one_file_discovery_removal_and_duplicate(tmp_path):
         {"attack_params": {"unexpected": 1}},
         {"partition": "dirichlet", "partition_params": {"alpha": 0.1}},
         {"learning_rate": float("nan")},
+        {"servers": 0},
+        {"servers": 11},
+        {"servers": True},
+        {"servers": 2, "client_servers": [0, 1]},
+        {"servers": 2, "client_servers": [0] * 10},
+        {"servers": 2, "client_servers": [0, 1] * 4 + [0, 2]},
+        {"servers": 3, "aggregation": "krum"},
     ],
 )
 def test_invalid_configuration(values):

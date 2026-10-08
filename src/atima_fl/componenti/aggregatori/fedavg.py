@@ -13,6 +13,12 @@ PLUGIN = Component(
     "fedavg",
     "aggregator",
     "FedAvg",
-    "Media pesata per numerosità originale dei client.",
+    "Weighted mean using original client sample counts.",
     hooks={"aggregate": aggregate},
+    translations={
+        "it": {
+            "title": "FedAvg",
+            "description": "Media pesata per numerosità originale dei client.",
+        }
+    },
 )

@@ -11,7 +11,13 @@ def build(config, params, seed):
 PLUGIN = Component(
     "linear",
     "model",
-    "Classificatore lineare",
-    "Baseline softmax lineare; confronto di capacità e prova della sostituibilità del modello.",
+    "Linear classifier",
+    "Linear softmax baseline for capacity comparison and interchangeable model verification.",
     hooks={"build": build},
+    translations={
+        "it": {
+            "title": "Classificatore lineare",
+            "description": "Baseline softmax lineare; confronto di capacità e prova della sostituibilità del modello.",
+        }
+    },
 )

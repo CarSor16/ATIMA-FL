@@ -25,10 +25,16 @@ PLUGIN = Component(
     "multi_krum",
     "aggregator",
     "Multi-Krum",
-    "Media dei migliori m score in un solo passaggio.",
+    "One-shot mean of the best m scores.",
     {
         "byzantine_bound": {"type": "integer", "default": 2, "minimum": 0},
         "select": {"type": "integer", "default": 3, "minimum": 1},
     },
     {"validate": validate, "aggregate": aggregate},
+    translations={
+        "it": {
+            "title": "Multi-Krum",
+            "description": "Media dei migliori m score in un solo passaggio.",
+        }
+    },
 )

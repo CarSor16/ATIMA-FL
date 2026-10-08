@@ -33,6 +33,47 @@ Open the loopback URL printed by the command. The basic installation provides
 the catalog, designer, profile validation and ZIP export without PyTorch or Flower.
 The local server is intended for a single user, not public hosting.
 
+The app starts in **English** with an **Italiano** selector. Language and
+Simple/Advanced switches preserve the experiment configuration.
+
+**Simple** shows population, server count, rounds, task/model, attack choice,
+malicious-client count and an inclusive attack window. **Advanced** also exposes
+specific malicious IDs, client-to-server routing, component parameters,
+hyperparameters, resources and stopping. Advanced values remain in effect when
+hidden; review the full JSON before export.
+
+Client and server IDs start at zero. Disabling an attack exports `attack="none"`
+with no malicious clients; re-enabling restores the selected attack settings.
+An attack from round 3 through 5 poisons those rounds only. From round 6 the
+clients stop new poisoning; previous effects can persist in global weights.
+
+## Aggregation topology
+
+`servers=1` preserves ordinary central aggregation. For `servers>1`, clients
+send their already-poisoned updates to assigned aggregation groups. Every
+server applies the chosen aggregator and defense pipeline. A global coordinator
+combines server deltas using **original sample mass**, without repeating defenses.
+FedAvg composition matches central FedAvg up to floating-point rounding; robust
+group aggregation generally changes the algorithm and its threat assumptions.
+
+- `client_servers=[]`: balanced, deterministic round-robin assignment.
+- `client_servers=[0,0,0,0,0,1,1,1,1,1]`: explicit assignment for ten clients.
+- `server_execution="processes"`: logical aggregation servers in spawned workers
+  inside the same job; Flower remains the coordinator/client message transport.
+- `server_execution="slurm_nodes"`: an `srun` aggregation task on each of at least
+  `servers` allocated nodes. Worker hostnames must be distinct. The shared Python
+  environment, plugin paths and run directory must be accessible from every node.
+
+Physical placement is an adapter requiring target-cluster verification. Request
+the nodes, actual GPU and CPU budget in New Batch Job; profile fields do not
+allocate resources. The coordinator routes deltas through shared job files; this
+does not emulate independent client-to-server network links or a privacy barrier.
+Slurm worker placement follows the [official srun interface](https://slurm.schedmd.com/srun.html).
+Per-server input hashes, hostnames, client groups and aggregation audits are stored.
+Krum/trimmed-mean requirements are checked for **every group** before launch.
+Attacks retain their declared federation-wide estimation/collusion scope; they
+are not automatically re-optimized against each local robust aggregator.
+
 For software tests and analysis:
 ```bash
 python -m pip install -e '.[training,flower,analysis,dev]'
@@ -72,6 +113,7 @@ src/atima_fl/
   core/            # contracts, configuration, discovery, numerics
   engine/          # training, poisoning, aggregation, storage, analysis
   adapters/flower/ # ClientApp / ServerApp and allocated-job launcher
+  adapters/slurm/  # physical aggregation workers in a multi-node allocation
   ui/              # loopback web designer; no scheduler submission
 examples/          # portable profiles
 docs/              # plugin contract and scientific protocol

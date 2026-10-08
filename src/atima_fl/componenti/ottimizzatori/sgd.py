@@ -16,10 +16,16 @@ PLUGIN = Component(
     "sgd",
     "optimizer",
     "SGD",
-    "SGD con momentum opzionale; stato ricreato a ogni fit.",
+    "SGD with optional momentum; state is recreated at every fit.",
     {
         "momentum": {"type": "number", "default": 0.0, "minimum": 0, "maximum": 0.999999},
         "weight_decay": {"type": "number", "default": 0.0, "minimum": 0},
     },
     {"build": build},
+    translations={
+        "it": {
+            "title": "SGD",
+            "description": "SGD con momentum opzionale; stato ricreato a ogni fit.",
+        }
+    },
 )

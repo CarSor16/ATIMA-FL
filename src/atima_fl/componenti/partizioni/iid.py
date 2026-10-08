@@ -8,7 +8,13 @@ def location(root, config, params):
 PLUGIN = Component(
     "iid",
     "partition",
-    "IID persistita",
-    "Usa assegnazioni e shard IID già salvati; non rigenera lo split.",
+    "Persisted IID",
+    "Uses saved IID assignments and shards; does not regenerate the split.",
     hooks={"location": location},
+    translations={
+        "it": {
+            "title": "IID persistita",
+            "description": "Usa assegnazioni e shard IID già salvati; non rigenera lo split.",
+        }
+    },
 )

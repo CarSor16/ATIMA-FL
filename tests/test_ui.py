@@ -23,6 +23,9 @@ def test_gui_catalog_validate_export_no_overwrite_and_token(gui):
     server, url = gui
     catalog = json.load(urlopen(url + "/api/catalog"))
     assert len(catalog["catalog"]["attack"]) == 11
+    no_attack = next(c for c in catalog["catalog"]["attack"] if c["id"] == "none")
+    assert no_attack["title"] == "No attack"
+    assert no_attack["translations"]["it"]["title"] == "Nessun attacco"
     c = json.load(urlopen(url + "/api/defaults"))
     c["name"] = "Baseline_fixture"
     body = json.dumps(c).encode()
@@ -40,6 +43,8 @@ def test_gui_catalog_validate_export_no_overwrite_and_token(gui):
     assert caught.value.code == 409
     assert not (server.workspace / "results").exists()
     assert b"parameterFields" in urlopen(url + "/app.js").read()
+    assert b'<html lang="en">' in urlopen(url + "/").read()
+    assert b"UI_TRANSLATIONS" in urlopen(url + "/i18n.js").read()
 
 
 def test_path_escape_and_foreign_host_rejected(gui):
@@ -49,3 +54,28 @@ def test_path_escape_and_foreign_host_rejected(gui):
     with pytest.raises(HTTPError) as caught:
         urlopen(Request(url + "/api/catalog", headers={"Host": "evil.example"}))
     assert caught.value.code == 403
+
+
+def test_gui_validates_variable_population_and_server_groups(gui):
+    _, url = gui
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    c = json.load(urlopen(url + "/api/defaults"))
+    c.update(
+        clients=8,
+        servers=2,
+        malicious_clients=[2, 5, 7],
+        attack="sign_flip",
+        attack_params={},
+        attack_start=3,
+        attack_end=5,
+    )
+    result = json.load(
+        urlopen(Request(url + "/api/validate", json.dumps(c).encode(), headers=headers))
+    )
+    assert result["config"]["servers"] == 2
+    assert result["config"]["malicious_clients"] == [2, 5, 7]
+    c["client_servers"] = [0] * 8
+    with pytest.raises(HTTPError) as caught:
+        urlopen(Request(url + "/api/validate", json.dumps(c).encode(), headers=headers))
+    assert caught.value.code == 422

@@ -12,7 +12,13 @@ def aggregate(matrix, counts, params):
 PLUGIN = Component(
     "median",
     "aggregator",
-    "Mediana",
-    "Mediana coordinata per coordinata, senza pesi di numerosità.",
+    "Median",
+    "Coordinatewise median without sample-count weights.",
     hooks={"aggregate": aggregate},
+    translations={
+        "it": {
+            "title": "Mediana",
+            "description": "Mediana coordinata per coordinata, senza pesi di numerosità.",
+        }
+    },
 )

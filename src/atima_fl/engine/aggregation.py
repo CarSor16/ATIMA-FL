@@ -39,3 +39,52 @@ def aggregate(updates, counts, config):
         "processed_norms": np.linalg.norm(matrix, axis=1).tolist(),
         **audit,
     }
+
+
+def aggregate_topology(updates, counts, config, pool=None):
+    """Client updates -> assigned servers -> sample-weighted coordinator.
+
+    One server retains the original aggregation exactly. Multiple servers use
+    the same selected component/defense pipeline in each nonempty group. The
+    coordinator combines server deltas by original sample mass, with no second
+    defense pass. Production can execute group aggregation in spawned workers.
+    """
+    if len(updates) != config.clients or len(counts) != config.clients:
+        raise ValueError("Topology requires one update/count per configured client")
+    if config.servers == 1:
+        return aggregate(updates, counts, config)
+    assignment = config.server_assignment()
+    groups = [
+        [cid for cid, sid in enumerate(assignment) if sid == server]
+        for server in range(config.servers)
+    ]
+    tasks = [
+        ([updates[cid] for cid in ids], [counts[cid] for cid in ids], config) for ids in groups
+    ]
+    if pool is not None and hasattr(pool, "aggregate_many"):
+        results = pool.aggregate_many(tasks)
+    elif pool is None:
+        results = [aggregate(*task) for task in tasks]
+    else:
+        futures = [pool.submit(aggregate, *task) for task in tasks]
+        results = [future.result() for future in futures]
+    masses = [sum(counts[cid] for cid in ids) for ids in groups]
+    matrix = np.stack([flatten(delta) for delta, _ in results])
+    combined = np.average(matrix, axis=0, weights=masses)
+    check_arrays([combined])
+    return restore(combined, updates[0]), {
+        "topology": "hierarchical_synchronous",
+        "aggregator": config.aggregation,
+        "coordinator": "sample_weighted_server_deltas",
+        "client_servers": list(assignment),
+        "servers": [
+            {
+                "id": sid,
+                "clients": ids,
+                "original_samples": mass,
+                "delta_l2": float(np.linalg.norm(matrix[sid])),
+                "aggregation": audit,
+            }
+            for sid, (ids, mass, (_, audit)) in enumerate(zip(groups, masses, results))
+        ],
+    }

@@ -49,3 +49,10 @@ The configuration knows protocol categories, not installed component names.
 The engine remains responsible for round orchestration, numerical guards,
 sample-count integrity and persistence. Changing those contracts requires an ABI
 change and tests; not every possible algorithm fits an existing hook unchanged.
+
+## Optional translations
+
+Component titles and descriptions use English as their base. A module can expose
+`translations={"it": {"title": "...", "description": "..."}}` in its `Component`.
+Missing translations fall back to the English metadata. Component IDs and
+parameters stay stable across languages. GUI translations do not change profiles.

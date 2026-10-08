@@ -19,9 +19,15 @@ def transform(context):
 PLUGIN = Component(
     "sign_flip",
     "attack",
-    "Inversione del delta",
-    "Inverte la direzione del delta locale, con intensità dichiarata.",
+    "Delta sign flip",
+    "Reverses the local delta direction with a declared strength.",
     {"strength": {"type": "number", "default": 1.0, "minimum": 0.000001}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    translations={
+        "it": {
+            "title": "Inversione del delta",
+            "description": "Inverte la direzione del delta locale, con intensità dichiarata.",
+        }
+    },
 )

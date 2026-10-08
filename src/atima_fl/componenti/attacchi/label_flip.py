@@ -30,8 +30,8 @@ def prepare(x, y, context):
 PLUGIN = Component(
     "label_flip",
     "attack",
-    "LabelFlip mirato",
-    "Una classe sorgente viene rietichettata verso una destinazione.",
+    "Targeted LabelFlip",
+    "Relabels one source class as a chosen target class.",
     {
         "source_class": {"type": "integer", "default": 1, "minimum": 0},
         "destination_class": {"type": "integer", "default": 0, "minimum": 0},
@@ -39,4 +39,10 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare},
     references=("https://arxiv.org/abs/2207.01982",),
+    translations={
+        "it": {
+            "title": "LabelFlip mirato",
+            "description": "Una classe sorgente viene rietichettata verso una destinazione.",
+        }
+    },
 )

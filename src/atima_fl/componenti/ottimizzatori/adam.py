@@ -13,7 +13,13 @@ PLUGIN = Component(
     "adam",
     "optimizer",
     "Adam",
-    "Stato dell’ottimizzatore ricreato a ogni fit locale.",
+    "Optimizer state is recreated at each local fit.",
     {"weight_decay": {"type": "number", "default": 0.0, "minimum": 0}},
     {"build": build},
+    translations={
+        "it": {
+            "title": "Adam",
+            "description": "Stato dell’ottimizzatore ricreato a ogni fit locale.",
+        }
+    },
 )

@@ -22,9 +22,15 @@ def prepare(x, y, context):
 PLUGIN = Component(
     "random_labels",
     "attack",
-    "Etichette casuali",
-    "Corrompe una quota di label senza scegliere una coppia sorgente-destinazione.",
+    "Random labels",
+    "Corrupts a fraction of labels without selecting a source-target pair.",
     {"poison_rate": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1}},
     {"prepare": prepare},
     references=("https://arxiv.org/abs/2502.03801",),
+    translations={
+        "it": {
+            "title": "Etichette casuali",
+            "description": "Corrompe una quota di label senza scegliere una coppia sorgente-destinazione.",
+        }
+    },
 )

@@ -156,6 +156,12 @@ PLUGIN = Component(
     "edge_iiot",
     "dataset",
     "EdgeIIoT multiclass-logiat",
-    "Loader dei dati preparati: 60 feature, 5 classi; verifica split/shard senza modificare i dati originali.",
+    "Prepared dataset loader: 60 features, 5 classes; verifies splits/shards without changing source data.",
     hooks={"validate": validate, "open": open_dataset},
+    translations={
+        "it": {
+            "title": "EdgeIIoT multiclass-logiat",
+            "description": "Loader dei dati preparati: 60 feature, 5 classi; verifica split/shard senza modificare i dati originali.",
+        }
+    },
 )

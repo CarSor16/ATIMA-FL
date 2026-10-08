@@ -17,9 +17,15 @@ def transform(context):
 PLUGIN = Component(
     "update_scaling",
     "attack",
-    "Amplificazione del delta",
-    "Modifica solo l’ampiezza del delta, senza trigger e senza invertirne il segno. Controllo meccanistico.",
+    "Delta scaling",
+    "Changes delta magnitude without a trigger or sign reversal. Mechanistic control.",
     {"factor": {"type": "number", "default": 5.0, "minimum": 1}},
     {"transform": transform},
     references=("https://arxiv.org/abs/2502.03801",),
+    translations={
+        "it": {
+            "title": "Amplificazione del delta",
+            "description": "Modifica solo l’ampiezza del delta, senza trigger e senza invertirne il segno. Controllo meccanistico.",
+        }
+    },
 )

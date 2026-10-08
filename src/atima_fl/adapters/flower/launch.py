@@ -20,6 +20,8 @@ def scheduler_allocation(config):
     gpu_count = int(tres.get("gres/gpu", "0"))
     if gpu_count < 1 or int(tres.get("cpu", "0")) < config.cpu_budget:
         raise RuntimeError("Requested GPU/CPU allocation was not granted")
+    if config.server_execution == "slurm_nodes" and int(tres.get("node", "0")) < config.servers:
+        raise RuntimeError("Physical aggregation requires one allocated node per server")
     return {"job_id": job, "alloc_tres": tres, "scheduler_gpu_count": gpu_count}
 
 
@@ -74,7 +76,12 @@ def launch(config, preflight_only=False):
         num_supernodes=config.clients,
         backend_config={
             "init_args": {
-                "num_cpus": config.cpu_budget - 2,
+                "num_cpus": min(
+                    config.cpu_budget - config.servers - 1,
+                    max(1, len(os.sched_getaffinity(0)) - 2)
+                    if hasattr(os, "sched_getaffinity")
+                    else config.cpu_budget - config.servers - 1,
+                ),
                 "num_gpus": allocation["scheduler_gpu_count"],
                 "include_dashboard": False,
             },

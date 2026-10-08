@@ -151,6 +151,44 @@ def test_full_two_phase_protocol_pair_and_hdf(dataset, tmp_path, attack, knowled
         assert (output / "per_class_recall.png").stat().st_size > 1000
 
 
+def test_hierarchical_pair_routes_poisoned_updates_and_deactivates_attack(dataset, tmp_path):
+    torch.set_num_threads(1)
+    c = ExperimentConfig(
+        name="hierarchical_clean",
+        dataset_root=str(dataset),
+        output_root=str(tmp_path / "runs"),
+        servers=3,
+        rounds=3,
+        model_params={"hidden": [8, 4]},
+        local_epochs=1,
+        malicious_clients=(1, 4, 7),
+        attack_start=2,
+        attack_end=2,
+    ).validate()
+    clean = _run_protocol(SoftwareGrid(), c, "cpu")
+    attacked = replace(c, name="hierarchical_flip", attack="sign_flip", paired_clean=str(clean))
+    run = _run_protocol(SoftwareGrid(), attacked, "cpu")
+    manifest = json.loads((run / "manifest.json").read_text())
+    assert manifest["topology"]["aggregation_servers"] == 3
+    assert manifest["status"] == "complete"
+    with h5py.File(run / "trajectory.h5") as file:
+        for rid in (1, 2, 3):
+            root = file[f"rounds/round_{rid:04d}"]
+            aggregation = json.loads(root.attrs["aggregation_json"])
+            assert aggregation["servers"][1]["clients"] == [1, 4, 7]
+            for cid in range(10):
+                client = root[f"clients/client_{cid:02d}"]
+                metadata = json.loads(client.attrs["metadata_json"])
+                assert metadata["aggregation_server"] == cid % 3
+                assert metadata["active"] == (rid == 2 and cid in (1, 4, 7))
+                if rid != 2 or cid not in (1, 4, 7):
+                    for layer in client["local_update"]:
+                        np.testing.assert_array_equal(
+                            client[f"local_update/{layer}"][...],
+                            client[f"submitted_update/{layer}"][...],
+                        )
+
+
 def test_audit_detects_split_leakage(dataset, tmp_path):
     c = ExperimentConfig(name="fixture", dataset_root=str(dataset), output_root=str(tmp_path))
     assert EdgeData(c).audit()["rows"]["train"] == 100

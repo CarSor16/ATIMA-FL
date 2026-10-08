@@ -39,8 +39,8 @@ def prepare(x, y, context):
 PLUGIN = Component(
     "feature_noise",
     "attack",
-    "Perturbazione delle feature",
-    "Corrompe feature selezionate dei dati locali, conservando le label. Variante numerica, non attacco di rete fisicamente validato.",
+    "Feature perturbation",
+    "Corrupts selected local features while preserving labels. Numerical variant; physical network feasibility is not established.",
     {
         "poison_rate": {"type": "number", "default": 0.5, "minimum": 0, "maximum": 1},
         "indices": {"type": "array", "default": [0, 1], "items": {"type": "integer", "minimum": 0}},
@@ -50,4 +50,10 @@ PLUGIN = Component(
     },
     {"validate": validate, "prepare": prepare},
     references=("https://arxiv.org/abs/2403.02983",),
+    translations={
+        "it": {
+            "title": "Perturbazione delle feature",
+            "description": "Corrompe feature selezionate dei dati locali, conservando le label. Variante numerica, non attacco di rete fisicamente validato.",
+        }
+    },
 )

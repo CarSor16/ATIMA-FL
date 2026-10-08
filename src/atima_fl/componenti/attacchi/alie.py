@@ -47,7 +47,7 @@ def warnings(config, params):
     fraction = (n - f - math.floor(n / 2 + 1) + f) / (n - f)
     if fraction <= 0.5:
         return [
-            "ALIE: il limite automatico z è zero o negativo; non interpretare un effetto nullo come robustezza."
+            "ALIE: the automatic z bound is zero or negative; a null effect is not evidence of robustness."
         ]
     return []
 
@@ -56,7 +56,7 @@ PLUGIN = Component(
     "alie",
     "attack",
     "ALIE",
-    "Perturbazione statistica dei collusi; z automatico può essere degenere.",
+    "Statistical perturbation using colluding updates; automatic z may be degenerate.",
     {
         "knowledge": {"type": "string", "default": "local", "choices": ["local", "oracle"]},
         "alie_z": {"type": "number", "default": -1.0, "minimum": -1},
@@ -70,4 +70,10 @@ PLUGIN = Component(
     references=(
         "https://proceedings.neurips.cc/paper/2019/file/ec1c59141046cd1866bbbcdfb6ae31d4-Paper.pdf",
     ),
+    translations={
+        "it": {
+            "title": "ALIE",
+            "description": "Perturbazione statistica dei collusi; z automatico può essere degenere.",
+        }
+    },
 )

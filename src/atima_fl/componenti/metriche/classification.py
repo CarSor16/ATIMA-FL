@@ -46,8 +46,14 @@ def evaluate(y, p, classes, params):
 PLUGIN = Component(
     "classification",
     "metrics",
-    "Metriche multiclasse",
-    "Macro/weighted F1, recall, precision, balanced accuracy, MCC, loss e confusion matrix.",
+    "Multiclass metrics",
+    "Macro/weighted F1, recall, precision, balanced accuracy, MCC, loss and confusion matrix.",
     {"probability_clip": {"type": "number", "default": 1e-7, "minimum": 1e-12, "maximum": 0.01}},
     {"evaluate": evaluate},
+    translations={
+        "it": {
+            "title": "Metriche multiclasse",
+            "description": "Macro/weighted F1, recall, precision, balanced accuracy, MCC, loss e confusion matrix.",
+        }
+    },
 )

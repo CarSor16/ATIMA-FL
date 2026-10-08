@@ -95,6 +95,7 @@ class Handler(BaseHTTPRequestHandler):
             assets = {
                 "/": ("index.html", "text/html; charset=utf-8"),
                 "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
                 "/style.css": ("style.css", "text/css; charset=utf-8"),
             }
             if path in assets:
@@ -131,12 +132,10 @@ class Handler(BaseHTTPRequestHandler):
                 warnings = []
                 if config.minimum_rounds > config.rounds:
                     warnings.append(
-                        "Il minimo per early stopping supera il cap: il run terminerà al cap."
+                        "Minimum early stopping rounds exceed the cap; the run will finish at the cap."
                     )
                 if config.attack != "none" and not config.paired_clean:
-                    warnings.append(
-                        "Prima del lancio serve una baseline clean completata e abbinata."
-                    )
+                    warnings.append("A completed, paired clean baseline is required before launch.")
                 plugin = config.registry().get("attack", config.attack)
                 if "warnings" in plugin.hooks:
                     warnings.extend(plugin.hooks["warnings"](config, config.parameters("attack")))
@@ -166,7 +165,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(404, {"error": "Not found"})
         except FileExistsError:
             return self.respond(
-                409, {"error": "Questo nome di esperimento è già salvato; scegli un nome diverso."}
+                409, {"error": "This experiment name is already saved; choose a different name."}
             )
         except (ValueError, KeyError, TypeError, OSError) as error:
             return self.respond(422, {"error": str(error)})

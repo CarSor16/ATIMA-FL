@@ -22,7 +22,13 @@ PLUGIN = Component(
     "krum",
     "aggregator",
     "Krum",
-    "Seleziona l’update con score minimo; requisito n≥2f+3.",
+    "Selects the update with the lowest score; requires n≥2f+3.",
     {"byzantine_bound": {"type": "integer", "default": 2, "minimum": 0}},
     {"validate": validate, "aggregate": aggregate},
+    translations={
+        "it": {
+            "title": "Krum",
+            "description": "Seleziona l’update con score minimo; requisito n≥2f+3.",
+        }
+    },
 )

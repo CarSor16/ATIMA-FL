@@ -17,7 +17,7 @@ from atima_fl.core.registry import Registry
 from atima_fl.core.numerics import PlateauPolicy, check_arrays, sha256_file
 from atima_fl.engine.data import open_dataset
 from atima_fl.engine.models import arrays, build, probabilities, metrics
-from atima_fl.engine.aggregation import aggregate
+from atima_fl.engine.aggregation import aggregate_topology
 from atima_fl.engine.storage import RoundStorage, atomic_json, raw_path, read_raw
 
 app = ServerApp()
@@ -88,12 +88,14 @@ def exchange(grid, node_ids, config, run, round_id, before, phase, counts):
         metadata = json.loads(reply.content["audit"]["metadata_json"])
         if metadata["client"] != cid or metadata["round"] != round_id:
             raise ValueError("Reply identity/round mismatch")
+        if metadata["aggregation_server"] != config.server_assignment()[cid]:
+            raise ValueError("Reply aggregation server differs from configured routing")
         count = int(reply.content["metrics"]["num-examples"])
         if phase == "submit" and count != counts[cid]:
             raise ValueError("Sample count changed between phases")
         result[cid] = {"values": values, "metadata": metadata, "count": count}
     if set(result) != set(range(config.clients)):
-        raise ValueError("Incomplete round: all ten logical clients are required")
+        raise ValueError("Incomplete round: all configured logical clients are required")
     return result
 
 
@@ -114,10 +116,22 @@ def run_experiment(grid, config, device="cuda"):
     allocation = scheduler_allocation(config)
     if torch.cuda.device_count() != allocation["scheduler_gpu_count"]:
         raise RuntimeError("CUDA devices differ from scheduler allocation")
-    return _run_protocol(grid, config, device)
+    if config.servers == 1:
+        return _run_protocol(grid, config, device)
+    if config.server_execution == "slurm_nodes":
+        from atima_fl.adapters.slurm.aggregation import SlurmAggregationPool
+
+        return _run_protocol(grid, config, device, aggregation_pool=SlurmAggregationPool(config))
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+
+    with ProcessPoolExecutor(
+        max_workers=config.servers, mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
+        return _run_protocol(grid, config, device, aggregation_pool=pool)
 
 
-def _run_protocol(grid, config, device):
+def _run_protocol(grid, config, device, aggregation_pool=None):
     """Internal entry for software fixtures; production entry enforces CUDA."""
     torch.use_deterministic_algorithms(True)
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -134,6 +148,13 @@ def _run_protocol(grid, config, device):
         "source_identity": source_identity(config),
         "runtime": runtime_identity(device, config),
         "status": "running",
+        "topology": {
+            "aggregation_servers": config.servers,
+            "client_servers": list(config.server_assignment()),
+            "coordinators": 0 if config.servers == 1 else 1,
+            "execution": config.server_execution if aggregation_pool else "serial_software_fixture",
+            "physical_multihost_requested": config.server_execution == "slurm_nodes",
+        },
     }
     manifest["scheduler_allocation"] = json.loads(os.environ.get("ATIMA_ALLOCATION_JSON", "null"))
     before = arrays(build(config))
@@ -206,7 +227,9 @@ def _run_protocol(grid, config, device):
             after = None
             evaluation, aggregation = {}, {}
             try:
-                delta, aggregation = aggregate(deltas, list(counts.values()), config)
+                delta, aggregation = aggregate_topology(
+                    deltas, list(counts.values()), config, aggregation_pool
+                )
                 after = [a + b for a, b in zip(before, delta)]
                 check_arrays(after, before)
                 evaluation = metrics(
