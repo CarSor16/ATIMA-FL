@@ -120,3 +120,28 @@ def test_web_status_endpoint_and_token_required_for_sync(tmp_path, monkeypatch):
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+def test_stored_password_path_is_selected_without_shell_or_password_logs(tmp_path, monkeypatch):
+    config(tmp_path)
+    invoked = []
+    monkeypatch.setattr(
+        "atima_fl.ui.cluster_results.password_ssh",
+        lambda settings, script: invoked.append((settings, script)) or json.dumps([
+            {"id": "Clean", "manifest": {"status": "complete"}, "final_metrics": {}}
+        ]),
+    )
+    outcome = sync_cluster_results(tmp_path)
+    assert outcome["imported"] == 1
+    assert len(invoked) == 1
+    assert "python3" in invoked[0][1]
+
+
+def test_password_ssh_returns_none_without_stored_credential(monkeypatch):
+    from atima_fl.ui.cluster_results import password_ssh
+    monkeypatch.setattr(
+        "atima_fl.ui.cluster_credentials.get_password", lambda user, host: None
+    )
+    assert password_ssh(
+        {"ssh_host": "cluster.example.edu", "ssh_user": "researcher"}, "print('ok')"
+    ) is None
