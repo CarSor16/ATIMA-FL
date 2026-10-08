@@ -7,7 +7,7 @@ from flwr.app import ArrayRecord, ConfigRecord, Context, Message, MetricRecord, 
 from flwr.clientapp import ClientApp
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.engine.client import train_local, submit_local
-from atima_fl.engine.data import open_dataset
+from atima_fl.engine import data as data_engine
 
 app = ClientApp()
 
@@ -25,7 +25,7 @@ def handle_train(message: Message, context: Context):
             raise RuntimeError("ClientApp has no CUDA device; CPU fallback is forbidden")
         torch.set_num_threads(config.client_cpus)
         values, metadata = train_local(
-            config, run, client, round_id, before, open_dataset(config), config.compute_device
+            config, run, client, round_id, before, data_engine.open_dataset(config), config.compute_device
         )
     elif command["phase"] == "submit":
         counts = {int(k): int(v) for k, v in json.loads(command["counts_json"]).items()}
