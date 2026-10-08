@@ -81,3 +81,11 @@ input[type="checkbox"]{accent-color:var(--teal)}
 [data-theme="dark"] .attack-timeline .clean-rounds{background:#43988f}
 [data-theme="dark"] .attack-timeline .active-rounds{background:#d18164}
 [data-theme="dark"] .download{color:#8ae5db}
+
+
+/* Compact defense stages without redundant move controls. */
+.defense-stage{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin:10px 0}
+.defense-stage>label{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;font-weight:600}
+.defense-stage>label input[type="checkbox"]{flex:none;margin:0}
+.defense-stage>.fields{margin-top:12px}
+[data-theme="dark"] .defense-stage{background:#142c37;border-color:var(--line)}
