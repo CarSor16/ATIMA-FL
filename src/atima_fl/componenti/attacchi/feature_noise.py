@@ -18,6 +18,7 @@ def prepare(x, y, context):
     rows = np.sort(rng.choice(len(y), int(len(y) * p["poison_rate"]), replace=False))
     coordinates = np.ix_(rows, p["indices"])
     values = x[coordinates].astype(np.float64)
+    original_values = x[coordinates].copy()
     values += rng.normal(0, p["sigma"], size=values.shape)
     x[coordinates] = np.clip(values, p["clip_min"], p["clip_max"]).astype(x.dtype)
     return TrainingBatch(
@@ -26,7 +27,7 @@ def prepare(x, y, context):
         np.empty(0, dtype=np.int64),
         np.empty(0, dtype=np.int64),
         {
-            "attack_applied": bool(len(rows) and p["sigma"]),
+            "attack_applied": not np.array_equal(x[coordinates], original_values),
             "changed_input_indices": rows.tolist(),
             "feature_indices": p["indices"],
             "input_sigma": p["sigma"],

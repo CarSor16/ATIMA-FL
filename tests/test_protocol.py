@@ -133,6 +133,10 @@ def test_full_two_phase_protocol_pair_and_hdf(dataset, tmp_path, attack, knowled
         assert len(file["rounds/round_0002/clients"]) == 10
         meta = json.loads(file["rounds/round_0002/clients/client_00"].attrs["metadata_json"])
         assert meta["is_malicious"] and meta["active"]
+        assert not meta["local_update_is_clean_counterfactual"]
+        assert meta["local_training_data_altered"] == (
+            attack in {"label_flip", "random_labels", "feature_noise", "model_replacement"}
+        )
     if attack == "model_replacement":
         assert "attack_metrics" in json.loads((run / "final_metrics.json").read_text())
     if attack == "ipm":

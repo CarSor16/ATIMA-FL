@@ -103,6 +103,15 @@ def test_gaussian_relative_budget_deterministic():
     assert np.linalg.norm(a[0] - ctx.local_arrays[0]) == pytest.approx(0.5 * np.sqrt(5), rel=1e-6)
 
 
+def test_feature_clipping_effect_is_recorded_with_zero_noise():
+    ctx = context(
+        "feature_noise", {"sigma": 0.0, "poison_rate": 1.0, "clip_min": 0.2, "clip_max": 0.3}
+    )
+    batch = prepare_training(np.full((10, 60), 0.5, dtype=np.float32), np.arange(10) % 5, ctx)
+    assert batch.notes["attack_applied"]
+    np.testing.assert_array_equal(batch.x[:, :2], np.full((10, 2), 0.3, dtype=np.float32))
+
+
 @pytest.mark.parametrize(
     "attack", ["random_labels", "feature_noise", "label_flip", "model_replacement"]
 )

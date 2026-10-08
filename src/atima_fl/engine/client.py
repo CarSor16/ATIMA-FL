@@ -29,9 +29,15 @@ def train_local(config, run, client, round_id, before, data, device):
         "poisoned_labels": len(batch.changed_label_indices),
         "backdoor_added_samples": len(batch.added_sample_indices),
         "device": str(device),
-        "local_update_is_clean_counterfactual": not context.active,
+        "local_update_is_clean_counterfactual": config.attack == "none",
+        "local_reference_scope": "local training conditional on incoming global; attacked runs are not paired-clean counterfactuals",
         **batch.notes,
     }
+    metadata["local_training_data_altered"] = (
+        len(batch.y) != len(original.y)
+        or not np.array_equal(batch.x[: len(original.y)], original.x)
+        or not np.array_equal(batch.y[: len(original.y)], original.y)
+    )
     # Base-sample trained labels are stored separately from appended trigger copies.
     write_raw(
         raw_path(run, round_id, client),
