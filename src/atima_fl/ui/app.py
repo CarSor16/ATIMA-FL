@@ -8,6 +8,7 @@ from urllib.parse import urlparse, unquote
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
 from atima_fl.engine.plans import save_plan, save_defense_study
+from atima_fl.ui.cluster_results import connection_settings, sync_cluster_results
 
 STATIC = Path(__file__).parent / "static"
 
@@ -121,6 +122,9 @@ class Handler(BaseHTTPRequestHandler):
                 values.update(deployment_defaults(self.server.workspace))
                 config = ExperimentConfig(**values)
                 return self.respond(200, config.resolved())
+            if path == "/api/cluster-status":
+                settings = connection_settings(self.server.workspace)
+                return self.respond(200, {"configured": settings is not None, "host": settings["ssh_host"] if settings else None})
             if path == "/api/results":
                 return self.respond(200, results(self.server.workspace))
             if path.startswith("/api/plans/") and path.endswith("/plan.zip"):
@@ -160,6 +164,10 @@ class Handler(BaseHTTPRequestHandler):
             ):
                 raise ValueError("Expected a JSON request within 1 MiB")
             body = json.loads(self.rfile.read(length))
+            if self.path == "/api/sync-cluster-results":
+                if body != {}:
+                    raise ValueError("Cluster sync takes no client-side parameters")
+                return self.respond(200, sync_cluster_results(self.server.workspace))
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
