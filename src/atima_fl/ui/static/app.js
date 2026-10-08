@@ -424,12 +424,247 @@ async function syncClusterResults(){
   output.textContent="Connecting securely over SSH and reading result summaries…";
   try{
     const response=await request("/api/sync-cluster-results",{});
-    output.textContent=`Imported ${response.imported} experiment summaries. Dataset files and model weights remain on the cluster.`;
+    output.textContent=`Imported ${response.imported} experiment summaries and available validation histories. Dataset files and model weights remain on the cluster.`;
     await refreshResults();
   }catch(error){output.textContent="Cluster import failed: "+error.message;}
   finally{button.disabled=false;}
 }
-async function refreshResults(){const target=$("results-list");target.replaceChildren();try{const values=await request("/api/results");if(!values.length)target.append(node("p","Nessun risultato locale disponibile."));for(const value of values){const item=node("article",undefined,"result-item");item.append(node("h3",value.id),node("p",`${value.status} · ${currentLanguage==="en"?"valid round":"round valido"} ${value.round ?? "—"}`),node("pre",JSON.stringify(value.metrics,null,2)));target.append(item);}}catch(error){target.append(node("p",error.message,"error"));}}
+// Results dashboard: test metrics are distinct from per-round validation metrics.
+const RESULT_METRICS = [
+  ["accuracy", "Accuracy", true], ["macro_f1", "Macro-F1", true],
+  ["balanced_accuracy", "Balanced accuracy", true], ["weighted_f1", "Weighted F1", true],
+  ["mcc", "MCC", false], ["loss", "Loss", false]
+];
+function numeric(v){return typeof v==="number" && Number.isFinite(v);}
+function score(v, percent=true){return numeric(v) ? (percent?(100*v).toFixed(2)+"%":v.toFixed(4)) : "—";}
+function deltaScore(value, reference, percent=true){
+  if(!numeric(value)||!numeric(reference))return "—";
+  const difference=(value-reference)*(percent?100:1);
+  return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
+}
+function testMetrics(value){return value?.metrics?.test || null;}
+function classNames(value){
+  const test=testMetrics(value);
+  const listed=Array.isArray(value?.classes)?value.classes:[];
+  const keys=test?.per_class && typeof test.per_class==="object"?Object.keys(test.per_class):[];
+  return listed.length===keys.length && listed.every(name=>keys.includes(name))?listed:keys;
+}
+function dataTable(headers, rows, className=""){
+  const wrapper=node("div",undefined,"result-table-scroll");
+  const table=node("table",undefined,"result-table "+className);
+  const head=node("thead");const headRow=node("tr");
+  for(const title of headers)headRow.append(node("th",title));
+  head.append(headRow);table.append(head);
+  const body=node("tbody");
+  for(const cells of rows){
+    const tr=node("tr");for(const cell of cells)tr.append(node("td",String(cell)));
+    body.append(tr);
+  }
+  table.append(body);wrapper.append(table);return wrapper;
+}
+function metricCards(metric){
+  const grid=node("div",undefined,"result-kpis");
+  for(const [key,label,percent] of RESULT_METRICS){
+    if(!numeric(metric[key]))continue;
+    const item=node("div",undefined,"result-kpi");
+    item.append(node("span",label),node("strong",score(metric[key],percent)));grid.append(item);
+  }
+  return grid;
+}
+function classMetricsSection(value, baseline){
+  const test=testMetrics(value);
+  const classes=classNames(value);
+  if(!test?.per_class || !classes.length)return null;
+  const section=node("section",undefined,"result-section");
+  section.append(node("h4",baseline?"Per-class test comparison":"Per-class test metrics"));
+  const clean=baseline?testMetrics(baseline)?.per_class:null;
+  const rows=classes.map(name=>{
+    const attack=test.per_class[name]||{},ref=clean?.[name]||{};
+    const common=[name,score(attack.precision),score(attack.recall),score(attack["f1-score"])];
+    return baseline
+      ? [name,score(ref.recall),score(attack.recall),
+         deltaScore(attack.recall,ref.recall),deltaScore(attack["f1-score"],ref["f1-score"])]
+      : [...common,String(attack.support??"—")];
+  });
+  section.append(baseline
+    ? dataTable(["Class","Baseline recall","Attack recall","Δ recall","Δ F1"],rows)
+    : dataTable(["Class","Precision","Recall","F1","Support"],rows));
+  return section;
+}
+function confusionSection(value){
+  const metric=testMetrics(value),classes=classNames(value);
+  const matrix=metric?.confusion_matrix;
+  if(!Array.isArray(matrix)||!classes.length||matrix.length!==classes.length
+    ||matrix.some(row=>!Array.isArray(row)||row.length!==classes.length))return null;
+  const section=node("section",undefined,"result-section");
+  section.append(node("h4","Test confusion matrix"),node("p","Rows: true class · columns: predicted class"));
+  const wrapper=node("div",undefined,"result-table-scroll");
+  const table=node("table",undefined,"result-table confusion-matrix");
+  const head=node("thead"),header=node("tr");
+  header.append(node("th","True ↓ / Predicted →"));
+  for(const name of classes)header.append(node("th",name));
+  head.append(header);table.append(head);
+  const body=node("tbody");
+  for(let i=0;i<classes.length;i++){
+    const tr=node("tr");tr.append(node("th",classes[i]));
+    const row=matrix[i],maximum=Math.max(1,...row.map(x=>numeric(x)?x:0));
+    for(let j=0;j<classes.length;j++){
+      const count=numeric(row[j])?row[j]:0;
+      const cell=node("td",String(count));
+      cell.className="matrix-cell"+(i===j?" on-diagonal":"");
+      cell.style.backgroundColor="rgba(8,126,131,"+(0.04+0.53*Math.max(0,count)/maximum).toFixed(3)+")";
+      cell.title=classes[i]+" → "+classes[j]+": "+count;
+      tr.append(cell);
+    }
+    body.append(tr);
+  }
+  table.append(body);wrapper.append(table);section.append(wrapper);
+  return section;
+}
+function summarySection(value, baseline){
+  const section=node("section",undefined,"result-section");
+  const own=testMetrics(value),clean=testMetrics(baseline);
+  if(!own||!clean)return null;
+  section.append(node("h4","Paired test comparison"));
+  section.append(node("p","Verified pair: "+baseline.id+" · same pair ID, runtime, source and completed rounds."));
+  const rows=RESULT_METRICS.map(([key,label,percent])=>
+    [label,score(clean[key],percent),score(own[key],percent),
+     deltaScore(own[key],clean[key],percent)]);
+  section.append(dataTable(["Metric","Baseline","Experiment","Δ experiment − baseline"],rows));
+  return section;
+}
+function roundSeries(value,metric,classIndex){
+  const list=Array.isArray(value?.history)?value.history:[];
+  return list.map(row=>({round:row.round,value:metric==="class_recall"?row.recall?.[classIndex]:row[metric]}))
+    .filter(point=>Number.isInteger(point.round)&&point.round>0&&numeric(point.value));
+}
+function svgElement(tag, attrs, textValue){
+  const element=document.createElementNS("http://www.w3.org/2000/svg",tag);
+  for(const [name,value] of Object.entries(attrs||{}))element.setAttribute(name,String(value));
+  if(textValue!==undefined)element.textContent=String(textValue);
+  return element;
+}
+function roundChart(value,baseline){
+  const section=node("section",undefined,"result-section");
+  section.append(node("h4","Validation metrics by round"));
+  const controls=node("div",undefined,"round-controls");
+  const metricLabel=node("label","Metric"),metricSelect=node("select");
+  for(const [key,label] of [...RESULT_METRICS.filter(m=>["accuracy","macro_f1","balanced_accuracy","loss"].includes(m[0])),
+                              ["class_recall","Class recall"]]){
+    const option=node("option",label);option.value=key;metricSelect.append(option);
+  }
+  metricSelect.value="macro_f1";metricLabel.append(metricSelect);
+  const classLabel=node("label","Class"),classSelect=node("select");
+  const classes=classNames(value);
+  for(const [i,name] of classes.entries()){
+    const option=node("option",name);option.value=String(i);classSelect.append(option);
+  }
+  const dosIndex=classes.findIndex(name=>name.toLowerCase()==="dos");
+  if(dosIndex>=0)classSelect.value=String(dosIndex);
+  classLabel.append(classSelect);controls.append(metricLabel,classLabel);section.append(controls);
+  const drawing=node("div",undefined,"round-chart");
+  const dataGrid=node("details",undefined,"round-data");
+  dataGrid.append(node("summary","Round data table"));
+  section.append(drawing,dataGrid);
+  function redraw(){
+    classLabel.classList.toggle("hidden",metricSelect.value!=="class_recall");
+    drawing.replaceChildren();
+    const metric=metricSelect.value,index=Number(classSelect.value||0);
+    const own=roundSeries(value,metric,index),ref=baseline?roundSeries(baseline,metric,index):[];
+    if(!own.length&&!ref.length){
+      drawing.append(node("p","No per-round validation data available. Import results from the cluster again."));
+      dataGrid.replaceChildren(node("summary","Round data table"));return;
+    }
+    const all=[...own,...ref],maxRound=Math.max(1,...all.map(p=>p.round));
+    const ymax=metric==="loss"?Math.max(0.01,...all.map(p=>p.value))*1.05:1;
+    const ymin=0,left=48,right=620,top=16,bottom=194;
+    const x=r=>left+(r-1)/(Math.max(2,maxRound)-1)*(right-left);
+    const y=v=>bottom-(v-ymin)/(ymax-ymin)*(bottom-top);
+    const svg=svgElement("svg",{viewBox:"0 0 650 233",role:"img",
+      "aria-label":"Validation "+metric+" over "+maxRound+" rounds"});
+    for(let step=0;step<=4;step++){
+      const val=ymin+(ymax-ymin)*step/4,sy=y(val);
+      svg.append(svgElement("line",{x1:left,y1:sy,x2:right,y2:sy,class:"chart-grid"}));
+      svg.append(svgElement("text",{x:left-7,y:sy+4,"text-anchor":"end",class:"chart-axis"},
+        metric==="loss"?val.toFixed(2):(100*val).toFixed(0)+"%"));
+    }
+    svg.append(svgElement("text",{x:left,y:bottom+21,class:"chart-axis"},"1"));
+    svg.append(svgElement("text",{x:right,y:bottom+21,"text-anchor":"end",class:"chart-axis"},String(maxRound)));
+    for(const [data,klass] of [[ref,"chart-baseline"],[own,"chart-experiment"]]){
+      if(!data.length)continue;
+      const pts=data.map(point=>x(point.round).toFixed(2)+","+y(point.value).toFixed(2)).join(" ");
+      svg.append(svgElement("polyline",{points:pts,class:klass}));
+      if(data.length===1)svg.append(svgElement("circle",{cx:x(data[0].round),cy:y(data[0].value),r:4,class:klass}));
+    }
+    drawing.append(svg);
+    const legend=node("p",undefined,"chart-legend");
+    if(ref.length)legend.append(node("span","Baseline · "+baseline.id,"legend-baseline"));
+    if(own.length)legend.append(node("span","Experiment · "+value.id,"legend-experiment"));
+    drawing.append(legend);
+    const refMap=new Map(ref.map(p=>[p.round,p.value]));
+    const ownMap=new Map(own.map(p=>[p.round,p.value]));
+    const rounds=[...new Set([...refMap.keys(),...ownMap.keys()])].sort((a,b)=>a-b);
+    const format=v=>score(v,metric!=="loss");
+    dataGrid.replaceChildren(node("summary","Round data table"),
+      dataTable(["Round",...(baseline?["Baseline"]:[]),"Experiment"],rounds.map(r=>
+        [String(r),...(baseline?[format(refMap.get(r))]:[]),format(ownMap.get(r))])));
+  }
+  metricSelect.addEventListener("change",redraw);
+  classSelect.addEventListener("change",redraw);
+  redraw();return section;
+}
+function renderResults(values){
+  const target=$("results-list"),comparison=$("result-comparisons");
+  target.replaceChildren();comparison.replaceChildren();
+  const byId=new Map(values.map(item=>[item.id,item]));
+  const paired=values.filter(item=>item.baseline_id && byId.has(item.baseline_id));
+  if(paired.length){
+    comparison.append(node("h3","Paired comparisons · test split"));
+    const rows=paired.map(run=>{
+      const baseline=byId.get(run.baseline_id),test=testMetrics(run),clean=testMetrics(baseline);
+      return [run.id,baseline.id,run.config?.model||"—",
+        deltaScore(test?.accuracy,clean?.accuracy),
+        deltaScore(test?.macro_f1,clean?.macro_f1)];
+    });
+    comparison.append(dataTable(["Attack experiment","Clean baseline","Model","Δ accuracy","Δ macro-F1"],rows));
+    comparison.append(node("p","Differences are percentage points (experiment minus clean baseline). Rounds are not independent replicates."));
+  }
+  if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
+  for(const value of values){
+    const baseline=value.baseline_id?byId.get(value.baseline_id):null;
+    const report=node("details",undefined,"result-report");
+    if(values.length===1)report.open=true;
+    const heading=node("summary",undefined,"result-report-heading");
+    const title=node("strong",value.id);
+    const meta=node("span",(value.config?.model||"Model")+" · "+
+      (value.config?.attack||"unknown")+" · "+value.status+" · round "+(value.round??"—"));
+    heading.append(title,meta);report.append(heading);
+    const content=node("div",undefined,"result-report-content");
+    const metric=testMetrics(value);
+    if(metric){
+      content.append(node("h4","Final test metrics"),metricCards(metric));
+      if(baseline){
+        const compare=summarySection(value,baseline);
+        if(compare)content.append(compare);
+      }else if(value.config?.attack && value.config.attack!=="none"){
+        content.append(node("p","No verified paired clean baseline available for this run."));
+      }
+      const cls=classMetricsSection(value,baseline);
+      if(cls)content.append(cls);
+      const matrix=confusionSection(value);
+      if(matrix)content.append(matrix);
+    }else content.append(node("p","Final test metrics are not available for this run."));
+    content.append(roundChart(value,baseline));
+    const raw=node("details",undefined,"result-raw");
+    raw.append(node("summary","Raw final metrics"),node("pre",JSON.stringify(value.metrics,null,2)));
+    content.append(raw);report.append(content);target.append(report);
+  }
+}
+async function refreshResults(){
+  const target=$("results-list");target.replaceChildren();
+  try{renderResults(await request("/api/results"));}
+  catch(error){$("result-comparisons").replaceChildren();target.append(node("p",error.message,"error"));}
+}
 async function initialize(){
   const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
   defaults.name="Baseline_"+new Date().toLocaleDateString("sv-SE");
