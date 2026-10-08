@@ -1,5 +1,6 @@
 "use strict";
-let catalog, defaults, token;
+let catalog, defaults, token, datasetTasks = {};
+let previousLabelTask = "";
 let mode="simple";
 const $ = id => document.getElementById(id);
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
@@ -18,22 +19,53 @@ function refreshLanguage(){
   $("language").value=currentLanguage;setMode(mode);
 }
 function node(tag, text, cls) { const el=document.createElement(tag); if(text!==undefined)el.textContent=uiText(text); if(cls)el.className=cls; return el; }
+function selectedTaskInfo() {
+  const dataset=$("dataset")?.value;
+  const task=$("dataset_params")?.querySelector('[data-param="task"]')?.value;
+  return {task, info:datasetTasks[dataset]?.[task]};
+}
+function updateTaskUi() {
+  const {task,info}=selectedTaskInfo();
+  const target=$("dataset-label-preview");
+  if(!target)return;
+  if(!info){
+    target.textContent="This dataset does not advertise classification tasks. Check its plugin documentation.";
+    $("num_classes").readOnly=false;
+    return;
+  }
+  $("num_classes").value=String(info.num_classes);
+  $("num_classes").readOnly=true;
+  target.textContent=`${task}: ${info.num_classes} classes — ${info.class_names.map((name,id)=>id+" · "+name).join(" | ")}. Reference mapping only; inspect data to verify availability.`;
+  if(previousLabelTask!==$("dataset").value+":"+task){
+    previousLabelTask=$("dataset").value+":"+task;
+    const attack=catalog?.attack?.find(item=>item.id===$("attack")?.value);
+    if(attack?.id==="label_flip"){
+      const fields=$("attack_params");
+      const values=readParams(fields);
+      if(values.source_class>=info.num_classes)values.source_class=info.num_classes>1?1:0;
+      if(values.destination_class>=info.num_classes)values.destination_class=0;
+      parameterFields(attack,fields,values);
+    }
+  }
+}
 function parameterFields(component, target, values={}) {
   target.replaceChildren();
   for(const [key,schema] of Object.entries(component.parameters)) {
     const label=node("label",schema.description || key);
     let input;
-    if(schema.choices) { input=node("select"); for(const choice of schema.choices) { const option=node("option",String(choice)); option.value=String(choice); input.append(option); } }
+    const labelNames=component.id==="label_flip" && ["source_class","destination_class"].includes(key) ? selectedTaskInfo().info?.class_names : null;
+    if(labelNames) { input=node("select"); for(let i=0;i<labelNames.length;i++) { const option=node("option",i+" · "+labelNames[i]);option.value=String(i);input.append(option); } }
+    else if(schema.choices) { input=node("select"); for(const choice of schema.choices) { const option=node("option",String(choice)); option.value=String(choice); input.append(option); } }
     else { input=node("input"); input.type=["integer","number"].includes(schema.type)?"number":"text"; if(input.type==="number") { input.step=schema.type==="integer"?"1":"any"; if(schema.minimum!==undefined)input.min=schema.minimum; if(schema.maximum!==undefined)input.max=schema.maximum; } }
     const value=values[key]===undefined?schema.default:values[key]; input.value=schema.type==="array"?JSON.stringify(value):String(value);
     input.dataset.param=key; input.dataset.type=schema.type; label.append(input); target.append(label);
   }
 }
 function selection(kind, field, target) {
-  const block=node("div",undefined,"component-block"+(["dataset","optimizer","loss","metrics"].includes(kind)?" advanced-only":"")),label=node("label",titles[kind]),select=node("select"); select.id=field;
+  const block=node("div",undefined,"component-block"+(["optimizer","loss","metrics"].includes(kind)?" advanced-only":"")),label=node("label",titles[kind]),select=node("select"); select.id=field;
   for(const component of catalog[kind]) { const option=node("option",componentLabel(component,"title")); option.value=component.id;select.append(option); }
   select.value=defaults[field]; label.append(select);block.append(label);
-  const description=node("p",undefined,"component-description"),params=node("div",undefined,"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
+  const description=node("p",undefined,"component-description"),params=node("div",undefined,kind==="dataset"?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
   function refresh(){const component=catalog[kind].find(c=>c.id===select.value);description.textContent=componentLabel(component,"description");parameterFields(component,params,select.value===defaults[field]?defaults[field+"_params"]:{});}
   select.addEventListener("change",()=>{refresh();if(kind==="attack")$("attack-enabled").checked=select.value!=="none";});refresh();
 }
@@ -48,6 +80,8 @@ function config() {
   const value=structuredClone(defaults);
   for(const [key,initial] of Object.entries(defaults)) { const input=$(key); if(!input)continue; value[key]=typeof initial==="number"?Number(input.value):input.value; }
   for(const entries of Object.values(groups)) for(const [,field] of entries)value[field+"_params"]=readParams($(field+"_params"));
+  const {info}=selectedTaskInfo();
+  if(info)value.num_classes=info.num_classes;
   value.client_servers=integerList($("client_servers").value,"Assegnazione server");
   if(!$("attack-enabled").checked) {value.attack="none";value.attack_params={};value.malicious_clients=[];value.paired_clean="";value.paired_rounds=0;}
   else if($("malicious-selection").value==="ids")value.malicious_clients=integerList($("malicious_clients").value,"ID malevoli");
@@ -95,6 +129,7 @@ function timeline(c){
 }
 function preview(){
   controls();
+  updateTaskUi();
   try {
     const c=config();$("preview").textContent=JSON.stringify(c,null,2);
     $("selection-summary").textContent=currentLanguage==="en"?`${c.clients} clients · ${c.servers} aggregation ${c.servers===1?"server":"servers"}${c.servers>1?" + 1 coordinator":""}\n${c.malicious_clients.length} malicious · ${c.rounds} rounds\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nCPUs ${c.cpu_budget} · ${c.compute_device.toUpperCase()} · epochs ${c.local_epochs}\nOptimizer ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} defenses · ${c.server_execution}\nAdvanced parameters preserved`:`${c.clients} client · ${c.servers} server di aggregazione${c.servers>1?" + 1 coordinatore":""}\n${c.malicious_clients.length} malevoli · ${c.rounds} round\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nCPU ${c.cpu_budget} · ${c.compute_device.toUpperCase()} · epoche ${c.local_epochs}\nOttimizzatore ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} difese · ${c.server_execution}\nParametri avanzati conservati`;
@@ -106,9 +141,27 @@ function preview(){
 }
 async function request(path,body){const response=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json","X-ATIMA-Token":token},body:JSON.stringify(body)}:{});const result=await response.json();if(!response.ok)throw new Error(result.error || response.statusText);return result;}
 async function action(save){$("messages").replaceChildren();try { const c=config();const checked=await request("/api/validate",c);$("validation-status").textContent=uiText("Valid profile · data and GPU must be checked in the job");for(const warning of checked.warnings)$("messages").append(node("p",warning,"warning"));if(save){const result=await request("/api/plans",checked.config);$("download").href=result.download;$("download").classList.remove("hidden");$("messages").append(node("p","Piano salvato. Nessun training avviato."));} } catch(error){$("validation-status").textContent=uiText("Validation failed");$("messages").append(node("p",error.message,"error"));} }
+async function inspectLabels(){
+  const target=$("label-inspection-results");
+  target.textContent="Reading local label metadata...";
+  try{
+    const result=await request("/api/inspect-dataset",config());
+    target.textContent=JSON.stringify({
+      selected_task:result.task,
+      available:result.task_availability[result.task],
+      all_task_availability:result.task_availability,
+      source_label_counts:result.observed_fine_labels,
+      model_class_counts:result.mapped_class_counts,
+      per_client_counts:result.per_client_counts,
+      note:result.note
+    },null,2);
+  }catch(error){
+    target.textContent="Inspection unavailable: "+error.message+". The dataset path must exist on the computer running this webapp.";
+  }
+}
 async function refreshResults(){const target=$("results-list");target.replaceChildren();try{const values=await request("/api/results");if(!values.length)target.append(node("p","Nessun risultato locale disponibile."));for(const value of values){const item=node("article",undefined,"result-item");item.append(node("h3",value.id),node("p",`${value.status} · ${currentLanguage==="en"?"valid round":"round valido"} ${value.round ?? "—"}`),node("pre",JSON.stringify(value.metrics,null,2)));target.append(item);}}catch(error){target.append(node("p",error.message,"error"));}}
 async function initialize(){
-  const [response,initial]=await Promise.all([request("/api/catalog"),request("/api/defaults")]);catalog=response.catalog;token=response.token;defaults=initial;
+  const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
   defaults.name="Baseline_"+new Date().toLocaleDateString("sv-SE");
   for(const [key,value] of Object.entries(defaults))if($(key))$(key).value=Array.isArray(value)?value.join(","):value;
   for(const [target,entries] of Object.entries(groups))for(const [kind,field] of entries)selection(kind,field,$(target));
@@ -125,7 +178,7 @@ async function initialize(){
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Fonte scientifica");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("inspect-labels").addEventListener("click",inspectLabels);
   const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
   for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
 }
