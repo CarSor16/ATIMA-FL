@@ -8,7 +8,9 @@ from urllib.parse import urlparse, unquote
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
 from atima_fl.engine.plans import save_plan, save_defense_study
-from atima_fl.ui.cluster_results import connection_settings, sync_cluster_results
+from atima_fl.ui.cluster_results import (
+    connection_settings, read_local_history, sync_cluster_results,
+)
 
 STATIC = Path(__file__).parent / "static"
 
@@ -52,15 +54,39 @@ def results(workspace):
         manifest = json.loads(path.read_text(encoding="utf-8"))
         final_path = path.parent / "final_metrics.json"
         final = json.loads(final_path.read_text(encoding="utf-8")) if final_path.exists() else {}
-        values.append(
-            {
-                "id": path.parent.name,
-                "status": manifest.get("status", "unknown"),
-                "round": manifest.get("last_valid_round"),
-                "config": manifest.get("config", {}),
-                "metrics": final,
-            }
-        )
+        config = manifest.get("config", {})
+        values.append({
+            "id": path.parent.name,
+            "status": manifest.get("status", "unknown"),
+            "round": manifest.get("last_valid_round"),
+            "config": config,
+            "metrics": final,
+            "pair_id": manifest.get("pair_id"),
+            "classes": manifest.get("dataset_audit", {}).get("classes", []),
+            "history": read_local_history(path.parent / "validation_history.json"),
+            "baseline_id": None,
+            "_identity": json.dumps(
+                [manifest.get("source_identity"), manifest.get("runtime")], sort_keys=True
+            ),
+        })
+    # Only make comparisons between explicitly paired, complete runs from
+    # identical software/runtime identities and with equal valid round caps.
+    baselines = {}
+    for value in values:
+        if value["status"] == "complete" and value["config"].get("attack") == "none":
+            if value["pair_id"]:
+                key = (value["pair_id"], value["_identity"], value["round"])
+                baselines.setdefault(key, []).append(value["id"])
+    for value in values:
+        if (
+            value["status"] == "complete" and value["config"].get("attack") != "none"
+            and value["pair_id"]
+        ):
+            key = (value["pair_id"], value["_identity"], value["round"])
+            candidates = baselines.get(key, [])
+            if len(candidates) == 1:
+                value["baseline_id"] = candidates[0]
+        del value["_identity"]
     return values
 
 
