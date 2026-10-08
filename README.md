@@ -125,6 +125,41 @@ The project pins Flower 1.36 and scientific dependencies in `pyproject.toml`.
 Platform-specific GPU/Slurm execution must be verified on the target cluster;
 Windows/macOS installation of the designer does not imply CUDA/Ray compatibility.
 
+## Local-only cluster execution path presets
+
+The web designer can export profiles that point to prepared data on a **remote
+cluster**, without requiring the dataset on the PC. Optionally create
+`deployment_defaults.json` inside the workspace passed to `atima ui --workspace`
+(e.g. in the external `Workspace_ATIMA` directory) containing:
+
+```json
+{
+  "dataset_root": "env:ATIMA_EDGE_IIOT_ROOT",
+  "output_root": "/absolute/cluster/directory/for/results"
+}
+```
+
+These fields prepopulate the web designer when it loads; they are then exported
+to the TOML. The workspace file is **not part of the Git repository**, and
+it must not contain credentials. You may supply an explicit absolute dataset
+path instead of `env:ATIMA_EDGE_IIOT_ROOT`. No local dataset lookup is
+performed during configuration or export. Before the cluster job's preflight,
+set `ATIMA_EDGE_IIOT_ROOT` to the existing prepared dataset directory in
+the compute environment when using the symbolic form. The preflight resolves
+and audits this location; it never invents missing fine-grained classes.
+
+### Defense pipeline interaction
+
+Enable defense stages using the selection chips in **Defenses before
+aggregation**. Selected stages appear in an ordered pipeline. Drag each
+stage's grip to change execution order. With keyboard focus on the grip,
+press Up/Down (or Home/End) to reorder without a mouse. Disabling a stage
+removes it from the active pipeline and preserves its parameter values if
+enabled again during the same session. The exported TOML `defenses` array
+records the exact active stage order; disabled stages are excluded. Changing
+the UI order changes the scientific preprocessing pipeline, so record it
+as an experimental variable.
+
 ## Workflow
 
 1. Choose components, seed, dataset paths and resource budget in the designer.
