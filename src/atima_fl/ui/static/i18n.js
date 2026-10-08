@@ -1,5 +1,16 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Select defenses below, then drag the active stages into the order they should run. Parameters are available in Advanced.": "Seleziona le difese, poi trascina gli stadi attivi nell’ordine di esecuzione. I parametri sono disponibili in Avanzata.",
+  "Available defenses": "Difese disponibili",
+  "Ordered defenses": "Difese ordinate",
+  "Active defense pipeline": "Pipeline di difese attive",
+  "Drag the grip to reorder · keyboard: ↑ / ↓": "Trascina la maniglia per riordinare · tastiera: ↑ / ↓",
+  "No active defenses — aggregation runs without preprocessing.": "Nessuna difesa attiva — l’aggregazione procede senza pre-elaborazione.",
+  "Reorder defense": "Riordina difesa",
+  "Use up and down arrow keys to move.": "Usa le frecce su e giù per spostare.",
+  "Drag to reorder; use arrow keys from the handle.": "Trascina per riordinare oppure usa le frecce sulla maniglia.",
+  "Defense execution order": "Ordine di esecuzione delle difese",
+  "None": "Nessuna",
   "Dark mode": "Modalità scura",
   "Light mode": "Modalità chiara",
   "Select the defenses to apply. They run in the displayed order; parameters are available in Advanced.": "Seleziona le difese da applicare. Vengono eseguite nell’ordine mostrato; i parametri sono disponibili in modalità Avanzata.",
