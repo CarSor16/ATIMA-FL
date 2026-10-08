@@ -472,11 +472,11 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     assert '"Exports experiment.toml": "Esporta experiment.toml"' in translations
     assert f'"{title}": "Crea un esperimento di sicurezza per il Federated Learning"' in translations
     assert '.header-tools .language-label{' in css
-    assert 'display:inline-flex;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
-    assert 'flex-direction:row;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
-    assert 'align-items:center;' in css.split('.header-tools .language-label{')[-1].split("}", 1)[0]
+    assert 'display:inline-flex;' in css.split('.header-tools .language-label{')[1].split("}", 1)[0]
+    assert 'flex-direction:row;' in css.split('.header-tools .language-label{')[1].split("}", 1)[0]
+    assert 'align-items:center;' in css.split('.header-tools .language-label{')[1].split("}", 1)[0]
     assert '.header-tools .language-label select{' in css
-    assert 'margin:0;' in css.split('.header-tools .language-label select{')[-1].split("}", 1)[0]
+    assert 'margin:0;' in css.split('.header-tools .language-label select{')[1].split("}", 1)[0]
     assert '.catalog-subgroups{' in css
     assert 'padding:18px 20px 22px;' in css
     assert 'padding:17px 18px 20px;' in css
