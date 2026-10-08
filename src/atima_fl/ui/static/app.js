@@ -38,6 +38,8 @@ function refreshLanguage(){
     select.closest(".component-block").querySelector(".component-description").textContent=componentLabel(catalog[kind].find(c=>c.id===select.value),"description");
   }
   for(const component of catalog.defense){const input=$("defense-"+component.id);input.parentElement.lastChild.nodeValue=" "+componentLabel(component,"title");}
+  for(const block of $("defense-components").children){const component=catalog.defense.find(c=>c.id===block.dataset.defense);block.querySelector(".defense-name").textContent=componentLabel(component,"title");}
+  updateDefensePipeline();
   $("component-list").replaceChildren();
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Scientific source");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
@@ -94,6 +96,141 @@ function selection(kind, field, target) {
   function refresh(){const component=catalog[kind].find(c=>c.id===select.value);description.textContent=componentLabel(component,"description");parameterFields(component,params,select.value===defaults[field]?defaults[field+"_params"]:{});}
   select.addEventListener("change",()=>{refresh();if(kind==="attack")$("attack-enabled").checked=select.value!=="none";});refresh();
 }
+// Stage order is the order of active DOM list items, which config() serializes
+// unchanged into the TOML defense array. Inactive stages remain in the catalog.
+let draggingDefense = null;
+const cachedDefenseParams = new Map();
+function updateDefensePipeline(announce=false) {
+  const rows = [...$("defense-components").children];
+  $("defense-empty").classList.toggle("hidden",rows.length>0);
+  rows.forEach((block,index)=>{
+    const component=catalog.defense.find(item=>item.id===block.dataset.defense);
+    block.setAttribute("aria-posinset",String(index+1));
+    block.setAttribute("aria-setsize",String(rows.length));
+    block.querySelector(".defense-position").textContent=String(index+1).padStart(2,"0");
+    block.querySelector(".defense-grip").setAttribute("aria-label",
+      `${uiText("Reorder defense")}: ${componentLabel(component,"title")} (${index+1}/${rows.length}). ${uiText("Use up and down arrow keys to move.")}`);
+  });
+  if(announce){
+    const names=rows.map(block=>componentLabel(catalog.defense.find(item=>item.id===block.dataset.defense),"title"));
+    $("defense-order-status").textContent=uiText("Defense execution order")+": "+(names.join(" → ") || uiText("None"));
+  }
+}
+function clearDefenseDropTargets() {
+  for(const block of $("defense-components").children)
+    block.classList.remove("drop-before","drop-after","is-dragging");
+}
+function finishDefenseReorder() {
+  clearDefenseDropTargets();
+  draggingDefense=null;
+  updateDefensePipeline(true);
+  preview();
+}
+function setDefenseEnabled(component, enabled, initialParams=null) {
+  const container=$("defense-components");
+  const existing=[...container.children].find(block=>block.dataset.defense===component.id);
+  if(!enabled){
+    if(existing){
+      cachedDefenseParams.set(component.id,readParams(existing.querySelector(".defense-params")));
+      existing.remove();
+    }
+    updateDefensePipeline();
+    return;
+  }
+  if(existing)return;
+  const block=node("div",undefined,"defense-stage");
+  block.dataset.defense=component.id;
+  block.setAttribute("role","listitem");
+  const heading=node("div",undefined,"defense-stage-heading");
+  const position=node("span","00","defense-position");
+  position.setAttribute("aria-hidden","true");
+  const grip=node("button","⠿","defense-grip");
+  grip.type="button";
+  grip.draggable=true;
+  grip.title=uiText("Drag to reorder; use arrow keys from the handle.");
+  const name=node("strong",componentLabel(component,"title"),"defense-name");
+  const params=node("div",undefined,"fields advanced-only defense-params");
+  params.id="defense-params-"+component.id;
+  parameterFields(component,params,initialParams ?? cachedDefenseParams.get(component.id) ?? {});
+  heading.append(position,grip,name);
+  block.append(heading,params);
+  grip.addEventListener("keydown",event=>{
+    const list=$("defense-components");
+    let changed=false;
+    if(event.key==="ArrowUp" && block.previousElementSibling){block.previousElementSibling.before(block);changed=true;}
+    if(event.key==="ArrowDown" && block.nextElementSibling){block.nextElementSibling.after(block);changed=true;}
+    if(event.key==="Home" && block.previousElementSibling){list.prepend(block);changed=true;}
+    if(event.key==="End" && block.nextElementSibling){list.append(block);changed=true;}
+    if(["ArrowUp","ArrowDown","Home","End"].includes(event.key)){
+      event.preventDefault();
+      if(changed){finishDefenseReorder();grip.focus();}
+    }
+  });
+  grip.addEventListener("dragstart",event=>{
+    draggingDefense=block;
+    event.dataTransfer.effectAllowed="move";
+    event.dataTransfer.setData("text/plain",component.id);
+    block.classList.add("is-dragging");
+  });
+  grip.addEventListener("dragend",()=>{
+    clearDefenseDropTargets();
+    draggingDefense=null;
+  });
+  block.addEventListener("dragover",event=>{
+    if(!draggingDefense || draggingDefense===block)return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect="move";
+    clearDefenseDropTargets();
+    const before=event.clientY < block.getBoundingClientRect().top+block.getBoundingClientRect().height/2;
+    block.classList.add(before?"drop-before":"drop-after");
+  });
+  block.addEventListener("drop",event=>{
+    if(!draggingDefense || draggingDefense===block)return;
+    event.preventDefault();
+    event.stopPropagation();
+    const before=event.clientY < block.getBoundingClientRect().top+block.getBoundingClientRect().height/2;
+    if(before)block.before(draggingDefense);else block.after(draggingDefense);
+    finishDefenseReorder();
+  });
+  container.append(block);
+  updateDefensePipeline();
+}
+function initializeDefenses() {
+  const picker=$("defense-picker");
+  const selected=new Map((defaults.defenses||[]).map(defense=>[defense.id,defense.params]));
+  for(const component of catalog.defense) {
+    const label=node("label",undefined,"defense-picker-item");
+    const checkbox=node("input");
+    checkbox.type="checkbox";
+    checkbox.id="defense-"+component.id;
+    label.append(checkbox,document.createTextNode(" "+componentLabel(component,"title")));
+    picker.append(label);
+    checkbox.addEventListener("change",()=>{
+      setDefenseEnabled(component,checkbox.checked);
+      preview();
+    });
+  }
+  // Preserve a preexisting exported stage order rather than imposing catalog order.
+  for(const [id,params] of selected) {
+    const component=catalog.defense.find(item=>item.id===id);
+    if(!component)continue;
+    $("defense-"+id).checked=true;
+    setDefenseEnabled(component,true,params);
+  }
+  $("defense-components").addEventListener("dragover",event=>{
+    if(draggingDefense){event.preventDefault();event.dataTransfer.dropEffect="move";}
+  });
+  $("defense-components").addEventListener("drop",event=>{
+    if(!draggingDefense)return;
+    event.preventDefault();
+    if(event.target===$("defense-components")){
+      $("defense-components").append(draggingDefense);
+      finishDefenseReorder();
+    }
+  });
+  updateDefensePipeline();
+}
+
 function readParams(target) { const value={}; for(const input of target.querySelectorAll("[data-param]")) { const type=input.dataset.type; value[input.dataset.param]=type==="array"?JSON.parse(input.value):["integer","number"].includes(type)?Number(input.value):type==="boolean"?input.value==="true":input.value; } return value; }
 function integerList(text, label) {
   if(!text.trim())return [];
@@ -116,7 +253,7 @@ function config() {
     value.malicious_clients=Array.from({length:n},(_,i)=>i);
   }
   if($("attack-until-end").checked)value.attack_end=value.rounds;
-  value.defenses=[];for(const block of $("defense-components").children){const component=catalog.defense.find(c=>c.id===block.dataset.defense);if($("defense-"+component.id).checked)value.defenses.push({id:component.id,params:readParams($("defense-params-"+component.id))});}
+  value.defenses=[];for(const block of $("defense-components").children){const component=catalog.defense.find(c=>c.id===block.dataset.defense);value.defenses.push({id:component.id,params:readParams($("defense-params-"+component.id))});}
   return value;
 }
 function controls() {
@@ -195,10 +332,7 @@ async function initialize(){
   $("mode-simple").addEventListener("click",()=>setMode("simple"));$("mode-advanced").addEventListener("click",()=>setMode("advanced"));
   $("attack-enabled").addEventListener("change",()=>{if($("attack-enabled").checked && $("attack").value==="none"){const choice=catalog.attack.find(c=>c.id!=="none");if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}}});
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});
-  for(const component of catalog.defense){const label=node("label"),input=node("input");input.type="checkbox";input.id="defense-"+component.id;label.append(input,document.createTextNode(" "+componentLabel(component,"title")));const params=node("div",undefined,"fields");params.id="defense-params-"+component.id;parameterFields(component,params);const block=node("div",undefined,"defense-stage");block.dataset.defense=component.id;
-    // A stable, catalog-defined order keeps the pipeline deterministic.
-    // The TOML defense list remains the authoritative order for cluster runs.
-    params.classList.add("advanced-only");block.append(label,params);$("defense-components").append(block);}
+  initializeDefenses();
   for(const [kind,components] of Object.entries(catalog))for(const component of components){const card=node("article",undefined,"card");card.append(node("span",kind,"eyebrow"),node("h2",componentLabel(component,"title")),node("p",componentLabel(component,"description")));for(const reference of component.references){const link=node("a","Fonte scientifica");link.href=reference;link.target="_blank";link.rel="noopener";card.append(link);}$("component-list").append(card);}
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
