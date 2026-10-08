@@ -41,6 +41,43 @@ def connection_settings(workspace):
     return data
 
 
+def password_ssh(settings, script):
+    """Execute the same read-only summary script using a stored Windows password."""
+    from atima_fl.ui.cluster_credentials import get_password
+
+    password = get_password(settings["ssh_user"], settings["ssh_host"])
+    if password is None:
+        return None
+    try:
+        import paramiko
+    except ImportError as exc:
+        raise ValueError("Install cluster support: pip install -e '.[cluster]'") from exc
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.load_host_keys(str(Path.home() / ".ssh" / "known_hosts")) if (
+        Path.home() / ".ssh" / "known_hosts"
+    ).is_file() else None
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        client.connect(
+            settings["ssh_host"], username=settings["ssh_user"], password=password,
+            look_for_keys=False, allow_agent=False, timeout=8, auth_timeout=8,
+            banner_timeout=8,
+        )
+        stdin, stdout, stderr = client.exec_command("python3 -", timeout=20)
+        stdin.write(script)
+        stdin.channel.shutdown_write()
+        output = stdout.read(12 * 1024 * 1024 + 1).decode("utf-8")
+        code = stdout.channel.recv_exit_status()
+        if code:
+            raise ValueError("Cluster SSH read failed; verify password and results path")
+        return output
+    except (OSError, EOFError, paramiko.SSHException) as exc:
+        raise ValueError("Cluster SSH password connection failed; check known_hosts and credentials") from exc
+    finally:
+        client.close()
+
+
 def sync_cluster_results(workspace, runner=subprocess.run):
     """Fetch read-only JSON summaries and copy atomically into local workspace.
 
@@ -81,17 +118,23 @@ print(json.dumps(out,allow_nan=False))
         "-o", "ConnectTimeout=8", "-o", "NumberOfPasswordPrompts=0",
         "--", settings["ssh_user"] + "@" + settings["ssh_host"], "python3", "-",
     ]
-    try:
-        response = runner(command, input=remote_script, text=True,
-                          capture_output=True, timeout=35, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise ValueError("SSH connection failed or timed out; verify VPN, SSH keys and cluster access") from exc
-    if response.returncode != 0:
-        raise ValueError("Cluster SSH read failed; verify VPN, trusted host key, keys and result path")
-    if len(response.stdout) > 12 * 1024 * 1024:
+    output = None
+    # Preserve injected runner behavior for isolated tests.
+    if runner is subprocess.run:
+        output = password_ssh(settings, remote_script)
+    if output is None:
+        try:
+            response = runner(command, input=remote_script, text=True,
+                              capture_output=True, timeout=35, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ValueError("SSH connection failed or timed out; verify VPN, SSH keys and cluster access") from exc
+        if response.returncode != 0:
+            raise ValueError("Cluster SSH read failed; verify VPN, trusted host key, keys and result path")
+        output = response.stdout
+    if len(output) > 12 * 1024 * 1024:
         raise ValueError("Cluster response too large")
     try:
-        entries = json.loads(response.stdout)
+        entries = json.loads(output)
     except (ValueError, TypeError) as exc:
         raise ValueError("Cluster returned invalid JSON results") from exc
     if not isinstance(entries, list) or len(entries) > 100:
