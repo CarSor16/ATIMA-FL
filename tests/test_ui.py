@@ -137,3 +137,28 @@ def test_gui_task_catalog_label_dimensions_and_unavailable_local_inspection(gui)
     assert caught.value.code == 422
     assert b"inspect-labels" in urlopen(url + "/").read()
     assert b"selectedTaskInfo" in urlopen(url + "/app.js").read()
+
+
+def test_gui_theme_toggle_brand_and_assets(gui):
+    _, url = gui
+    index = urlopen(url + "/").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    app = urlopen(url + "/app.js").read().decode("utf-8")
+    translation = urlopen(url + "/i18n.js").read().decode("utf-8")
+
+    assert "Adversarial Testing Infrastructure for Model Aggregation — Federated Learning" in index
+    assert 'id="theme-toggle"' in index
+    assert 'id="theme-label"' in index
+    assert 'id="theme-symbol"' in index
+    assert 'aria-label="Dark mode"' in index
+    assert 'aria-pressed=' not in index.split('id="theme-toggle"')[1].split("</button>")[0]
+    assert ':root[data-theme="dark"]' in css
+    assert '[data-theme="dark"] input' in css
+    assert '[data-theme="dark"] .card' in css
+    assert "prefers-reduced-motion" in css
+    assert 'localStorage.getItem("atima-theme")' in app
+    assert 'localStorage.setItem("atima-theme", theme)' in app
+    assert 'document.documentElement.dataset.theme = theme' in app
+    assert 'button.setAttribute("aria-label", text)' in app
+    assert '"Dark mode": "Modalità scura"' in translation
+    assert '"Light mode": "Modalità chiara"' in translation
