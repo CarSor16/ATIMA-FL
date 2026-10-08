@@ -347,7 +347,7 @@ def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui)
     css = urlopen(url + "/style.css").read().decode("utf-8")
     assert 'id="result-comparisons"' in html
     assert "function renderResults(values)" in script
-    assert "function roundChart(value,baseline)" in script
+    assert "function roundChart(value,baseline,manual=false,alignedClasses=true)" in script
     assert "function confusionSection(value)" in script
     assert "function classMetricsSection(value, baseline)" in script
     assert "function deltaScore(value, reference, percent=true)" in script
