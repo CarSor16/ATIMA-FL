@@ -8,3 +8,76 @@
 .label-inspector h3{margin:0 0 6px;font-size:15px}
 .label-inspector .secondary{margin:8px 0}
 .inspection-results{max-height:340px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#34505f}
+
+
+/* Brand identity and appearance control: presentation only, independent of plans. */
+.sidebar{width:260px}
+main{margin-left:260px}
+.brand{align-items:flex-start;gap:11px;letter-spacing:normal;min-width:0}
+.brand .mark{line-height:1.1;flex-shrink:0}
+.brand-identity{min-width:0}
+.brand-name{font-size:25px;line-height:1.16;font-weight:800;letter-spacing:-.7px}
+.brand-name span{color:#8ad6d3}
+.brand .brand-subtitle{font-size:10.5px;font-weight:500;line-height:1.6;letter-spacing:.05px;text-transform:none;color:#a9c8d1;margin-top:9px;max-width:190px}
+.sidebar nav{margin-top:34px}
+.theme-toggle{display:inline-flex;gap:9px;align-items:center;justify-content:center;min-height:37px;padding:7px 13px;background:#fff;border:1px solid var(--line);border-radius:9px;color:var(--ink);font:600 12px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
+.theme-symbol{display:inline-flex;justify-content:center;width:20px;font-size:18px;line-height:1}
+.theme-toggle:hover{border-color:var(--teal);background:#edf7f6}
+.theme-toggle:focus-visible,.nav:focus-visible,.mode-switch button:focus-visible,.primary:focus-visible,.secondary:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.nav:hover:not(.active){background:#1a3c47;color:#fff}
+.card,.mode-bar,.selector,.theme-toggle{transition:background-color .17s ease,border-color .17s ease,box-shadow .17s ease}
+input[type="checkbox"]{accent-color:var(--teal)}
+@media(max-width:1180px){.sidebar{width:218px}main{margin-left:218px}.brand .brand-subtitle{font-size:10px}}
+@media(max-width:600px){.sidebar{width:auto}.brand .brand-subtitle{max-width:300px}main{margin-left:0}}
+@media(prefers-reduced-motion:reduce){.card,.mode-bar,.selector,.theme-toggle{transition:none}}
+
+/* The complete dark palette also covers dynamically generated parameter fields. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#091720;
+  --ink:#e7f0f4;
+  --muted:#9eb3bf;
+  --line:#2c4552;
+  --teal:#64d8cb;
+  --side:#071e29;
+}
+[data-theme="dark"] .sidebar{background:#071e29;box-shadow:inset -1px 0 #2d4651}
+[data-theme="dark"] .sidebar .brand-subtitle{color:#b0cad4}
+[data-theme="dark"] .sidebar .nav:hover:not(.active){background:#22434f}
+[data-theme="dark"] .nav.active{background:#254c56;box-shadow:inset 3px 0 #64d8cb}
+[data-theme="dark"] .card,[data-theme="dark"] .mode-bar{background:#112630;border-color:#2c4552;box-shadow:0 6px 25px #00000020}
+[data-theme="dark"] .selector,[data-theme="dark"] .label-inspector{background:#142c37;border-color:#2c4552}
+[data-theme="dark"] .fields label,[data-theme="dark"] .selector>label,[data-theme="dark"] .component-block>label,[data-theme="dark"] .stacked,[data-theme="dark"] .params label{color:#bdd2dc}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:#0c1e29;color:#e7f0f4;border-color:#365362}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#91a7b4;opacity:1}
+[data-theme="dark"] input:focus,[data-theme="dark"] select:focus,[data-theme="dark"] textarea:focus{border-color:#64d8cb;box-shadow:0 0 0 3px #64d8cb2a}
+[data-theme="dark"] input:disabled,[data-theme="dark"] select:disabled,[data-theme="dark"] input:read-only{background:#192d38;color:#a3bbc6}
+[data-theme="dark"] .badge{background:#173d3b;color:#a0f0e5;border-color:#285951}
+[data-theme="dark"] .step{background:#1b4949;color:#8df1e3}
+[data-theme="dark"] .workflow span{border-color:#3a5562}
+[data-theme="dark"] .workflow .current{border-color:#64d8cb;color:#64d8cb}
+[data-theme="dark"] .mode-switch{background:#0a1d27}
+[data-theme="dark"] .mode-switch button{color:#bad0da}
+[data-theme="dark"] .mode-switch button[aria-pressed=true]{background:#167c76;color:#fff}
+[data-theme="dark"] .theme-toggle{background:#162d38;color:#e5f2f3;border-color:#355460}
+[data-theme="dark"] .theme-toggle:hover{background:#21414b;border-color:#64d8cb}
+[data-theme="dark"] .primary{background:#178d81;color:#fff}
+[data-theme="dark"] .primary:hover{background:#12766d}
+[data-theme="dark"] .secondary{background:#1b3440;color:#d6e9ef;border-color:#3c5967}
+[data-theme="dark"] .secondary:hover{background:#274451;border-color:#64d8cb}
+[data-theme="dark"] .status{background:#1c3440;color:#c9dde5}
+[data-theme="dark"] .status.valid,[data-theme="dark"] .message.success{background:#173e34;color:#9af2cd}
+[data-theme="dark"] .message{background:#423520;color:#ffe0a1}
+[data-theme="dark"] .message.error{background:#45262a;color:#ffc0bd}
+[data-theme="dark"] .warning{color:#ffc77d}
+[data-theme="dark"] .error{color:#ffaaa7}
+[data-theme="dark"] .hint{color:#a6bac5}
+[data-theme="dark"] .hint strong{color:#e4f2f4}
+[data-theme="dark"] .prose li{color:#b9cbd3}
+[data-theme="dark"] .review pre,[data-theme="dark"] .result-card{background:#0a1e28;color:#cadde5}
+[data-theme="dark"] .catalog-grid code{background:#24404a;color:#dceff3}
+[data-theme="dark"] .inspection-results{color:#c3dee6}
+[data-theme="dark"] .attack-timeline{background:#263c47}
+[data-theme="dark"] .attack-timeline .clean-rounds{background:#43988f}
+[data-theme="dark"] .attack-timeline .active-rounds{background:#d18164}
+[data-theme="dark"] .download{color:#8ae5db}
