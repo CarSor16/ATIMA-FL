@@ -309,3 +309,49 @@ def test_cluster_status_exposes_missing_config_location_not_secrets(tmp_path):
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+
+def test_results_api_exposes_task_and_audited_split_hashes_for_manual_comparison(tmp_path):
+    from atima_fl.ui.app import results
+    folder = tmp_path / "results" / "Binary_Clean"
+    folder.mkdir(parents=True)
+    hashes = {
+        "train": "sha-train", "validation": "sha-valid",
+        "test": "sha-test", "feature_schema.json": "sha-schema",
+        "label_mapping.json": "sha-map", "preprocessor.json": "sha-prep",
+        "client_0": "do-not-need-to-expose-client-shard",
+    }
+    (folder / "manifest.json").write_text(json.dumps({
+        "status": "complete", "last_valid_round": 10,
+        "config": {
+            "attack": "none", "dataset": "edge_iiot",
+            "dataset_params": {"task": "binary"},
+        },
+        "dataset_audit": {
+            "task": "binary", "classes": ["Normal", "Attack"],
+            "hashes": hashes, "client_counts": {"0": 100},
+        },
+    }))
+    (folder / "final_metrics.json").write_text(json.dumps({
+        "test": {"samples": 200,
+                 "per_class": {"Normal": {"support": 100}, "Attack": {"support": 100}}}
+    }))
+    result = results(tmp_path)[0]
+    assert result["dataset_identity"]["task"] == "binary"
+    assert result["dataset_identity"]["hashes"]["test"] == "sha-test"
+    assert result["dataset_identity"]["hashes"]["feature_schema.json"] == "sha-schema"
+    assert "client_0" not in result["dataset_identity"]["hashes"]
+    assert "client_counts" not in result["dataset_identity"]
+
+
+def test_results_api_old_manifest_missing_audit_is_not_misrepresented(tmp_path):
+    from atima_fl.ui.app import results
+    folder = tmp_path / "results" / "Old"
+    folder.mkdir(parents=True)
+    (folder / "manifest.json").write_text(json.dumps({
+        "status": "complete", "config": {"dataset": "edge_iiot", "attack": "none"},
+    }))
+    result = results(tmp_path)[0]
+    assert result["dataset_identity"]["task"] is None
+    assert all(value is None for value in result["dataset_identity"]["hashes"].values())

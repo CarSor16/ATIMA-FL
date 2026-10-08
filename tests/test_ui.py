@@ -386,3 +386,21 @@ def test_manual_results_compare_and_auto_attack_model_names(gui):
     assert ".manual-compare-controls" in css
     assert ".manual-matrix-grid" in css
     assert '"Compare any two experiments": "Confronta due esperimenti qualsiasi"' in translations
+
+
+
+def test_manual_comparison_fails_closed_for_mismatched_dataset_metadata(gui):
+    _, url = gui
+    javascript = urlopen(url + "/app.js").read().decode("utf-8")
+    index = urlopen(url + "/").read().decode("utf-8")
+    assert "function manualWarnings(first,second)" in javascript
+    assert '"train","validation","test","feature_schema.json"' in javascript
+    assert 'ca.dataset!==cb.dataset' in javascript
+    assert 'taskA!==taskB' in javascript
+    assert 'if(!sameClasses)' in javascript
+    assert 'if(missingHashes.length)' in javascript
+    assert 'if(sameClasses&&!supportMatches)' in javascript
+    assert 'if(!validation.compatible)' in javascript
+    assert 'return;' in javascript.split('if(!validation.compatible)', 1)[1].split('const a=testMetrics', 1)[0]
+    assert 'Comparison blocked · incompatible experiment data' in javascript
+    assert 'id="manual-comparison-output"' in index

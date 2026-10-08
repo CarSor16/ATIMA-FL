@@ -1,5 +1,16 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Comparison blocked · incompatible experiment data": "Confronto bloccato · dati sperimentali incompatibili",
+  "Dataset compatibility verified: matching task, labels, prepared file hashes and test class support.": "Compatibilità dataset verificata: task, classi, hash dei file preparati e campioni per classe coincidono.",
+  "To compare scores, use the same audited dataset, classification task, class mapping and test split. Individual experiment reports remain available below.": "Per confrontare le metriche usa lo stesso dataset verificato, task, mappatura delle classi e split di test. I report individuali restano disponibili qui sotto.",
+  "Dataset identity missing in experiment configuration.": "Identità del dataset assente nella configurazione.",
+  "Classification task missing from the dataset audit.": "Task di classificazione assente dall'audit del dataset.",
+  "Experiment A has inconsistent classification task metadata.": "L'esperimento A ha metadati di task incoerenti.",
+  "Experiment B has inconsistent classification task metadata.": "L'esperimento B ha metadati di task incoerenti.",
+  "Different or missing class labels/order (binary and multiclass cannot be compared).": "Classi o ordine delle classi differenti o mancanti (binario e multiclasse non sono confrontabili).",
+  "Test sample count is missing; identical test populations cannot be verified.": "Manca il numero di campioni di test, impossibile verificarne la corrispondenza.",
+  "Class support differs or is missing; test populations cannot be verified.": "Campioni per classe differenti o mancanti; impossibile verificare il test.",
+  "Final test metrics missing in one or both experiments.": "Metriche finali di test mancanti in uno o entrambi gli esperimenti.",
   "Compare any two experiments": "Confronta due esperimenti qualsiasi",
   "Choose A and B to compare final test metrics, per-class scores, confusion matrices and validation curves. Deltas are B minus A.": "Scegli A e B per confrontare metriche finali di test, risultati per classe, matrici di confusione e curve di validazione. Le differenze sono B meno A.",
   "Experiment A": "Esperimento A",

@@ -377,3 +377,16 @@ Dates and CPU budgets are not appended. Uncheck auto-name only when a manual
 name is necessary. Old experiment folders retain their original names.
 Repeated trials with the same attack/model must use distinct output roots
 or existing folders will conflict; **never overwrite** finished results.
+
+
+### Dataset compatibility for manual A/B comparisons
+
+ATIMA disables quantitative manual A/B comparisons when task, dataset identity,
+class names/order, test sample counts, per-class test supports, or SHA-256 file
+fingerprints of the prepared train/validation/test splits, feature schema,
+label mapping and preprocessor do not match. This also blocks binary-vs-multiclass
+comparisons even when the source dataset is the same. Missing historical audit
+fields fail closed (a result without enough provenance is not presumed compatible).
+The individual reports remain visible. Changing model architecture or seed on
+otherwise identical data is allowed for **descriptive** analysis only, with an
+explicit warning; these differences must not be interpreted as attack causality.

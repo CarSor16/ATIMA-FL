@@ -63,6 +63,16 @@ def results(workspace):
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
+            "dataset_identity": {
+                "task": manifest.get("dataset_audit", {}).get("task"),
+                "hashes": {
+                    key: manifest.get("dataset_audit", {}).get("hashes", {}).get(key)
+                    for key in (
+                        "train", "validation", "test", "feature_schema.json",
+                        "label_mapping.json", "preprocessor.json",
+                    )
+                },
+            },
             "history": read_local_history(path.parent / "validation_history.json"),
             "baseline_id": None,
             "_identity": json.dumps(

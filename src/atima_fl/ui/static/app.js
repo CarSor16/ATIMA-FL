@@ -642,34 +642,64 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
 }
 
 // Manual A/B comparison is intentionally distinct from verified clean/attack pairing.
+// A manual comparison must use the same classification task and verified
+// prepared dataset. Identical display names or the same sample count alone
+// do not prove that two datasets or label projections are equivalent.
 function manualWarnings(first,second){
-  const warnings=[];
-  const ca=first.config||{}, cb=second.config||{};
+  const warnings=[],blockers=[];
+  const ca=first.config||{},cb=second.config||{};
+  const da=first.dataset_identity||{},db=second.dataset_identity||{};
+  const taskA=da.task,taskB=db.task;
   const namesA=classNames(first),namesB=classNames(second);
-  const sameClasses=namesA.length>0 && namesA.length===namesB.length
+  const sameClasses=namesA.length>=2 && namesA.length===namesB.length
     && namesA.every((name,i)=>name===namesB[i]);
-  const supportMatches=sameClasses && namesA.every(name=>
-    testMetrics(first)?.per_class?.[name]?.support===testMetrics(second)?.per_class?.[name]?.support);
-  if(!sameClasses)warnings.push("Class labels or their order differ. Per-class deltas and class recall overlays are disabled.");
-  else if(!supportMatches)warnings.push("Test support by class differs; the compared test populations may differ.");
-  if(testMetrics(first)?.samples!==testMetrics(second)?.samples)
-    warnings.push("Test sample counts differ; aggregate scores are not directly comparable.");
-  for(const [key,description] of [["dataset","dataset"],["model","model"],
-                                   ["partition","partition"],["seed","random seed"],
-                                   ["rounds","training round cap"]]){
+  const hashesA=da.hashes||{},hashesB=db.hashes||{};
+  const requiredHashes=["train","validation","test","feature_schema.json",
+                        "label_mapping.json","preprocessor.json"];
+  if(!ca.dataset||!cb.dataset)blockers.push("Dataset identity missing in experiment configuration.");
+  else if(ca.dataset!==cb.dataset)
+    blockers.push("Different datasets: "+ca.dataset+" vs "+cb.dataset+".");
+  if(!taskA||!taskB)blockers.push("Classification task missing from the dataset audit.");
+  else if(taskA!==taskB)
+    blockers.push("Different classification tasks: "+taskA+" vs "+taskB+".");
+  if(ca.dataset_params?.task && taskA && ca.dataset_params.task!==taskA)
+    blockers.push("Experiment A has inconsistent classification task metadata.");
+  if(cb.dataset_params?.task && taskB && cb.dataset_params.task!==taskB)
+    blockers.push("Experiment B has inconsistent classification task metadata.");
+  if(!sameClasses)
+    blockers.push("Different or missing class labels/order (binary and multiclass cannot be compared).");
+  const missingHashes=requiredHashes.filter(key=>
+    typeof hashesA[key]!=="string"||!hashesA[key]||
+    typeof hashesB[key]!=="string"||!hashesB[key]);
+  if(missingHashes.length)blockers.push("Missing audited dataset fingerprints: "+missingHashes.join(", ")+".");
+  else{
+    const different=requiredHashes.filter(key=>hashesA[key]!==hashesB[key]);
+    if(different.length)blockers.push("Prepared dataset files/splits differ: "+different.join(", ")+".");
+  }
+  const metricsA=testMetrics(first),metricsB=testMetrics(second);
+  if(!metricsA||!metricsB)blockers.push("Final test metrics missing in one or both experiments.");
+  const samplesA=metricsA?.samples,samplesB=metricsB?.samples;
+  if(!Number.isInteger(samplesA)||!Number.isInteger(samplesB))
+    blockers.push("Test sample count is missing; identical test populations cannot be verified.");
+  else if(samplesA!==samplesB)
+    blockers.push("Test sample counts differ: "+samplesA+" vs "+samplesB+".");
+  const supportMatches=sameClasses && namesA.every(name=>{
+    const a=metricsA?.per_class?.[name]?.support,b=metricsB?.per_class?.[name]?.support;
+    return Number.isInteger(a)&&Number.isInteger(b)&&a===b;
+  });
+  if(sameClasses&&!supportMatches)
+    blockers.push("Class support differs or is missing; test populations cannot be verified.");
+  for(const [key,description] of [["model","model"],["partition","partition"],
+                                   ["seed","random seed"],["rounds","training round cap"]]){
     if(ca[key]!==undefined && cb[key]!==undefined && JSON.stringify(ca[key])!==JSON.stringify(cb[key]))
       warnings.push("Different "+description+": "+String(ca[key])+" vs "+String(cb[key])+".");
   }
-  const taskA=ca.dataset_params?.task, taskB=cb.dataset_params?.task;
-  if(taskA!==undefined && taskB!==undefined && taskA!==taskB)
-    warnings.push("Different classification task: "+taskA+" vs "+taskB+".");
-  if(first.round!==second.round)
-    warnings.push("Runs completed different numbers of rounds.");
-  if(first.pair_id && second.pair_id && first.pair_id!==second.pair_id)
+  if(first.round!==second.round)warnings.push("Runs completed different numbers of rounds.");
+  if(first.pair_id&&second.pair_id&&first.pair_id!==second.pair_id)
     warnings.push("Different pair identifiers: this is not a matched clean/attack experiment.");
   if(first.status!=="complete"||second.status!=="complete")
     warnings.push("At least one run is incomplete.");
-  return {warnings,sameClasses,supportMatches};
+  return {warnings,blockers,compatible:blockers.length===0,sameClasses,supportMatches};
 }
 function manualComparison(first,second){
   const root=$("manual-comparison-output");root.replaceChildren();
@@ -679,11 +709,18 @@ function manualComparison(first,second){
   }
   root.append(node("h4","Selected experiments · final test metrics"));
   const verified=first.baseline_id===second.id || second.baseline_id===first.id;
-  root.append(node("p",verified?
+  const validation=manualWarnings(first,second);
+  if(validation.compatible)root.append(node("p",verified?
     "Verified clean/attack pair. Δ always means B minus A; reverse the selections to change direction.":
     "Exploratory comparison, not a verified paired attack effect. Δ always means B minus A."));
-  const validation=manualWarnings(first,second);
   for(const warning of validation.warnings)root.append(node("p",warning,"warning"));
+  if(!validation.compatible){
+    root.append(node("h4","Comparison blocked · incompatible experiment data"));
+    for(const reason of validation.blockers)root.append(node("p",reason,"error"));
+    root.append(node("p","To compare scores, use the same audited dataset, classification task, class mapping and test split. Individual experiment reports remain available below."));
+    return;
+  }
+  root.append(node("p","Dataset compatibility verified: matching task, labels, prepared file hashes and test class support.","comparison-verified"));
   const a=testMetrics(first),b=testMetrics(second);
   if(a&&b){
     root.append(dataTable(["Metric","A · "+first.id,"B · "+second.id,"Δ B − A"],
