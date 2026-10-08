@@ -410,6 +410,25 @@ async function inspectLabels(){
     target.textContent="Inspection unavailable: "+error.message+". The dataset path must exist on the computer running this webapp.";
   }
 }
+async function refreshClusterStatus(){
+  try {
+    const status=await request("/api/cluster-status");
+    $("cluster-status").textContent=status.configured
+      ? `SSH configured for ${status.host}. Import on demand; no background connection.`
+      : "Not configured. Add cluster_connection.json to the ATIMA workspace with your SSH hostname, username, and remote results path.";
+  }catch(error){$("cluster-status").textContent=error.message;}
+}
+async function syncClusterResults(){
+  const button=$("sync-cluster-results"),output=$("cluster-sync-message");
+  button.disabled=true;
+  output.textContent="Connecting securely over SSH and reading result summaries…";
+  try{
+    const response=await request("/api/sync-cluster-results",{});
+    output.textContent=`Imported ${response.imported} experiment summaries. Dataset files and model weights remain on the cluster.`;
+    await refreshResults();
+  }catch(error){output.textContent="Cluster import failed: "+error.message;}
+  finally{button.disabled=false;}
+}
 async function refreshResults(){const target=$("results-list");target.replaceChildren();try{const values=await request("/api/results");if(!values.length)target.append(node("p","Nessun risultato locale disponibile."));for(const value of values){const item=node("article",undefined,"result-item");item.append(node("h3",value.id),node("p",`${value.status} · ${currentLanguage==="en"?"valid round":"round valido"} ${value.round ?? "—"}`),node("pre",JSON.stringify(value.metrics,null,2)));target.append(item);}}catch(error){target.append(node("p",error.message,"error"));}}
 async function initialize(){
   const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
@@ -425,7 +444,7 @@ async function initialize(){
   renderComponentCatalog();
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("inspect-labels").addEventListener("click",inspectLabels);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
   for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
 }
