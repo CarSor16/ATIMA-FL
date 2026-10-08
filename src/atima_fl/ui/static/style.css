@@ -117,3 +117,6 @@ input[type="checkbox"]{accent-color:var(--teal)}
 [data-theme="dark"] .defense-pipeline .defense-stage{background:#142c37;border-color:#35505d;border-left-color:var(--teal)}
 [data-theme="dark"] .defense-grip{background:#21414b;border-color:#365967;color:#e7f0f4}
 @media(max-width:600px){.pipeline-heading{flex-direction:column;gap:4px}.defense-picker-item{max-width:100%}}
+
+.dataset-path-hint{font-size:11px;font-weight:400;color:var(--muted);line-height:1.55}
+[data-theme="dark"] .dataset-path-hint{color:#adbfca}
