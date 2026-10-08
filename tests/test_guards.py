@@ -14,7 +14,7 @@ from atima_fl.adapters.flower.launch import scheduler_allocation
 
 
 def test_cold_discovery_is_thread_safe(tmp_path):
-    folder = tmp_path / "attacchi"
+    folder = tmp_path / "attacks"
     folder.mkdir()
     (folder / "slow.py").write_text(
         "import time\nfrom atima_fl.core.contracts import Component\n"
@@ -30,7 +30,7 @@ def test_cold_discovery_is_thread_safe(tmp_path):
     ["sign_flip", "update_scaling", "gaussian_noise", "alie", "ipm", "fang", "model_replacement"],
 )
 def test_real_batchnorm_buffers_are_protected(tmp_path, attack):
-    folder = tmp_path / "modelli"
+    folder = tmp_path / "models"
     folder.mkdir()
     (folder / "bn.py").write_text(
         "from atima_fl.core.contracts import Component\n"

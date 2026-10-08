@@ -11,15 +11,15 @@ from .contracts import Component
 
 # These are protocol categories, not a list of installed implementations.
 FOLDERS = {
-    "attack": "attacchi",
-    "model": "modelli",
-    "defense": "difese",
-    "aggregator": "aggregatori",
-    "dataset": "dati",
-    "partition": "partizioni",
-    "optimizer": "ottimizzatori",
-    "loss": "perdite",
-    "metrics": "metriche",
+    "attack": "attacks",
+    "model": "models",
+    "defense": "defenses",
+    "aggregator": "aggregators",
+    "dataset": "datasets",
+    "partition": "partitions",
+    "optimizer": "optimizers",
+    "loss": "losses",
+    "metrics": "metrics",
 }
 
 _FILE_DIGESTS = {}
@@ -66,7 +66,7 @@ class Registry:
             self._discover(extra_directory, fresh)
 
     def _discover(self, extra_directory, fresh):
-        builtins = Path(__file__).resolve().parents[1] / "componenti"
+        builtins = Path(__file__).resolve().parents[1] / "components"
         self.components = {kind: {} for kind in FOLDERS}
         self.sources = {}
         self.extra_directory = Path(extra_directory).resolve() if extra_directory else None

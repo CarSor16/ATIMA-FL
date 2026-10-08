@@ -5,7 +5,7 @@ Discovery loads metadata without importing Flower/PyTorch. Heavy dependencies
 belong inside execution hooks. External plugins are trusted executable code.
 
 ```python
-# plugins/aggregatori/example.py
+# plugins/aggregators/example.py
 from atima_fl.core.contracts import Component
 
 def aggregate(matrix, counts, params):
@@ -24,15 +24,15 @@ string, array, object; defaults, bounds, choices and array item schemas.
 
 | Kind / folder | Required hook | Contract |
 |---|---|---|
-| attack / attacchi | optional prepare/transform | `prepare(x,y,context) -> TrainingBatch`; `transform(context) -> (arrays,audit)` |
-| model / modelli | build | `build(config,params,seed) -> torch.nn.Module`; named parameters define attack scope |
-| aggregator / aggregatori | aggregate | `(matrix,counts,params) -> (vector,audit)`; flattened float64 deltas |
-| defense / difese | apply | `(matrix,params) -> (same_shape_matrix,audit)`; no malicious identity oracle |
-| dataset / dati | open | `(config,params) -> object` with `shard(id)`, `split(name)`, `audit()`, `classes` |
-| partition / partizioni | location | `(root,config,params) -> prepared partition path` |
-| optimizer / ottimizzatori | build | `(model.parameters(),config,params) -> optimizer`; recreated each fit |
-| loss / perdite | build | `(config,params) -> criterion` |
-| metrics / metriche | evaluate | `(y,probabilities,classes,params) -> finite JSON metrics` |
+| attack / attacks | optional prepare/transform | `prepare(x,y,context) -> TrainingBatch`; `transform(context) -> (arrays,audit)` |
+| model / models | build | `build(config,params,seed) -> torch.nn.Module`; named parameters define attack scope |
+| aggregator / aggregators | aggregate | `(matrix,counts,params) -> (vector,audit)`; flattened float64 deltas |
+| defense / defenses | apply | `(matrix,params) -> (same_shape_matrix,audit)`; no malicious identity oracle |
+| dataset / datasets | open | `(config,params) -> object` with `shard(id)`, `split(name)`, `audit()`, `classes` |
+| partition / partitions | location | `(root,config,params) -> prepared partition path` |
+| optimizer / optimizers | build | `(model.parameters(),config,params) -> optimizer`; recreated each fit |
+| loss / losses | build | `(config,params) -> criterion` |
+| metrics / metrics | evaluate | `(y,probabilities,classes,params) -> finite JSON metrics` |
 
 Optional `validate(config,params)` checks component-specific invariants.
 Attack `knowledge(context)` declares accessible logical client IDs;

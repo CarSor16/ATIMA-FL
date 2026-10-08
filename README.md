@@ -107,9 +107,9 @@ valid round and marks the run failed.
 
 ```text
 src/atima_fl/
-  componenti/       # one file per interchangeable component
-    attacchi/ modelli/ difese/ aggregatori/
-    dati/ partizioni/ ottimizzatori/ perdite/ metriche/
+  components/       # one file per interchangeable component
+    attacks/ models/ defenses/ aggregators/
+    datasets/ partitions/ optimizers/ losses/ metrics/
   core/            # contracts, configuration, discovery, numerics
   engine/          # training, poisoning, aggregation, storage, analysis
   adapters/flower/ # ClientApp / ServerApp and allocated-job launcher

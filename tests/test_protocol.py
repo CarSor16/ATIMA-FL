@@ -8,7 +8,7 @@ import pytest
 import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context, Message, MetricRecord, RecordDict
 from atima_fl.core.configuration import ExperimentConfig
-from atima_fl.componenti.dati.edge_iiot import FEATURES
+from atima_fl.components.datasets.edge_iiot import FEATURES
 from atima_fl.engine.data import open_dataset as EdgeData
 from atima_fl.engine.client import train_local, submit_local
 from atima_fl.adapters.flower.server import _run_protocol, run_experiment

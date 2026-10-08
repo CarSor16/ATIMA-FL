@@ -80,7 +80,7 @@ def test_validated_configuration_crosses_process_boundary(serializer):
 
 
 def test_one_file_discovery_removal_and_duplicate(tmp_path):
-    folder = tmp_path / "aggregatori"
+    folder = tmp_path / "aggregators"
     folder.mkdir()
     file = folder / "custom.py"
     file.write_text(
