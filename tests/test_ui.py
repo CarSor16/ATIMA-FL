@@ -358,3 +358,31 @@ def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui)
     assert "innerHTML" not in script
     assert ".confusion-matrix" in css
     assert ".round-chart" in css
+
+
+def test_manual_results_compare_and_auto_attack_model_names(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    script = urlopen(url + "/app.js").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    translations = urlopen(url + "/i18n.js").read().decode("utf-8")
+    for element in ["manual-comparison-output", "compare-experiment-a",
+                    "compare-experiment-b", "compare-swap", "auto-experiment-name"]:
+        assert f'id="{element}"' in html
+    assert 'id="auto-experiment-name" checked' in html
+    assert 'defaults.name="Baseline_MLP"' in script
+    assert 'function proposedExperimentName()' in script
+    assert 'none:"Baseline",alie:"ALIE"' in script
+    assert 'mlp:"MLP",lopez_cnn:"CNN"' in script
+    assert 'if(kind==="attack"||kind==="model")updateExperimentName();' in script
+    assert 'function updateManualComparison(values)' in script
+    assert 'function manualWarnings(first,second)' in script
+    assert 'function manualComparison(first,second)' in script
+    assert 'root.append(roundChart(second,first,true,validation.sameClasses))' in script
+    assert 'first.baseline_id===second.id || second.baseline_id===first.id' in script
+    assert 'function roundChart(value,baseline,manual=false,alignedClasses=true)' in script
+    assert "createElementNS" in script
+    assert "innerHTML" not in script
+    assert ".manual-compare-controls" in css
+    assert ".manual-matrix-grid" in css
+    assert '"Compare any two experiments": "Confronta due esperimenti qualsiasi"' in translations

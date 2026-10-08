@@ -353,3 +353,27 @@ Baseline pairing requires complete runs with equal `pair_id`,
 software/runtime identity and valid-round count; unmatched experiments
 are not automatically compared. The charts show validation history,
 not independent-seed statistics or test scores at every round.
+
+
+### Choose two Results experiments (manual A/B)
+
+The Results page includes independent selectors for experiment **A** and
+experiment **B**. Test accuracy, Macro-F1 and other scores are displayed
+side by side with deltas **B minus A** in percentage points; per-class precision,
+recall and F1 are shown when class labels align. Confusion matrices appear
+side by side, and validation histories can be overlaid by round. The page
+warns about differences in model, task, sample count, class support, seed,
+round count and pair identity. The original automatic *Paired comparisons*
+table is separate: it shows **one row per attacked run** that has exactly one
+verified compatible clean baseline; baseline runs are not additional rows.
+Manual comparisons are descriptive and do not prove causality or statistical
+significance.
+
+### Experiment naming
+
+The designer now enables **Auto-name from attack and model** by default,
+creating names such as \`Baseline_MLP\`, \`ALIE_CNN\`, and \`LabelFlip_MLP\`.
+Dates and CPU budgets are not appended. Uncheck auto-name only when a manual
+name is necessary. Old experiment folders retain their original names.
+Repeated trials with the same attack/model must use distinct output roots
+or existing folders will conflict; **never overwrite** finished results.

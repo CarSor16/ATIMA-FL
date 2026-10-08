@@ -199,3 +199,26 @@ input[type="checkbox"]{accent-color:var(--teal)}
 [data-theme="dark"] .result-table thead th{background:#203e49}
 .result-report-heading:focus-visible,.round-data summary:focus-visible,.result-raw summary:focus-visible{outline:3px solid var(--teal);outline-offset:-3px}
 @media(max-width:600px){.result-report-content{padding:12px}.result-report-heading{padding:12px}.result-table th,.result-table td{padding:8px}.result-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Manual cross-run analysis and automatic experiment naming. */
+.auto-name-control{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-weight:500!important}
+.auto-name-control input[type="checkbox"]{width:auto;min-width:initial;margin:0}
+#name[readonly]{background:#f1f7f7;cursor:default}
+.manual-comparison{border:1px solid var(--line);border-radius:12px;padding:19px;margin:22px 0 28px;background:var(--bg)}
+.manual-comparison>h3{margin:0 0 5px;font-size:16px}
+.manual-comparison>p,#manual-comparison-output>p{font-size:12px;color:var(--muted);margin:7px 0 12px}
+.manual-compare-controls{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:end;margin:17px 0 23px}
+.manual-compare-controls label{font-size:12px;font-weight:650;display:grid;gap:5px;min-width:0}
+.manual-compare-controls select{min-width:0}
+.manual-compare-controls button{width:auto;margin:0;white-space:nowrap}
+.manual-matrix-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.manual-matrix{min-width:0;overflow:hidden;border:1px solid var(--line);padding:12px;border-radius:8px}
+.manual-matrix>strong{font-size:12px;overflow-wrap:anywhere}
+.manual-matrix .result-section{margin-top:8px}
+.manual-matrix .confusion-matrix th,.manual-matrix .confusion-matrix td{min-width:54px;padding:8px 6px}
+.manual-comparison .warning{font-size:12px;color:#a35a19!important}
+[data-theme="dark"] .manual-comparison{background:#142d37}
+[data-theme="dark"] .manual-matrix{border-color:var(--line)}
+[data-theme="dark"] #name[readonly]{background:#203b43}
+@media(max-width:960px){.manual-matrix-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.manual-compare-controls{grid-template-columns:1fr}.manual-compare-controls button{width:100%}.manual-comparison{padding:13px}}

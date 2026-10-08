@@ -1,6 +1,7 @@
 "use strict";
 let catalog, defaults, token, datasetTasks = {};
 let previousLabelTask = "";
+let chosenComparison = {first: null, second: null};
 let mode="simple";
 const $ = id => document.getElementById(id);
 
@@ -184,7 +185,11 @@ function selection(kind, field, target) {
   select.value=defaults[field]; label.append(select);block.append(label);
   const description=node("p",undefined,"component-description"),params=node("div",undefined,kind==="dataset"?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
   function refresh(){const component=catalog[kind].find(c=>c.id===select.value);description.textContent=componentLabel(component,"description");parameterFields(component,params,select.value===defaults[field]?defaults[field+"_params"]:{});}
-  select.addEventListener("change",()=>{refresh();if(kind==="attack")$("attack-enabled").checked=select.value!=="none";});refresh();
+  select.addEventListener("change",()=>{
+    refresh();
+    if(kind==="attack")$("attack-enabled").checked=select.value!=="none";
+    if(kind==="attack"||kind==="model")updateExperimentName();
+  });refresh();
 }
 // Stage order is the order of active DOM list items, which config() serializes
 // unchanged into the TOML defense array. Inactive stages remain in the catalog.
@@ -379,6 +384,26 @@ function timeline(c){
   const english=enabled?`${c.malicious_clients.length} malicious out of ${c.clients} (${(100*c.malicious_clients.length/c.clients).toFixed(1)}%). Active in rounds ${first}–${last} inclusive; no new poisoning from round ${last+1}. Previous effects may persist in the weights.`:`Clean baseline: ${c.clients} clients, no active attack.`;
   const text=currentLanguage==="en"?english:italian;target.setAttribute("aria-label",text);$("attack-summary").textContent=text;
 }
+
+const PREFERRED_ATTACK_NAMES = {none:"Baseline",alie:"ALIE",ipm:"IPM",fang:"FANG"};
+const PREFERRED_MODEL_NAMES = {mlp:"MLP",lopez_cnn:"CNN",linear:"Linear"};
+function experimentDisplayPart(identifier){
+  return String(identifier||"Unknown").split("_")
+    .map(piece=>piece.charAt(0).toUpperCase()+piece.slice(1)).join("");
+}
+function proposedExperimentName(){
+  const attack=$("attack-enabled")?.checked ? $("attack")?.value : "none";
+  const model=$("model")?.value;
+  return (PREFERRED_ATTACK_NAMES[attack]||experimentDisplayPart(attack))+"_"+
+    (PREFERRED_MODEL_NAMES[model]||experimentDisplayPart(model));
+}
+function updateExperimentName(){
+  const choice=$("auto-experiment-name"),field=$("name");
+  if(!choice||!field)return;
+  field.readOnly=choice.checked;
+  if(choice.checked)field.value=proposedExperimentName();
+}
+
 function preview(){
   controls();
   updateTaskUi();
@@ -545,7 +570,7 @@ function svgElement(tag, attrs, textValue){
   if(textValue!==undefined)element.textContent=String(textValue);
   return element;
 }
-function roundChart(value,baseline){
+function roundChart(value,baseline,manual=false,alignedClasses=true){
   const section=node("section",undefined,"result-section");
   section.append(node("h4","Validation metrics by round"));
   const controls=node("div",undefined,"round-controls");
@@ -560,6 +585,7 @@ function roundChart(value,baseline){
   for(const [i,name] of classes.entries()){
     const option=node("option",name);option.value=String(i);classSelect.append(option);
   }
+  if(!alignedClasses)metricSelect.querySelector('option[value="class_recall"]')?.remove();
   const dosIndex=classes.findIndex(name=>name.toLowerCase()==="dos");
   if(dosIndex>=0)classSelect.value=String(dosIndex);
   classLabel.append(classSelect);controls.append(metricLabel,classLabel);section.append(controls);
@@ -599,28 +625,135 @@ function roundChart(value,baseline){
     }
     drawing.append(svg);
     const legend=node("p",undefined,"chart-legend");
-    if(ref.length)legend.append(node("span","Baseline · "+baseline.id,"legend-baseline"));
-    if(own.length)legend.append(node("span","Experiment · "+value.id,"legend-experiment"));
+    if(ref.length)legend.append(node("span",(manual?"A · ":"Baseline · ")+baseline.id,"legend-baseline"));
+    if(own.length)legend.append(node("span",(manual?"B · ":"Experiment · ")+value.id,"legend-experiment"));
     drawing.append(legend);
     const refMap=new Map(ref.map(p=>[p.round,p.value]));
     const ownMap=new Map(own.map(p=>[p.round,p.value]));
     const rounds=[...new Set([...refMap.keys(),...ownMap.keys()])].sort((a,b)=>a-b);
     const format=v=>score(v,metric!=="loss");
     dataGrid.replaceChildren(node("summary","Round data table"),
-      dataTable(["Round",...(baseline?["Baseline"]:[]),"Experiment"],rounds.map(r=>
+      dataTable(["Round",...(baseline?[manual?"A":"Baseline"]:[]),manual?"B":"Experiment"],rounds.map(r=>
         [String(r),...(baseline?[format(refMap.get(r))]:[]),format(ownMap.get(r))])));
   }
   metricSelect.addEventListener("change",redraw);
   classSelect.addEventListener("change",redraw);
   redraw();return section;
 }
+
+// Manual A/B comparison is intentionally distinct from verified clean/attack pairing.
+function manualWarnings(first,second){
+  const warnings=[];
+  const ca=first.config||{}, cb=second.config||{};
+  const namesA=classNames(first),namesB=classNames(second);
+  const sameClasses=namesA.length>0 && namesA.length===namesB.length
+    && namesA.every((name,i)=>name===namesB[i]);
+  const supportMatches=sameClasses && namesA.every(name=>
+    testMetrics(first)?.per_class?.[name]?.support===testMetrics(second)?.per_class?.[name]?.support);
+  if(!sameClasses)warnings.push("Class labels or their order differ. Per-class deltas and class recall overlays are disabled.");
+  else if(!supportMatches)warnings.push("Test support by class differs; the compared test populations may differ.");
+  if(testMetrics(first)?.samples!==testMetrics(second)?.samples)
+    warnings.push("Test sample counts differ; aggregate scores are not directly comparable.");
+  for(const [key,description] of [["dataset","dataset"],["model","model"],
+                                   ["partition","partition"],["seed","random seed"],
+                                   ["rounds","training round cap"]]){
+    if(ca[key]!==undefined && cb[key]!==undefined && JSON.stringify(ca[key])!==JSON.stringify(cb[key]))
+      warnings.push("Different "+description+": "+String(ca[key])+" vs "+String(cb[key])+".");
+  }
+  const taskA=ca.dataset_params?.task, taskB=cb.dataset_params?.task;
+  if(taskA!==undefined && taskB!==undefined && taskA!==taskB)
+    warnings.push("Different classification task: "+taskA+" vs "+taskB+".");
+  if(first.round!==second.round)
+    warnings.push("Runs completed different numbers of rounds.");
+  if(first.pair_id && second.pair_id && first.pair_id!==second.pair_id)
+    warnings.push("Different pair identifiers: this is not a matched clean/attack experiment.");
+  if(first.status!=="complete"||second.status!=="complete")
+    warnings.push("At least one run is incomplete.");
+  return {warnings,sameClasses,supportMatches};
+}
+function manualComparison(first,second){
+  const root=$("manual-comparison-output");root.replaceChildren();
+  if(!first||!second)return;
+  if(first.id===second.id){
+    root.append(node("p","Select two different experiments.","warning"));return;
+  }
+  root.append(node("h4","Selected experiments · final test metrics"));
+  const verified=first.baseline_id===second.id || second.baseline_id===first.id;
+  root.append(node("p",verified?
+    "Verified clean/attack pair. Δ always means B minus A; reverse the selections to change direction.":
+    "Exploratory comparison, not a verified paired attack effect. Δ always means B minus A."));
+  const validation=manualWarnings(first,second);
+  for(const warning of validation.warnings)root.append(node("p",warning,"warning"));
+  const a=testMetrics(first),b=testMetrics(second);
+  if(a&&b){
+    root.append(dataTable(["Metric","A · "+first.id,"B · "+second.id,"Δ B − A"],
+      RESULT_METRICS.map(([key,label,percent])=>
+        [label,score(a[key],percent),score(b[key],percent),deltaScore(b[key],a[key],percent)])));
+    const classes=classNames(first);
+    if(validation.sameClasses && a.per_class && b.per_class){
+      const section=node("section",undefined,"result-section");
+      section.append(node("h4","Per-class test comparison · A vs B"));
+      section.append(dataTable(["Class","A precision","B precision","Δ precision",
+        "A recall","B recall","Δ recall","A F1","B F1","Δ F1"],classes.map(name=>{
+        const aa=a.per_class[name]||{},bb=b.per_class[name]||{};
+        return [name,score(aa.precision),score(bb.precision),deltaScore(bb.precision,aa.precision),
+          score(aa.recall),score(bb.recall),deltaScore(bb.recall,aa.recall),
+          score(aa["f1-score"]),score(bb["f1-score"]),
+          deltaScore(bb["f1-score"],aa["f1-score"])];
+      })));
+      root.append(section);
+    }
+    const matrices=node("section",undefined,"result-section");
+    matrices.append(node("h4","Test confusion matrices · side by side"));
+    const columns=node("div",undefined,"manual-matrix-grid");
+    for(const [tag,run] of [["A",first],["B",second]]){
+      const column=node("div",undefined,"manual-matrix");
+      column.append(node("strong",tag+" · "+run.id));
+      const matrix=confusionSection(run);
+      if(matrix)column.append(matrix);
+      else column.append(node("p","Confusion matrix unavailable."));
+      columns.append(column);
+    }
+    matrices.append(columns);root.append(matrices);
+  }else root.append(node("p","Final test metrics missing in at least one experiment."));
+  root.append(roundChart(second,first,true,validation.sameClasses));
+  root.append(node("p","Validation curves are measured per round; test metrics are final-only. This single-run comparison is descriptive, not a statistical significance test."));
+}
+let availableResults=[];
+function refreshManualFromChoices(){
+  const items=new Map(availableResults.map(run=>[run.id,run]));
+  manualComparison(items.get(chosenComparison.first),items.get(chosenComparison.second));
+}
+function updateManualComparison(values){
+  availableResults=values;
+  const firstSelect=$("compare-experiment-a"),secondSelect=$("compare-experiment-b");
+  const firstPrevious=chosenComparison.first,secondPrevious=chosenComparison.second;
+  const available=new Map(values.map(run=>[run.id,run]));
+  const ordered=[...values].sort((a,b)=>a.id.localeCompare(b.id));
+  const fallbackA=ordered.find(run=>run.config?.attack==="none")?.id||ordered[0]?.id||null;
+  const fallbackB=ordered.find(run=>run.baseline_id===fallbackA)?.id
+    ||ordered.find(run=>run.id!==fallbackA)?.id||null;
+  chosenComparison.first=available.has(firstPrevious)?firstPrevious:fallbackA;
+  chosenComparison.second=available.has(secondPrevious)?secondPrevious:fallbackB;
+  for(const [select,selected] of [[firstSelect,chosenComparison.first],[secondSelect,chosenComparison.second]]){
+    select.replaceChildren();
+    for(const run of ordered){
+      const option=node("option",run.id);option.value=run.id;select.append(option);
+    }
+    if(selected!==null)select.value=selected;
+  }
+  manualComparison(available.get(chosenComparison.first),available.get(chosenComparison.second));
+}
+
 function renderResults(values){
   const target=$("results-list"),comparison=$("result-comparisons");
   target.replaceChildren();comparison.replaceChildren();
   const byId=new Map(values.map(item=>[item.id,item]));
+  updateManualComparison(values);
   const paired=values.filter(item=>item.baseline_id && byId.has(item.baseline_id));
   if(paired.length){
     comparison.append(node("h3","Paired comparisons · test split"));
+    comparison.append(node("p","One row per attacked run with exactly one verified compatible clean baseline. Clean baselines are references, not additional rows. These are final TEST score differences, not round-by-round attack metrics."));
     const rows=paired.map(run=>{
       const baseline=byId.get(run.baseline_id),test=testMetrics(run),clean=testMetrics(baseline);
       return [run.id,baseline.id,run.config?.model||"—",
@@ -630,6 +763,7 @@ function renderResults(values){
     comparison.append(dataTable(["Attack experiment","Clean baseline","Model","Δ accuracy","Δ macro-F1"],rows));
     comparison.append(node("p","Differences are percentage points (experiment minus clean baseline). Rounds are not independent replicates."));
   }
+  if(!paired.length)comparison.append(node("p","No verified clean/attack pairs available. You can still compare any two runs manually above."));
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
   for(const value of values){
     const baseline=value.baseline_id?byId.get(value.baseline_id):null;
@@ -664,22 +798,43 @@ function renderResults(values){
 async function refreshResults(){
   const target=$("results-list");target.replaceChildren();
   try{renderResults(await request("/api/results"));}
-  catch(error){$("result-comparisons").replaceChildren();target.append(node("p",error.message,"error"));}
+  catch(error){$("result-comparisons").replaceChildren();
+    $("manual-comparison-output").replaceChildren();target.append(node("p",error.message,"error"));}
 }
 async function initialize(){
   const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
-  defaults.name="Baseline_"+new Date().toLocaleDateString("sv-SE");
+  defaults.name="Baseline_MLP";
   for(const [key,value] of Object.entries(defaults))if($(key))$(key).value=Array.isArray(value)?value.join(","):value;
   for(const [target,entries] of Object.entries(groups))for(const [kind,field] of entries)selection(kind,field,$(target));
   $("malicious-count").value=defaults.malicious_clients.length;
   $("attack-enabled").checked=defaults.attack!=="none";
   $("mode-simple").addEventListener("click",()=>setMode("simple"));$("mode-advanced").addEventListener("click",()=>setMode("advanced"));
-  $("attack-enabled").addEventListener("change",()=>{if($("attack-enabled").checked && $("attack").value==="none"){const choice=catalog.attack.find(c=>c.id!=="none");if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}}});
+  $("attack-enabled").addEventListener("change",()=>{
+    if($("attack-enabled").checked && $("attack").value==="none"){
+      const choice=catalog.attack.find(c=>c.id!=="none");
+      if(choice){$("attack").value=choice.id;$("attack").dispatchEvent(new Event("change",{bubbles:true}));}
+    }
+    updateExperimentName();
+  });
+  $("auto-experiment-name").addEventListener("change",()=>{updateExperimentName();preview();});
+  updateExperimentName();
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});
   initializeDefenses();
   renderComponentCatalog();
   $("catalog-status").textContent=`${catalog.attack.length-1} attacchi · componenti da file`;
   $("experiment-form").addEventListener("input",preview);$("experiment-form").addEventListener("change",preview);$("experiment-form").addEventListener("submit",event=>event.preventDefault());
+  $("compare-experiment-a").addEventListener("change",()=>{
+    chosenComparison.first=$("compare-experiment-a").value;refreshManualFromChoices();
+  });
+  $("compare-experiment-b").addEventListener("change",()=>{
+    chosenComparison.second=$("compare-experiment-b").value;refreshManualFromChoices();
+  });
+  $("compare-swap").addEventListener("click",()=>{
+    [chosenComparison.first,chosenComparison.second]=[chosenComparison.second,chosenComparison.first];
+    $("compare-experiment-a").value=chosenComparison.first||"";
+    $("compare-experiment-b").value=chosenComparison.second||"";
+    refreshManualFromChoices();
+  });
   $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   const pages={designer:["Disegna il tuo esperimento","Componenti intercambiabili, un profilo riproducibile."],components:["Catalogo dei componenti","Implementazioni scoperte dalle cartelle del framework."],results:["Risultati degli esperimenti","Metriche locali e stato dei run importati."],guide:["Dal progetto al cluster","Un percorso verificabile dalla configurazione all’analisi."]};
   for(const button of document.querySelectorAll(".nav"))button.addEventListener("click",()=>{for(const item of document.querySelectorAll(".nav,.page"))item.classList.remove("active");button.classList.add("active");$(button.dataset.page).classList.add("active");[$("page-title").textContent,$("page-subtitle").textContent]=pages[button.dataset.page].map(uiText);if(button.dataset.page==="results")refreshResults();});$("language").addEventListener("change",()=>{currentLanguage=$("language").value;try{localStorage.setItem("atima-language",currentLanguage);}catch{}refreshLanguage();});refreshLanguage();
