@@ -403,3 +403,7 @@ imported run metadata, and the Guide has shortcuts to existing functional pages.
 Page transitions preserve unsaved designer state. Light/dark and English/Italian
 preferences are retained, and mobile navigation remains keyboard-accessible.
 No fabricated metrics, training runs, cluster calls or credentials are added.
+
+## Results workbench
+
+Search imported experiments, inspect single runs, compare compatible A/B results and open verified clean/attack pairs. Final test metrics remain separate from recorded validation curves. Missing dataset audits block deltas; individual reports remain available. The shared light/dark English/Italian GUI uses native HTML/CSS/JavaScript. See [Results workbench](docs/results-workbench.md) for controls, scientific gates and Windows update/start commands.

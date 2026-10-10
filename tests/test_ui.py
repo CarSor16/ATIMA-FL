@@ -348,10 +348,10 @@ def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui)
     assert 'id="result-comparisons"' in html
     assert "function renderResults(values)" in script
     assert "function roundChart(value,baseline,manual=false,alignedClasses=true)" in script
-    assert "function confusionSection(value)" in script
-    assert "function classMetricsSection(value, baseline)" in script
+    assert "function matrixAnalysis(first,second,compatible)" in script
+    assert "function perClassAnalysis(first,second,compatible,supportOnly=false)" in script
     assert "function deltaScore(value, reference, percent=true)" in script
-    assert "value.baseline_id" in script
+    assert "run.baseline_id" in script
     assert 'metricSelect.value="macro_f1"' in script
     assert "createElementNS" in script
     assert "JSON.stringify(value.metrics,null,2)" in script
@@ -378,8 +378,8 @@ def test_manual_results_compare_and_auto_attack_model_names(gui):
     assert 'function updateManualComparison(values)' in script
     assert 'function manualWarnings(first,second)' in script
     assert 'function manualComparison(first,second)' in script
-    assert 'root.append(roundChart(second,first,true,validation.sameClasses))' in script
-    assert 'first.baseline_id===second.id || second.baseline_id===first.id' in script
+    assert 'root.append(b?roundChart(b,a,true,true):roundChart(a,null))' in script
+    assert '(first.baseline_id===second.id && verifiedPair(first,byId))' in script
     assert 'function roundChart(value,baseline,manual=false,alignedClasses=true)' in script
     assert "createElementNS" in script
     assert "innerHTML" not in script
