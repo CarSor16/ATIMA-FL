@@ -1,6 +1,5 @@
 """Focused behavior checks for independent threat mechanisms."""
 from dataclasses import replace
-import json
 import numpy as np
 import pytest
 from atima_fl.core.configuration import ExperimentConfig
