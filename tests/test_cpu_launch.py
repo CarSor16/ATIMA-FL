@@ -51,3 +51,23 @@ def test_explicit_cpu_launch_reserves_zero_ray_gpus(monkeypatch):
     assert backend["init_args"]["num_gpus"] == 0
     assert backend["client_resources"]["num_gpus"] == 0
     assert backend["init_args"]["num_cpus"] == 46
+
+def test_allocation_aware_run_uses_verified_scheduler_resources(monkeypatch):
+    from types import SimpleNamespace
+    from atima_fl.adapters.flower.launch import allocated_config
+    from atima_fl.core.configuration import ExperimentConfig
+    import os
+    import subprocess
+
+    monkeypatch.setenv("SLURM_JOB_ID", "1234")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(
+        stdout="JobId=1234 AllocTRES=cpu=16,mem=32G,node=1,gres/gpu=1"))
+    if hasattr(os, "sched_getaffinity"):
+        monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(16)))
+    configured = allocated_config(ExperimentConfig())
+    assert configured.cpu_budget == 16
+    assert configured.compute_device == "cuda"
+    assert configured.client_cpus >= 1
+    monkeypatch.delenv("SLURM_JOB_ID")
+    with pytest.raises(RuntimeError, match="allocated Slurm"):
+        allocated_config(ExperimentConfig())
