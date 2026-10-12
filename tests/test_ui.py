@@ -487,3 +487,32 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     assert 'padding:17px 18px 20px;' in css
     assert 'grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));' in css
     assert '@media(max-width:600px)' in css
+
+def test_single_toml_export_and_no_overwrite(gui):
+    server, url = gui
+    response = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": response["token"]}
+    profile = json.load(urlopen(url + "/api/defaults"))
+    profile["name"] = "SingleToml_fixture"
+    body = json.dumps(profile).encode()
+    result = json.load(urlopen(Request(url + "/api/toml", body, headers=headers)))
+    assert result["download"] == "/api/profiles/SingleToml_fixture.toml"
+    downloaded = urlopen(url + result["download"]).read()
+    assert (server.workspace / "profiles" / "SingleToml_fixture.toml").read_bytes() == downloaded
+    import tomllib
+    assert tomllib.loads(downloaded.decode())["experiment"]["name"] == profile["name"]
+    with pytest.raises(HTTPError) as err:
+        urlopen(Request(url + "/api/toml", body, headers=headers))
+    assert err.value.code == 409
+
+
+def test_unified_designer_without_hardware_resource_controls(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode()
+    js = urlopen(url + "/app.js").read().decode()
+    for name in ("mode-simple", "mode-advanced", "compute_device", "cpu_budget",
+                 "client_cpus", "client_gpu_fraction"):
+        assert 'id="' + name + '"' not in html
+    assert 'id="save-zip"' in html
+    assert 'id="output_root"' in html and 'id="dataset_root"' in html
+    assert 'action("toml")' in js

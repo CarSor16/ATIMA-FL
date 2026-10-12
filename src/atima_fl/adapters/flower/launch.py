@@ -6,6 +6,35 @@ import re
 import subprocess
 
 
+def allocated_config(config):
+    """Use the resources actually granted by Slurm for the simplified run CLI."""
+    from dataclasses import replace
+
+    job = os.environ.get("SLURM_JOB_ID")
+    if not job:
+        raise RuntimeError("atima run requires an allocated Slurm job")
+    result = subprocess.run(
+        ["scontrol", "show", "job", "-o", job],
+        check=True, capture_output=True, text=True,
+    )
+    match = re.search(r"\\bAllocTRES=(\\S+)", result.stdout)
+    if not match:
+        raise RuntimeError("Cannot verify Slurm AllocTRES")
+    tres = dict(item.split("=", 1) for item in match.group(1).split(",") if "=" in item)
+    cpus = int(tres.get("cpu", "0"))
+    gpus = int(tres.get("gres/gpu", "0"))
+    available = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else cpus
+    budget = min(cpus, available)
+    if budget < config.servers + 2:
+        raise RuntimeError("Slurm allocation provides too few CPUs for federation")
+    client_cpus = max(1, min(config.client_cpus, (budget - config.servers - 1) // min(config.clients, 4)))
+    return replace(
+        config, cpu_budget=budget, client_cpus=client_cpus,
+        compute_device="cuda" if gpus else "cpu",
+        client_gpu_fraction=0.5 if gpus else 1.0,
+    ).validate()
+
+
 def scheduler_allocation(config):
     job = os.environ.get("SLURM_JOB_ID")
     if not job:

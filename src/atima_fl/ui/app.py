@@ -174,6 +174,12 @@ class Handler(BaseHTTPRequestHandler):
                 })
             if path == "/api/results":
                 return self.respond(200, results(self.server.workspace))
+            if path.startswith("/api/profiles/") and path.endswith(".toml"):
+                name = path.removeprefix("/api/profiles/").removesuffix(".toml")
+                if not name or not all(ch.isalnum() or ch in "_-." for ch in name) or name in {".", ".."}:
+                    raise ValueError("Invalid profile name")
+                file = child(self.server.workspace / "profiles", name + ".toml")
+                return self.respond(200, file.read_bytes(), "application/toml; charset=utf-8")
             if path.startswith("/api/plans/") and path.endswith("/plan.zip"):
                 name = path.removeprefix("/api/plans/").removesuffix("/plan.zip")
                 file = child(self.server.workspace / "plans", name + "/plan.zip")
@@ -257,6 +263,13 @@ class Handler(BaseHTTPRequestHandler):
                         },
                     },
                 )
+            if self.path == "/api/toml":
+                directory = self.server.workspace / "profiles"
+                directory.mkdir(parents=True, exist_ok=True)
+                file = directory / (config.name + ".toml")
+                config.save(file)
+                return self.respond(201, {"name": config.name, "directory": str(file),
+                                          "download": f"/api/profiles/{config.name}.toml"})
             if self.path in {"/api/plans", "/api/defense-study"}:
                 exporter = save_defense_study if self.path == "/api/defense-study" else save_plan
                 directory = exporter(config, self.server.workspace)

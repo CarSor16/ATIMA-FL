@@ -407,3 +407,26 @@ No fabricated metrics, training runs, cluster calls or credentials are added.
 ## Results workbench
 
 Search imported experiments, inspect single runs, compare compatible A/B results and open verified clean/attack pairs. Final test metrics remain separate from recorded validation curves. Missing dataset audits block deltas; individual reports remain available. The shared light/dark English/Italian GUI uses native HTML/CSS/JavaScript. See [Results workbench](docs/results-workbench.md) for controls, scientific gates and Windows update/start commands.
+
+## Single-TOML workflow on Slurm
+
+The unified Designer shows all scientific parameters and editable dataset/results
+directories; hardware resources are selected in the cluster job scheduler.
+**Export experiment.toml** downloads a single profile and saves it under
+`<workspace>/profiles/<name>.toml`. The original ZIP export remains available.
+
+Copy the TOML to the cluster. Inside the allocated Slurm job:
+
+```bash
+export ATIMA_EDGE_IIOT_ROOT="/verified/prepared/edge-iiot"
+atima run experiment.toml
+# Dataset, allocation and device preflight only:
+atima run experiment.toml --preflight-only
+```
+
+The new command reads actual Slurm CPU/GPU allocation, performs preflight and
+launches training. It does not submit jobs, bypass Slurm, or upload files.
+The old `atima launch --config` and ZIP plans remain compatible. An attack
+must point to a completed paired clean baseline and use the same allocation and
+software/runtime identity. Resource controls remain in the TOML schema for
+backwards compatibility, but are not chosen in the Designer.

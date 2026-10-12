@@ -36,6 +36,9 @@ def main(argv=None):
     defense.add_argument("--unprotected", required=True)
     defense.add_argument("--protected", required=True)
     defense.add_argument("--output", required=True)
+    easy = commands.add_parser("run", help="Preflight then train TOML in an allocated Slurm job")
+    easy.add_argument("profile", help="Path to experiment.toml")
+    easy.add_argument("--preflight-only", action="store_true")
     launch = commands.add_parser(
         "launch", help="Preflight or run inside an allocated Slurm GPU job"
     )
@@ -89,6 +92,13 @@ def main(argv=None):
         from .engine.defense_analysis import compare_defenses
 
         print(json.dumps(compare_defenses(args.unprotected, args.protected, args.output), indent=2))
+    elif args.command == "run":
+        from .adapters.flower.launch import allocated_config, launch as run
+
+        config = allocated_config(ExperimentConfig.load(args.profile))
+        run(config, preflight_only=True)
+        if not args.preflight_only:
+            run(config, preflight_only=False)
     elif args.command == "launch":
         from .adapters.flower.launch import launch as run
 

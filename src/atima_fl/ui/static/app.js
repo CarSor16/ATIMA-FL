@@ -3,7 +3,7 @@ let catalog, defaults, token, datasetTasks = {};
 let clusterDatasetInventory = null;
 let previousLabelTask = "";
 let chosenComparison = {first: null, second: null};
-let mode="simple";
+
 const $ = id => document.getElementById(id);
 
 // The UI theme is a local presentation preference; it never enters experiment plans.
@@ -275,7 +275,7 @@ function refreshLanguage(){
   renderClusterDatasetInventory();
   renderComponentCatalog();
   $("catalog-status").textContent=currentLanguage==="en"?`${catalog.attack.length-1} attacks · components from files`:`${catalog.attack.length-1} attacchi · componenti da file`;
-  $("language").value=currentLanguage;setTheme(theme);setMode(mode);
+  $("language").value=currentLanguage;setTheme(theme);
   if($("results").classList.contains("active"))renderResults(availableResults);
 }
 function node(tag, text, cls) { const el=document.createElement(tag); if(text!==undefined)el.textContent=uiText(text); if(cls)el.className=cls; return el; }
@@ -520,18 +520,11 @@ function controls() {
   $("malicious-count").disabled=explicit;
   if(explicit){try{$("malicious-count").value=integerList($("malicious_clients").value,"ID malevoli").length;}catch{}}
   $("malicious-count").max=$("clients").value;
-  $("servers").max=$("clients").value;$("cpu_budget").min=Number($("client_cpus").value)+Number($("servers").value)+1;
+  $("servers").max=$("clients").value;
   const untilEnd=$("attack-until-end").checked;
   $("attack_end").disabled=untilEnd;
   if(untilEnd)$("attack_end").value=$("rounds").value;
   $("attack_start").max=$("rounds").value;$("attack_end").max=$("rounds").value;
-}
-function setMode(value){
-  mode=value;$("designer").classList.toggle("simple-mode",mode==="simple");
-  $("mode-simple").setAttribute("aria-pressed",String(mode==="simple"));
-  $("mode-advanced").setAttribute("aria-pressed",String(mode==="advanced"));
-  $("mode-description").textContent=uiText(mode==="simple"?"Simple · essential choices; advanced parameters are preserved.":"Advanced · all parameters, specific clients and server assignments.");
-  preview();
 }
 function timeline(c){
   const target=$("attack-timeline");target.replaceChildren();
@@ -567,7 +560,7 @@ function preview(){
   updateTaskUi();
   try {
     const c=config();$("preview").textContent=JSON.stringify(c,null,2);
-    $("selection-summary").textContent=currentLanguage==="en"?`${c.clients} clients · ${c.servers} aggregation ${c.servers===1?"server":"servers"}${c.servers>1?" + 1 coordinator":""}\n${c.malicious_clients.length} malicious · ${c.rounds} rounds\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nCPUs ${c.cpu_budget} · ${c.compute_device.toUpperCase()} · epochs ${c.local_epochs}\nOptimizer ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} defenses · ${c.server_execution}\nAdvanced parameters preserved`:`${c.clients} client · ${c.servers} server di aggregazione${c.servers>1?" + 1 coordinatore":""}\n${c.malicious_clients.length} malevoli · ${c.rounds} round\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nCPU ${c.cpu_budget} · ${c.compute_device.toUpperCase()} · epoche ${c.local_epochs}\nOttimizzatore ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} difese · ${c.server_execution}\nParametri avanzati conservati`;
+    $("selection-summary").textContent=currentLanguage==="en"?`${c.clients} clients · ${c.servers} aggregation ${c.servers===1?"server":"servers"}${c.servers>1?" + 1 coordinator":""}\n${c.malicious_clients.length} malicious · ${c.rounds} rounds\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nEpochs ${c.local_epochs}\nOptimizer ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} defenses · ${c.server_execution}`:`${c.clients} client · ${c.servers} server di aggregazione${c.servers>1?" + 1 coordinatore":""}\n${c.malicious_clients.length} malevoli · ${c.rounds} round\n${c.model} · ${c.partition} · ${c.attack} → ${c.aggregation}\nEpoche ${c.local_epochs}\nOttimizzatore ${c.optimizer} · learning rate ${c.learning_rate}\n${c.defenses.length} difese · ${c.server_execution}`;
     $("topology-summary").dataset.placement=c.server_execution;
     const assignment=c.client_servers.length?c.client_servers:Array.from({length:c.clients},(_,i)=>i%c.servers);
     $("topology-summary").textContent=Array.from({length:c.servers},(_,sid)=>`Server ${sid}: ${currentLanguage==="en"?"clients":"client"} ${assignment.flatMap((server,cid)=>server===sid?[cid]:[]).join(", ")}`).join(" · ");
@@ -575,7 +568,7 @@ function preview(){
   } catch(error){$("validation-status").textContent=error.message;$("download").classList.add("hidden");$("preview").textContent=(currentLanguage==="en"?"Incomplete configuration: ":"Configurazione incompleta: ")+error.message;}
 }
 async function request(path,body){const response=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json","X-ATIMA-Token":token},body:JSON.stringify(body)}:{});const result=await response.json();if(!response.ok)throw new Error(result.error || response.statusText);return result;}
-async function action(save){$("messages").replaceChildren();try { const c=config();const checked=await request("/api/validate",c);$("validation-status").textContent=uiText("Valid profile · data and GPU must be checked in the job");for(const warning of checked.warnings)$("messages").append(node("p",warning,"warning"));if(save){const result=await request("/api/plans",checked.config);$("download").href=result.download;$("download").classList.remove("hidden");$("messages").append(node("p","Piano salvato. Nessun training avviato."));} } catch(error){$("validation-status").textContent=uiText("Validation failed");$("messages").append(node("p",error.message,"error"));} }
+async function action(save){$("messages").replaceChildren();try { const c=config();const checked=await request("/api/validate",c);$("validation-status").textContent=uiText("Valid profile · data and GPU must be checked in the job");for(const warning of checked.warnings)$("messages").append(node("p",warning,"warning"));if(save){const result=await request(save==="zip"?"/api/plans":"/api/toml",checked.config);$("download").href=result.download;$("download").textContent=save==="zip"?"Download plan ZIP":"Download experiment.toml";$("download").classList.remove("hidden");$("messages").append(node("p","Piano salvato. Nessun training avviato."));} } catch(error){$("validation-status").textContent=uiText("Validation failed");$("messages").append(node("p",error.message,"error"));} }
 async function inspectLabels(){
   const target=$("label-inspection-results");
   target.textContent="Reading local label metadata...";
@@ -1174,7 +1167,6 @@ async function initialize(){
   addResearchDatasetOptions();
   $("malicious-count").value=defaults.malicious_clients.length;
   $("attack-enabled").checked=defaults.attack!=="none";
-  $("mode-simple").addEventListener("click",()=>setMode("simple"));$("mode-advanced").addEventListener("click",()=>setMode("advanced"));
   $("attack-enabled").addEventListener("change",()=>{
     if($("attack-enabled").checked && $("attack").value==="none"){
       const choice=catalog.attack.find(c=>c.id!=="none");
@@ -1203,7 +1195,7 @@ async function initialize(){
     $("compare-experiment-b").value=chosenComparison.second||"";
     refreshManualFromChoices();
   });
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action(true));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   $("component-search").addEventListener("input",renderComponentCatalog);
   for(const button of document.querySelectorAll(".nav"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
