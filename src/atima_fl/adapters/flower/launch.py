@@ -17,7 +17,7 @@ def allocated_config(config):
         ["scontrol", "show", "job", "-o", job],
         check=True, capture_output=True, text=True,
     )
-    match = re.search(r"\\bAllocTRES=(\\S+)", result.stdout)
+    match = re.search(r"\bAllocTRES=(\S+)", result.stdout)
     if not match:
         raise RuntimeError("Cannot verify Slurm AllocTRES")
     tres = dict(item.split("=", 1) for item in match.group(1).split(",") if "=" in item)
