@@ -63,6 +63,8 @@ def poison_update(context):
         context.counts,
         tuple(range(len(indices))),
     )
+    if hasattr(context, "run_dir"):
+        scoped.run_dir = context.run_dir
     values, info = hook(scoped)
     check_arrays(values, scoped.global_arrays)
     submitted = [a.copy() for a in context.local_arrays]

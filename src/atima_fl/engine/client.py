@@ -63,6 +63,7 @@ def submit_local(config, run, client, round_id, before, counts):
         counts=counts,
         attackable_indices=attackable_indices(config),
     )
+    context.run_dir = run
     context.raw_by_client = {
         cid: read_raw(raw_path(run, round_id, cid))[0] for cid in knowledge_ids(context)
     }
