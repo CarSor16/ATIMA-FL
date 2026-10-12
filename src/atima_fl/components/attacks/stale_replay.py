@@ -2,13 +2,14 @@
 from pathlib import Path
 import numpy as np
 from atima_fl.core.contracts import Component
-from atima_fl.engine.storage import raw_path, read_raw
 
 def validate(config, params):
     if config.attack_start <= params["lag_rounds"]:
         raise ValueError("Stale replay requires an earlier completed local round")
 
 def transform(context):
+    # Keep the lightweight GUI/catalog independent of optional training deps.
+    from atima_fl.engine.storage import raw_path, read_raw
     lag = context.config.parameters("attack")["lag_rounds"]
     location = getattr(context, "run_dir", None)
     if location is None:
