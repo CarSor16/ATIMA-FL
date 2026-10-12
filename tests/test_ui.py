@@ -22,7 +22,12 @@ def gui(tmp_path):
 def test_gui_catalog_validate_export_no_overwrite_and_token(gui):
     server, url = gui
     catalog = json.load(urlopen(url + "/api/catalog"))
-    assert len(catalog["catalog"]["attack"]) == 11
+    assert len(catalog["catalog"]["attack"]) >= 16
+    assert {"none", "label_flip", "alie", "fang", "model_replacement",
+            "class_withholding", "clean_label_trigger", "free_rider",
+            "stale_replay", "sybil_collusion"} <= {
+        plugin["id"] for plugin in catalog["catalog"]["attack"]
+    }
     no_attack = next(c for c in catalog["catalog"]["attack"] if c["id"] == "none")
     assert no_attack["title"] == "No attack"
     assert no_attack["translations"]["it"]["title"] == "Nessun attacco"

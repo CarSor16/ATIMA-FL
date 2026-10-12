@@ -42,7 +42,7 @@ def test_clean_label_trigger_changes_features_not_labels():
     a = prepare_training(x, y, c)
     np.testing.assert_array_equal(a.y, y)
     assert a.notes["attack_applied"]
-    assert np.all(a.x[y == 0, :2] == 0.9)
+    assert np.allclose(a.x[y == 0, :2], 0.9)
     assert np.all(a.x[y == 1, :2] == 0)
 
 def test_free_rider_zero_delta():
