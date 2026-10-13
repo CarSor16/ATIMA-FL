@@ -430,3 +430,23 @@ The old `atima launch --config` and ZIP plans remain compatible. An attack
 must point to a completed paired clean baseline and use the same allocation and
 software/runtime identity. Resource controls remain in the TOML schema for
 backwards compatibility, but are not chosen in the Designer.
+
+## Universal Dataset Manager: local-first, cluster optional
+
+Open **Dataset Manager** in the GUI to inspect CSV, CSV.GZ, Parquet, or a
+directory of compatible files. Confirm the label column, optionally declare
+the benign class, select a new output directory, and prepare. ATIMA creates
+persisted IID/Dirichlet FL shards, selects the universal_tabular dataset,
+and sets its actual feature/class dimensions. SSH and Slurm are optional.
+
+Install training extras with `pip install -e ".[training,flower]"`, then:
+
+```bash
+atima datasets inspect ./raw/flows.csv
+atima datasets prepare ./raw/flows.csv --label-column Attack --benign-label Benign --clients 10 --output ./prepared/flows-v1
+atima run profile.toml --local --preflight-only
+atima run profile.toml --local
+```
+
+On an allocated Slurm job, run `atima run profile.toml` without the local flag.
+See [Universal datasets](docs/UNIVERSAL_DATASETS.md) for known limitations.

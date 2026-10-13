@@ -114,3 +114,47 @@ def test_local_launch_uses_cpu_without_slurm(monkeypatch):
     launch(c, local=True)
     assert recorded["backend_config"]["init_args"]["num_gpus"] == 0
     assert recorded["backend_config"]["client_resources"]["num_gpus"] == 0
+
+
+
+def test_local_dataset_manager_api_without_cluster(tmp_path, raw):
+    from threading import Thread
+    from urllib.request import Request, urlopen
+
+    from atima_fl.ui.app import create_server
+
+    server = create_server(tmp_path / "workspace", 0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}"
+        catalog = json.load(urlopen(url + "/api/catalog"))
+        headers = {
+            "Content-Type": "application/json",
+            "X-ATIMA-Token": catalog["token"],
+        }
+
+        def post(endpoint, payload):
+            request = Request(
+                url + endpoint, data=json.dumps(payload).encode(), headers=headers
+            )
+            return json.load(urlopen(request))
+
+        data = post("/api/datasets/inspect", {"path": str(raw)})
+        assert any(v["column"] == "Attack" for v in data["label_candidates"])
+        prepared = post("/api/datasets/prepare", {
+            "path": str(raw), "output": str(tmp_path / "via-ui"),
+            "label_column": "Attack", "benign_label": "Benign",
+            "clients": 10, "seed": 7, "exclude_columns": [],
+        })
+        assert prepared["num_classes"] == 3
+        looked_up = post("/api/datasets/prepared", {"path": prepared["path"]})
+        assert looked_up["input_dim"] == prepared["input_dim"]
+        html = urlopen(url + "/").read().decode()
+        assert 'id="dataset-manager"' in html
+        assert 'id="ud-source-path"' in html
+        assert 'id="ud-prepare"' in html
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()

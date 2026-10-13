@@ -33,7 +33,13 @@ for path in paths:
             import pandas as pd
         except ImportError as exc:
             raise ValueError("Remote Parquet inspection requires pandas and pyarrow") from exc
-        table = pd.read_parquet(path).head(5000)
+        import pyarrow.parquet as pq
+        parquet = pq.ParquetFile(path)
+        batches = parquet.iter_batches(batch_size=5000)
+        first = next(batches, None)
+        table = first.to_pandas() if first is not None else pd.DataFrame()
+        if table.empty:
+            raise ValueError("Empty Parquet dataset")
         header = [str(x) for x in table.columns]
         samples = table.astype("string").fillna("").to_dict("records")
     else:

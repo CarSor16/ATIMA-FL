@@ -19,12 +19,18 @@ _LABEL_NAMES = {"label", "labels", "attack", "attack_type", "attack_cat",
                 "category", "class", "target", "outcome", "y"}
 _METADATA_NAMES = {"src_ip", "dst_ip", "source_ip", "destination_ip",
                    "timestamp", "time", "flow_id", "id", "source_row_id",
-                   "input_fingerprint", "target_id", "fine_label"}
+                   "input_fingerprint", "target_id", "fine_label", "session_id",
+                   "connection_id", "flowid"}
 
 
 def source_files(source):
-    root = Path(source).expanduser().resolve(strict=True)
+    original = Path(source).expanduser()
+    if original.is_symlink():
+        raise ValueError("Dataset source symlinks are not accepted")
+    root = original.resolve(strict=True)
     if root.is_file():
+        if not root.name.lower().endswith(EXTENSIONS):
+            raise ValueError("Source must be CSV, CSV.GZ or Parquet")
         paths = [root]
     elif root.is_dir():
         # Intentionally inspect direct children only: never traverse arbitrary trees.
