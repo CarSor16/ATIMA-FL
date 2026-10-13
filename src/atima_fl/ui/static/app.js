@@ -33,6 +33,7 @@ function setTheme(next, persist = false) {
 // Common shell shared by every page. Navigation preserves existing form state.
 const PAGE_META={
   designer:{heading:"Create a federated learning security experiment",subtitle:"Configure an FL security experiment and export a reproducible TOML plan.",crumb:"DESIGNER"},
+  "dataset-manager":{heading:"Dataset Manager",subtitle:"Inspect and prepare a local dataset, or inspect remote metadata over optional SSH.",crumb:"DATASETS"},
   components:{heading:"Components",subtitle:"Registered plugins and their capabilities.",crumb:"LIBRARY"},
   results:{heading:"Results",subtitle:"Compare experiments and model performance.",crumb:"ANALYTICS"},
   guide:{heading:"Guide",subtitle:"From configuration to research evidence.",crumb:"WORKFLOW"}
@@ -124,6 +125,12 @@ function refreshTaskOptions(){
       if(allowed && !allowed.available)option.textContent+=" · "+uiText("Unavailable on cluster");
     }
   }
+  if(dataset==="universal_tabular" && task){
+    for(const option of task.options){
+      const spec=datasetTasks.universal_tabular?.[option.value];
+      option.disabled=Boolean(spec && spec.available===false && option.value!==task.value);
+    }
+  }
   if($("attack")?.value==="label_flip"){
     const info=selectedTaskInfo().info;
     if(info)for(const name of ["source_class","destination_class"]){
@@ -135,11 +142,10 @@ function refreshTaskOptions(){
 }
 
 function addResearchDatasetOptions(){
-  // Visible reference options are disabled until a compatible, audited ATIMA
-  // data plugin exists. An NF-V2 raw CSV cannot be passed to the Edge plugin.
+  // Raw NF-V2 files must first be converted via the universal_tabular adapter.
   const select=$("dataset");
   const group=document.createElement("optgroup");
-  group.label=uiText("NF-V2 datasets · not yet executable");
+  group.label=uiText("NF-V2 raw datasets · prepare via Dataset Manager");
   for(const [,title] of NF_DATASETS){
     for(const variant of ["Binary · 2 classes","Macro-classes · based on source Attack labels"]){
       const option=node("option",title+" · "+variant+" · "+uiText("Adapter required"));
@@ -1159,6 +1165,74 @@ async function refreshResults(){
     if(requestId===resultsRequestId){button.disabled=false;$("results").setAttribute("aria-busy","false");}
   }
 }
+
+function applyPreparedDataset(summary){
+  datasetTasks.universal_tabular = {
+    multiclass:{num_classes:summary.num_classes,class_names:summary.classes,
+                description:"Classes confirmed in prepared mapping",available:true},
+    binary:{num_classes:2,class_names:["Benign","Attack"],available:
+            summary.task_options.includes("binary")}
+  };
+  $("dataset").value="universal_tabular";
+  $("dataset").dispatchEvent(new Event("change",{bubbles:true}));
+  $("dataset_root").value=summary.path;
+  $("input_dim").value=summary.input_dim;
+  $("clients").value=summary.client_count;
+  const task=$("dataset_params").querySelector('[data-param="task"]');
+  if(task)task.value="multiclass";
+  refreshTaskOptions();
+  updateTaskUi();
+  preview();
+  navigateTo("designer",true);
+}
+async function inspectUniversalSource(){
+  const button=$("ud-inspect"),target=$("ud-analysis");
+  button.disabled=true;
+  target.textContent="Inspecting dataset metadata…";
+  try{
+    const remote=$("ud-location").value==="remote";
+    const result=await request(remote?"/api/datasets/inspect-remote":"/api/datasets/inspect",
+                              {path:$("ud-source-path").value});
+    target.textContent=JSON.stringify(result,null,2);
+    const select=$("ud-label");select.replaceChildren();
+    for(const col of result.columns){
+      const option=node("option",col);option.value=col;select.append(option);
+    }
+    const named=result.label_candidates.filter(x=>x.named);
+    if(named.length===1)select.value=named[0].column;
+    $("ud-feedback").textContent=remote
+      ?"Read-only remote preview. Preparation must run on the remote machine."
+      :"Confirm the label and benign value before preparing. No files were changed.";
+    $("ud-prepare").disabled=remote;
+  }catch(error){
+    target.textContent=error.message;
+    $("ud-feedback").textContent="Inspection failed; check path and optional dependencies.";
+  }finally{button.disabled=false;}
+}
+async function prepareUniversalSource(){
+  const button=$("ud-prepare"),feedback=$("ud-feedback");
+  button.disabled=true;feedback.textContent="Preparing immutable local splits and shards…";
+  try{
+    const source=$("ud-source-path").value;
+    const result=await request("/api/datasets/prepare",{
+      path:source,output:$("ud-output").value,label_column:$("ud-label").value,
+      benign_label:$("ud-benign").value,clients:Number($("ud-clients").value),
+      seed:Number($("ud-seed").value),
+      exclude_columns:$("ud-exclude").value.split(",").map(x=>x.trim()).filter(Boolean)
+    });
+    feedback.textContent="Prepared: "+result.path;
+    applyPreparedDataset(result);
+  }catch(error){feedback.textContent="Preparation failed: "+error.message;}
+  finally{button.disabled=$("ud-location").value==="remote";}
+}
+async function selectPreparedUniversalSource(){
+  const feedback=$("ud-feedback");
+  try{
+    const result=await request("/api/datasets/prepared",{path:$("ud-prepared-path").value});
+    applyPreparedDataset(result);
+  }catch(error){feedback.textContent="Prepared dataset unavailable: "+error.message;}
+}
+
 async function initialize(){
   const [response,initial,tasks]=await Promise.all([request("/api/catalog"),request("/api/defaults"),request("/api/dataset-tasks")]);catalog=response.catalog;token=response.token;defaults=initial;datasetTasks=tasks;
   defaults.name="Baseline_MLP";
@@ -1175,6 +1249,12 @@ async function initialize(){
     updateExperimentName();
   });
   $("discover-cluster-datasets").addEventListener("click",discoverClusterDatasets);
+  $("ud-inspect").addEventListener("click",inspectUniversalSource);
+  $("ud-prepare").addEventListener("click",prepareUniversalSource);
+  $("ud-select-prepared").addEventListener("click",selectPreparedUniversalSource);
+  $("ud-location").addEventListener("change",()=>{
+    $("ud-prepare").disabled=$("ud-location").value==="remote";
+  });
   $("auto-experiment-name").addEventListener("change",()=>{updateExperimentName();preview();});
   updateExperimentName();
   $("malicious-selection").addEventListener("change",()=>{if($("malicious-selection").value==="ids" && !$("malicious_clients").value.trim()){const n=Number($("malicious-count").value);$("malicious_clients").value=Array.from({length:n},(_,i)=>i).join(",");}});

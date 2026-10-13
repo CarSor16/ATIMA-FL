@@ -218,6 +218,42 @@ class Handler(BaseHTTPRequestHandler):
             ):
                 raise ValueError("Expected a JSON request within 1 MiB")
             body = json.loads(self.rfile.read(length))
+            if self.path in {"/api/datasets/inspect", "/api/datasets/prepare",
+                             "/api/datasets/inspect-remote", "/api/datasets/prepared"}:
+                if not isinstance(body, dict):
+                    raise ValueError("Dataset request must be a JSON object")
+                if self.path == "/api/datasets/inspect":
+                    if set(body) != {"path"}:
+                        raise ValueError("Inspect requires only path")
+                    from atima_fl.core.universal_data import inspect
+
+                    return self.respond(200, inspect(body["path"]))
+                if self.path == "/api/datasets/inspect-remote":
+                    if set(body) != {"path"}:
+                        raise ValueError("Remote inspect requires only path")
+                    from atima_fl.ui.remote_inspection import inspect_remote
+
+                    return self.respond(200, inspect_remote(self.server.workspace, body["path"]))
+                if self.path == "/api/datasets/prepared":
+                    if set(body) != {"path"}:
+                        raise ValueError("Prepared lookup requires only path")
+                    from atima_fl.core.universal_data import prepared_summary
+
+                    return self.respond(200, prepared_summary(body["path"]))
+                allowed = {"path", "output", "label_column", "benign_label", "clients",
+                           "seed", "exclude_columns"}
+                if not {"path", "output", "label_column", "clients", "seed"} <= set(body) or (
+                    set(body) - allowed
+                ):
+                    raise ValueError("Invalid preparation fields")
+                from atima_fl.core.universal_data import prepare
+
+                return self.respond(201, prepare(
+                    body["path"], body["output"], body["label_column"],
+                    benign_label=body.get("benign_label") or None,
+                    clients=body["clients"], seed=body["seed"],
+                    exclude_columns=body.get("exclude_columns", []),
+                ))
             if self.path == "/api/discover-cluster-datasets":
                 if body != {}:
                     raise ValueError("Cluster dataset discovery takes no client-side parameters")
@@ -286,7 +322,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(
                 409, {"error": "This experiment name is already saved; choose a different name."}
             )
-        except (ValueError, KeyError, TypeError, OSError) as error:
+        except (ValueError, KeyError, TypeError, OSError, ImportError) as error:
             return self.respond(422, {"error": str(error)})
 
 

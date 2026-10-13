@@ -309,3 +309,25 @@ def prepare(source, output, label_column, *, benign_label=None, clients=10,
         "task_options": ["multiclass"] + (["binary"] if benign_label is not None else []),
         "client_count": clients, "rows": {k: len(v) for k, v in split_indices.items()},
     }
+
+
+def prepared_summary(source):
+    """Discover a previously prepared ATIMA tree without reading all training tensors."""
+    root = Path(source).expanduser().resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("Prepared source must be a directory")
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("format") != "atima-universal-tabular-v1":
+        raise ValueError("Not an ATIMA universal prepared dataset")
+    mapping = json.loads((root / "label_mapping.json").read_text(encoding="utf-8"))
+    schema = json.loads((root / "feature_schema.json").read_text(encoding="utf-8"))
+    if set(mapping.values()) != set(range(len(mapping))) or not schema.get("columns"):
+        raise ValueError("Invalid prepared schema")
+    return {
+        "path": str(root), "classes": sorted(mapping, key=mapping.get),
+        "num_classes": len(mapping), "input_dim": len(schema["columns"]),
+        "benign_label": manifest.get("benign_label"),
+        "task_options": ["multiclass"] + (
+            ["binary"] if manifest.get("benign_label") in mapping else []),
+        "client_count": manifest["clients"], "rows": manifest["rows"],
+    }
