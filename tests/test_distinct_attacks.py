@@ -12,7 +12,7 @@ def ctx(attack, params=None, *, malicious=(0, 1), client=0, round_id=3):
     config = ExperimentConfig(attack=attack, attack_params=params or {},
                               malicious_clients=malicious, attack_start=2).validate()
     global_arrays = [np.array([1., 2.], dtype=np.float32)]
-    local = [np.array([2., 3.], dtype=np.float32)]
+    local = [np.array([4., 5.] if client == 1 else [2., 3.], dtype=np.float32)]
     context = AttackContext(config, client, round_id, global_arrays, local,
                             {0: [np.array([2., 3.], dtype=np.float32)],
                              1: [np.array([4., 5.], dtype=np.float32)]}, {i: 10 for i in range(10)}, (0,))

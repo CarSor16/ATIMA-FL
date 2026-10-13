@@ -1,6 +1,5 @@
 """Optional read-only SSH inspector for explicit arbitrary tabular paths."""
 import json
-from pathlib import Path
 import re
 import subprocess
 

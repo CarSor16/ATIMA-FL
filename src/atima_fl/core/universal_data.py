@@ -140,7 +140,12 @@ def prepare(source, output, label_column, *, benign_label=None, clients=10,
     chunks = []
     rows = 0
     for path in files:
-        frame = _read(path)
+        if path.suffix.lower() == ".parquet":
+            import pyarrow.parquet as parquet
+
+            if parquet.ParquetFile(path).metadata.num_rows > max_rows - rows:
+                raise ValueError(f"Source exceeds {max_rows} rows; increase --max-rows")
+        frame = _read(path, rows=max_rows - rows + 1)
         if columns is None:
             columns = list(frame.columns)
         if list(frame.columns) != columns:
