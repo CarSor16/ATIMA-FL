@@ -116,7 +116,14 @@ def run_experiment(grid, config, device=None):
         raise RuntimeError("No CUDA GPU visible to ServerApp")
     from .launch import scheduler_allocation
 
-    allocation = scheduler_allocation(config)
+    if os.environ.get("ATIMA_LOCAL_EXECUTION") == "1":
+        if device != "cpu" or config.server_execution == "slurm_nodes":
+            raise ValueError("Local execution permits CPU with logical servers only")
+        allocation = json.loads(os.environ["ATIMA_ALLOCATION_JSON"])
+        if allocation.get("verification") != "local_process_cpu_affinity":
+            raise ValueError("Missing verified local allocation")
+    else:
+        allocation = scheduler_allocation(config)
     if device == "cuda" and torch.cuda.device_count() != allocation["scheduler_gpu_count"]:
         raise RuntimeError("CUDA devices differ from scheduler allocation")
     if config.servers == 1:

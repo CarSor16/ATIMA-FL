@@ -76,11 +76,21 @@ def scheduler_allocation(config):
     return {"job_id": job, "alloc_tres": tres, "scheduler_gpu_count": gpu_count}
 
 
-def launch(config, preflight_only=False):
+def launch(config, preflight_only=False, local=False):
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     os.environ.setdefault("OMP_NUM_THREADS", str(config.client_cpus))
     config.validate()
-    allocation = scheduler_allocation(config)
+    if local:
+        if config.compute_device != "cpu" or config.server_execution == "slurm_nodes":
+            raise ValueError("Local execution requires CPU and logical aggregation servers")
+        os.environ["ATIMA_LOCAL_EXECUTION"] = "1"
+        allocation = {
+            "job_id": None, "alloc_tres": {"cpu": str(config.cpu_budget), "node": "1"},
+            "scheduler_gpu_count": 0, "verification": "local_process_cpu_affinity",
+        }
+    else:
+        os.environ.pop("ATIMA_LOCAL_EXECUTION", None)
+        allocation = scheduler_allocation(config)
     os.environ["ATIMA_ALLOCATION_JSON"] = json.dumps(allocation)
     import torch
 

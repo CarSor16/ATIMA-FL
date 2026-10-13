@@ -52,6 +52,7 @@ def main(argv=None):
     easy = commands.add_parser("run", help="Preflight then train TOML in an allocated Slurm job")
     easy.add_argument("profile", help="Path to experiment.toml")
     easy.add_argument("--preflight-only", action="store_true")
+    easy.add_argument("--local", action="store_true", help="Train on the local CPU without Slurm")
     launch = commands.add_parser(
         "launch", help="Preflight or run inside an allocated Slurm GPU job"
     )
@@ -118,10 +119,21 @@ def main(argv=None):
     elif args.command == "run":
         from .adapters.flower.launch import allocated_config, launch as run
 
-        config = allocated_config(ExperimentConfig.load(args.profile))
-        run(config, preflight_only=True)
-        if not args.preflight_only:
-            run(config, preflight_only=False)
+        config = ExperimentConfig.load(args.profile)
+        if args.local:
+            from dataclasses import replace
+            import os
+
+            available = (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity")
+                         else os.cpu_count() or 0)
+            if available < config.servers + 2:
+                raise RuntimeError("Local run needs at least servers + 2 available CPU cores")
+            config = replace(config, cpu_budget=available, client_cpus=1,
+                             compute_device="cpu", client_gpu_fraction=1.0).validate()
+            run(config, preflight_only=args.preflight_only, local=True)
+        else:
+            config = allocated_config(config)
+            run(config, preflight_only=args.preflight_only)
     elif args.command == "launch":
         from .adapters.flower.launch import launch as run
 
