@@ -12,6 +12,19 @@ def main(argv=None):
         prog="atima", description="ATIMA-FL · modular experiment layer on Flower"
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    datasets = commands.add_parser("datasets", help="Inspect or prepare any supported tabular source")
+    dataset_commands = datasets.add_subparsers(dest="dataset_command", required=True)
+    di = dataset_commands.add_parser("inspect", help="Suggest labels from a local file/directory")
+    di.add_argument("path")
+    dp = dataset_commands.add_parser("prepare", help="Prepare immutable FL shards from tabular data")
+    dp.add_argument("path")
+    dp.add_argument("--output", required=True)
+    dp.add_argument("--label-column", required=True)
+    dp.add_argument("--benign-label")
+    dp.add_argument("--exclude", action="append", default=[])
+    dp.add_argument("--clients", type=int, default=10)
+    dp.add_argument("--seed", type=int, default=2026)
+    dp.add_argument("--max-rows", type=int, default=500000)
     catalog = commands.add_parser("catalog", help="List discovered interchangeable components")
     catalog.add_argument("--plugins")
     ui = commands.add_parser("ui", help="Open the local experiment designer")
@@ -61,7 +74,17 @@ def main(argv=None):
     defense_stats.add_argument("--inputs", nargs="+", required=True)
     defense_stats.add_argument("--output", required=True)
     args = parser.parse_args(argv)
-    if args.command == "catalog":
+    if args.command == "datasets":
+        from .core.universal_data import inspect, prepare
+
+        if args.dataset_command == "inspect":
+            data = inspect(args.path)
+        else:
+            data = prepare(args.path, args.output, args.label_column,
+                           benign_label=args.benign_label, exclude_columns=args.exclude,
+                           clients=args.clients, seed=args.seed, max_rows=args.max_rows)
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif args.command == "catalog":
         print(json.dumps(Registry(args.plugins).catalog(), ensure_ascii=False, indent=2))
     elif args.command == "ui":
         from .ui.app import serve
