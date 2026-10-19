@@ -7,6 +7,7 @@ from flwr.app import ArrayRecord, ConfigRecord, Context, Message, MetricRecord, 
 from flwr.clientapp import ClientApp
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.engine.client import train_local, submit_local
+from atima_fl.engine.attacks import reported_samples
 from atima_fl.engine import data as data_engine
 
 app = ClientApp()
@@ -32,12 +33,17 @@ def handle_train(message: Message, context: Context):
         values, metadata = submit_local(config, run, client, round_id, before, counts)
     else:
         raise ValueError("Unknown protocol phase")
+    count, count_audit = reported_samples(
+        config, client, round_id, metadata["original_samples"]
+    )
+    metadata.update(count_audit)
+    metadata["attack_applied"] = metadata.get("attack_applied", False) or count_audit["count_spoofed"]
     return Message(
         content=RecordDict(
             {
                 "arrays": ArrayRecord(numpy_ndarrays=values),
                 "metrics": MetricRecord(
-                    {"client-id": client, "num-examples": metadata["original_samples"]}
+                    {"client-id": client, "num-examples": count}
                 ),
                 "audit": ConfigRecord({"metadata_json": json.dumps(metadata, allow_nan=False)}),
             }
