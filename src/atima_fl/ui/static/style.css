@@ -684,3 +684,52 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 @media(max-width:420px){.manual-compare-controls.single .run-metadata{grid-template-columns:70px minmax(0,1fr)}}
 
 .header-cta{background:var(--teal);color:var(--bg);border-radius:5px}
+
+/* Research dashboard: compact scan-first tiles, zoom controls, no scroll traps. */
+#results .performance-region,#results .detail-region,#results .analysis-selection{min-width:0}
+#results .performance-table{border-collapse:separate;border-spacing:0;min-width:600px}
+#results .result-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+#results .result-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:12px}
+#results .round-controls{align-items:end;gap:10px}
+#results .round-controls>.chart-action{align-self:end}
+.chart-action{width:auto;min-width:64px;min-height:38px;border:1px solid var(--line);border-radius:8px;
+  padding:8px 11px;font:600 12px/1.2 system-ui;color:var(--ink);background:var(--surface-raised);
+  cursor:pointer}
+.chart-action:hover{border-color:var(--teal);background:var(--accent-soft)}
+.chart-action:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.fl-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:14px;margin:16px 0}
+.fl-audit-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.fl-audit-card>strong{display:block;font-size:13px;overflow-wrap:anywhere;margin-bottom:12px}
+.fl-metric-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;margin:0;font-size:12px}
+.fl-metric-grid dt{color:var(--muted)}
+.fl-metric-grid dd{font-weight:700;margin:0;font-variant-numeric:tabular-nums;text-align:right}
+.fl-empty{padding:18px;border:1px dashed var(--line);border-radius:8px;color:var(--muted)}
+.fl-diagnostics .round-chart svg{width:100%;height:auto;min-height:220px}
+.fl-diagnostics .round-controls select{min-width:210px;max-width:100%}
+.fl-diagnostics .round-controls input[type="number"]{width:92px}
+
+/* Guide layout: override old list-counter positioning that overlapped cards. */
+#guide{min-width:0}
+#guide .page-intro{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+#guide .guide-actions{display:flex;justify-content:center;align-items:stretch;flex-wrap:wrap;gap:12px;margin:12px auto 24px;max-width:980px}
+#guide .guide-actions .secondary{flex:0 1 auto;min-width:min(100%,225px);width:auto;margin:0;white-space:normal}
+#guide .card.prose{box-sizing:border-box;width:100%;max-width:980px;min-width:0;margin-inline:auto;padding:clamp(18px,3vw,35px);overflow-wrap:anywhere}
+#guide .prose>ol{display:grid;grid-template-columns:minmax(0,1fr);counter-reset:guide-step;gap:12px;padding:0;margin:20px 0}
+#guide .prose>ol>li{counter-increment:guide-step;display:flex;flex-wrap:wrap;align-items:center;gap:9px 14px;
+  position:relative;min-width:0;margin:0;padding:17px 19px;border:1px solid var(--line);
+  background:var(--surface-raised);border-radius:11px;line-height:1.6;overflow-wrap:anywhere}
+#guide .prose>ol>li::before{content:counter(guide-step,decimal-leading-zero);position:static;inset:auto;
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;
+  min-width:36px;width:36px;height:36px;padding:0;margin:0;border:1px solid var(--line);
+  border-radius:9px;background:var(--accent-soft);color:var(--accent-strong);
+  font:800 12px/1 ui-monospace,monospace}
+#guide .prose code{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+#guide .guide-reference{min-width:0;overflow-wrap:anywhere}
+#guide .guide-reference>summary{padding:6px 0}
+#guide .guide-reference p{margin:12px 0}
+@media(max-width:600px){
+  #guide .guide-actions .secondary{width:100%;flex:1 1 100%}
+  #guide .prose>ol>li{padding:13px;gap:8px}
+  .fl-metric-grid{grid-template-columns:minmax(0,1fr);gap:2px}
+  .fl-metric-grid dd{text-align:left;margin-bottom:8px}
+}
