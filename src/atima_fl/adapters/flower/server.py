@@ -198,6 +198,7 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
     node_ids = sorted(grid.get_node_ids())
     policy = PlateauPolicy(config)
     history = []
+    federated_rounds = []
     last_valid = 0
     try:
         if len(node_ids) != config.clients:
@@ -258,6 +259,36 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
                 )
                 raise
             storage.commit(round_id, before, after, clients, evaluation, aggregation)
+            # Compact, non-sensitive FL telemetry travels with final_metrics.json.
+            # These values describe the simulation, not independent physical clients.
+            actual = [int(client["metadata"]["original_samples"]) for client in clients]
+            claimed = [counts[client["id"]] for client in clients]
+            compromised = [client["metadata"]["is_malicious"] for client in clients]
+            norms = [
+                float(np.sqrt(sum(np.square(np.asarray(v, dtype=np.float64)).sum()
+                                  for v in difference)))
+                for difference in deltas
+            ]
+            step_norm = float(np.sqrt(sum(
+                np.square(np.asarray(v, dtype=np.float64)).sum() for v in delta
+            )))
+            federated_rounds.append({
+                "round": round_id,
+                "logical_clients": len(clients),
+                "malicious_clients": int(sum(compromised)),
+                "attack_applied_clients": int(sum(bool(client["metadata"].get("attack_applied"))
+                                                  for client in clients)),
+                "count_mismatch_clients": int(sum(a != b for a, b in zip(actual, claimed))),
+                "actual_malicious_mass_fraction": float(
+                    sum(a for a, flag in zip(actual, compromised) if flag) / sum(actual)
+                ),
+                "reported_malicious_mass_fraction": float(
+                    sum(a for a, flag in zip(claimed, compromised) if flag) / sum(claimed)
+                ),
+                "mean_client_update_l2": float(np.mean(norms)),
+                "max_client_update_l2": float(np.max(norms)),
+                "global_step_l2": step_norm,
+            })
             last_valid = round_id
             history.append(
                 {"round": round_id, "seconds": time.perf_counter() - started, **evaluation}
@@ -282,7 +313,13 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
         test = data.split("test")
         test_x, test_y = test.x, test.y
         test_p = probabilities(before, test_x, config, device)
-        final = {"test": metrics(test_y, test_p, data.classes, config)}
+        final = {
+            "test": metrics(test_y, test_p, data.classes, config),
+            "federated": {
+                "scope": "simulated_logical_clients_server_audit",
+                "rounds": federated_rounds,
+            },
+        }
         plugin = config.registry().get("attack", config.attack)
         evaluate_attack = plugin.hooks.get("evaluate")
         if evaluate_attack:
