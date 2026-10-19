@@ -741,6 +741,11 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
   from.value=String(Math.min(maxRound,previous.from||1));to.value=String(Math.min(maxRound,previous.to||maxRound));from.setAttribute("aria-label",uiText("From round"));to.setAttribute("aria-label",uiText("To round"));
   fromLabel.append(from);toLabel.append(to);
   controls.append(metric.label,classChoice.label,showA.label,showB.label,showDelta.label,fromLabel,toLabel);
+  const zoomIn=node("button","Zoom +","chart-action"),zoomOut=node("button","Zoom −","chart-action"),
+    zoomReset=node("button","Reset zoom","chart-action");
+  for(const b of [zoomIn,zoomOut,zoomReset])b.type="button";
+  const autoscale=checkControl("Focus Y axis",previous.autoscale??false);
+  controls.append(zoomIn,zoomOut,zoomReset,autoscale.label);
   const drawing=node("div",undefined,"round-chart"),tooltip=node("p","Hover or focus a point for its recorded value.","chart-tooltip");
   tooltip.setAttribute("role","status");
   const dataGrid=node("details",undefined,"round-data");
@@ -751,6 +756,13 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     const key=metricSelect.value,percent=key!=="loss"&&key!=="mcc";
     let ymin=key==="mcc"?-1:0,ymax=key==="loss"?Math.max(.01,...all.map(p=>p.value))*1.05:1;
     if(delta){const extent=Math.max(.001,...all.map(p=>Math.abs(p.value)))*1.12;ymin=-extent;ymax=extent;}
+    else if(autoscale.input.checked){
+      const lo=Math.min(...all.map(p=>p.value)),hi=Math.max(...all.map(p=>p.value));
+      const padding=Math.max(1e-4,(hi-lo)*.12);
+      ymin=lo-padding;ymax=hi+padding;
+      if(key!=="mcc"&&key!=="loss"){ymin=Math.max(0,ymin);ymax=Math.min(1,ymax);}
+      if(ymax<=ymin)ymax=ymin+1e-4;
+    }
     const start=Number(from.value),end=Number(to.value),left=72,right=940,top=24,bottom=270;
     const x=r=>left+(r-start)/Math.max(1,end-start)*(right-left),y=v=>bottom-(v-ymin)/(ymax-ymin)*(bottom-top);
     const title=delta?"Validation delta · B − A":"Recorded validation values";
@@ -786,7 +798,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     dataGrid.replaceChildren(node("summary","Round data table"));
     const start=Number(from.value),end=Number(to.value);
     if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end>maxRound||start>end){drawing.append(node("p","Choose a valid round range.","warning"));return;}
-    chartPreferences.set(preferenceKey,{metric:metricSelect.value,classIndex:classChoice.select.value,showA:showA.input.checked,showB:showB.input.checked,showDelta:showDelta.input.checked,from:start,to:end});
+    chartPreferences.set(preferenceKey,{metric:metricSelect.value,classIndex:classChoice.select.value,showA:showA.input.checked,showB:showB.input.checked,showDelta:showDelta.input.checked,from:start,to:end,autoscale:autoscale.input.checked});
     const select=run=>roundSeries(run,metricSelect.value,Number(classChoice.select.value||0)).filter(p=>p.round>=start&&p.round<=end);
     const a=select(baseline||value),b=baseline?select(value):[],difference=baseline?roundDelta(a,b):[];
     const series=[];
@@ -803,7 +815,19 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     const percent=metricSelect.value!=="loss"&&metricSelect.value!=="mcc";
     dataGrid.append(dataTable(["Round","A",...(baseline?["B","Δ B − A"]:[])],rounds.map(r=>[r,score(am.get(r),percent),...(baseline?[score(bm.get(r),percent),deltaScore(bm.get(r),am.get(r),percent)]:[])])));
   }
-  for(const input of [metricSelect,classChoice.select,showA.input,showB.input,showDelta.input,from,to])input.addEventListener("change",redraw);
+  for(const input of [metricSelect,classChoice.select,showA.input,showB.input,showDelta.input,from,to,autoscale.input])input.addEventListener("change",redraw);
+  function zoom(ratio){
+    const start=Number(from.value),end=Number(to.value);
+    if(!Number.isInteger(start)||!Number.isInteger(end)||start>end)return;
+    const span=Math.max(1,Math.min(maxRound,Math.round((end-start+1)*ratio)));
+    const center=(start+end)/2;
+    let nextFrom=Math.max(1,Math.round(center-(span-1)/2));
+    nextFrom=Math.min(nextFrom,maxRound-span+1);
+    from.value=String(nextFrom);to.value=String(nextFrom+span-1);redraw();
+  }
+  zoomIn.addEventListener("click",()=>zoom(.5));
+  zoomOut.addEventListener("click",()=>zoom(2));
+  zoomReset.addEventListener("click",()=>{from.value="1";to.value=String(maxRound);redraw();});
   redraw();return section;
 }
 function manualWarnings(first,second){
