@@ -1066,7 +1066,8 @@ function renderAnalysis(){
     if(analysisTab==="overview"||analysisTab==="rounds"){
       if(analysisTab==="overview")root.append(node("p","Validation curves are measured per round; test metrics are final-only. This single-run comparison is descriptive, not a statistical significance test."));
       root.append(b?roundChart(b,a,true,true):roundChart(a,null));
-    }else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
+    }else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
+    else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
     else if(analysisTab==="matrices")root.append(matrixAnalysis(a,b,compatible));
     else root.append(perClassAnalysis(a,b,compatible,true));
   }
