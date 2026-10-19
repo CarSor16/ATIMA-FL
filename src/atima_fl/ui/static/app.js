@@ -629,7 +629,32 @@ function deltaScore(value, reference, percent=true){
   const difference=(value-reference)*(percent?100:1);
   return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
 }
-function testMetrics(value){return value?.metrics?.test || null;}
+// Additional scores are calculated from recorded per-class final test metrics.
+const DERIVED_METRICS = [
+  ["macro_precision","Macro precision",true],
+  ["worst_supported_recall","Worst class recall",true],
+  ["intrusion_miss_rate","Macro intrusion FN rate",true],
+  ["benign_false_alarm_rate","Benign false-alarm rate",true]
+];
+const FINAL_METRICS = [...RESULT_METRICS,...DERIVED_METRICS];
+function testMetrics(value){
+  const test=value?.metrics?.test||null;
+  if(!test)return null;
+  const entries=Object.entries(test.per_class||{});
+  const supported=entries.filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
+  const precisions=entries.filter(([,v])=>numeric(v?.precision));
+  const intrusions=supported.filter(([name])=>!/^(benign|normal)$/i.test(name));
+  const benign=entries.find(([name])=>/^(benign|normal)$/i.test(name));
+  const hasBenign=Boolean(benign);
+  return {...test,
+    macro_precision:precisions.length?precisions.reduce((s,[,v])=>s+v.precision,0)/precisions.length:null,
+    worst_supported_recall:supported.length?Math.min(...supported.map(([,v])=>v.recall)):null,
+    intrusion_miss_rate:hasBenign&&intrusions.length
+      ?intrusions.reduce((s,[,v])=>s+(1-v.recall),0)/intrusions.length:null,
+    benign_false_alarm_rate:benign&&numeric(benign[1]?.support)&&benign[1].support>0&&numeric(benign[1]?.recall)
+      ?1-benign[1].recall:null
+  };
+}
 function classNames(value){
   const test=testMetrics(value);
   const listed=Array.isArray(value?.classes)?value.classes:[];
@@ -651,7 +676,7 @@ function dataTable(headers, rows, className=""){
 }
 function metricCards(metric){
   const grid=node("div",undefined,"result-kpis");
-  for(const [key,label,percent] of RESULT_METRICS){
+  for(const [key,label,percent] of FINAL_METRICS){
     if(!numeric(metric[key]))continue;
     const item=node("div",undefined,"result-kpi");
     item.append(node("span",label),node("strong",score(metric[key],percent)));grid.append(item);
@@ -720,6 +745,11 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
   from.value=String(Math.min(maxRound,previous.from||1));to.value=String(Math.min(maxRound,previous.to||maxRound));from.setAttribute("aria-label",uiText("From round"));to.setAttribute("aria-label",uiText("To round"));
   fromLabel.append(from);toLabel.append(to);
   controls.append(metric.label,classChoice.label,showA.label,showB.label,showDelta.label,fromLabel,toLabel);
+  const zoomIn=node("button","Zoom +","chart-action"),zoomOut=node("button","Zoom −","chart-action"),
+    zoomReset=node("button","Reset zoom","chart-action");
+  for(const b of [zoomIn,zoomOut,zoomReset])b.type="button";
+  const autoscale=checkControl("Focus Y axis",previous.autoscale??false);
+  controls.append(zoomIn,zoomOut,zoomReset,autoscale.label);
   const drawing=node("div",undefined,"round-chart"),tooltip=node("p","Hover or focus a point for its recorded value.","chart-tooltip");
   tooltip.setAttribute("role","status");
   const dataGrid=node("details",undefined,"round-data");
@@ -730,6 +760,13 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     const key=metricSelect.value,percent=key!=="loss"&&key!=="mcc";
     let ymin=key==="mcc"?-1:0,ymax=key==="loss"?Math.max(.01,...all.map(p=>p.value))*1.05:1;
     if(delta){const extent=Math.max(.001,...all.map(p=>Math.abs(p.value)))*1.12;ymin=-extent;ymax=extent;}
+    else if(autoscale.input.checked){
+      const lo=Math.min(...all.map(p=>p.value)),hi=Math.max(...all.map(p=>p.value));
+      const padding=Math.max(1e-4,(hi-lo)*.12);
+      ymin=lo-padding;ymax=hi+padding;
+      if(key!=="mcc"&&key!=="loss"){ymin=Math.max(0,ymin);ymax=Math.min(1,ymax);}
+      if(ymax<=ymin)ymax=ymin+1e-4;
+    }
     const start=Number(from.value),end=Number(to.value),left=72,right=940,top=24,bottom=270;
     const x=r=>left+(r-start)/Math.max(1,end-start)*(right-left),y=v=>bottom-(v-ymin)/(ymax-ymin)*(bottom-top);
     const title=delta?"Validation delta · B − A":"Recorded validation values";
@@ -765,7 +802,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     dataGrid.replaceChildren(node("summary","Round data table"));
     const start=Number(from.value),end=Number(to.value);
     if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end>maxRound||start>end){drawing.append(node("p","Choose a valid round range.","warning"));return;}
-    chartPreferences.set(preferenceKey,{metric:metricSelect.value,classIndex:classChoice.select.value,showA:showA.input.checked,showB:showB.input.checked,showDelta:showDelta.input.checked,from:start,to:end});
+    chartPreferences.set(preferenceKey,{metric:metricSelect.value,classIndex:classChoice.select.value,showA:showA.input.checked,showB:showB.input.checked,showDelta:showDelta.input.checked,from:start,to:end,autoscale:autoscale.input.checked});
     const select=run=>roundSeries(run,metricSelect.value,Number(classChoice.select.value||0)).filter(p=>p.round>=start&&p.round<=end);
     const a=select(baseline||value),b=baseline?select(value):[],difference=baseline?roundDelta(a,b):[];
     const series=[];
@@ -782,7 +819,19 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
     const percent=metricSelect.value!=="loss"&&metricSelect.value!=="mcc";
     dataGrid.append(dataTable(["Round","A",...(baseline?["B","Δ B − A"]:[])],rounds.map(r=>[r,score(am.get(r),percent),...(baseline?[score(bm.get(r),percent),deltaScore(bm.get(r),am.get(r),percent)]:[])])));
   }
-  for(const input of [metricSelect,classChoice.select,showA.input,showB.input,showDelta.input,from,to])input.addEventListener("change",redraw);
+  for(const input of [metricSelect,classChoice.select,showA.input,showB.input,showDelta.input,from,to,autoscale.input])input.addEventListener("change",redraw);
+  function zoom(ratio){
+    const start=Number(from.value),end=Number(to.value);
+    if(!Number.isInteger(start)||!Number.isInteger(end)||start>end)return;
+    const span=Math.max(1,Math.min(maxRound,Math.round((end-start+1)*ratio)));
+    const center=(start+end)/2;
+    let nextFrom=Math.max(1,Math.round(center-(span-1)/2));
+    nextFrom=Math.min(nextFrom,maxRound-span+1);
+    from.value=String(nextFrom);to.value=String(nextFrom+span-1);redraw();
+  }
+  zoomIn.addEventListener("click",()=>zoom(.5));
+  zoomOut.addEventListener("click",()=>zoom(2));
+  zoomReset.addEventListener("click",()=>{from.value="1";to.value=String(maxRound);redraw();});
   redraw();return section;
 }
 function manualWarnings(first,second){
@@ -865,14 +914,16 @@ function verifiedPair(run,byId){
 function metricDirection(key,first,second){
   if(!numeric(first)||!numeric(second))return "unavailable";
   const difference=second-first;if(Math.abs(difference)<1e-12)return "unchanged";
-  return (key==="loss"?difference<0:difference>0)?"improved":"degraded";
+  return (["loss","intrusion_miss_rate","benign_false_alarm_rate"].includes(key)?difference<0:difference>0)?"improved":"degraded";
 }
 function selectedRun(root,run,tag){
   root.replaceChildren();if(!run){root.append(node("p","No experiment selected."));return;}
   root.append(node("strong",run.id));
   const metadata=node("dl",undefined,"run-metadata");
   const fields=[["Dataset",run.config?.dataset],["Task",run.dataset_identity?.task],
-    ["Classes",classNames(run).length||null],["Model",run.config?.model],["Attack",run.config?.attack],
+    ["Classes",classNames(run).length||null],["Model",run.config?.model],
+     ["Partition",run.config?.partition],["Aggregator",run.config?.aggregation],
+     ["Clients",run.config?.clients],["Attack",run.config?.attack],
     ["Status",run.status],["Rounds",run.round],["Accuracy",score(testMetrics(run)?.accuracy)],
     ["Macro-F1",score(testMetrics(run)?.macro_f1)]];
   for(const [title,value] of fields){metadata.append(node("dt",title),node("dd",value===null||value===undefined?"—":String(value)));}
@@ -884,7 +935,7 @@ function performanceOverview(first,second,compatible){
   const table=node("table",undefined,"result-table performance-table"),head=node("thead"),tr=node("tr");
   for(const label of ["Metric","A",...(second?["B","Δ B − A","Classifier performance"]:[])])tr.append(node("th",label));
   head.append(tr);table.append(head);const body=node("tbody");
-  for(const [key,label,percent] of RESULT_METRICS){
+  for(const [key,label,percent] of FINAL_METRICS){
     const a=testMetrics(first)?.[key],b=testMetrics(second)?.[key],row=node("tr");
     row.append(node("th",label),node("td",score(a,percent)));
     if(second){
@@ -1019,7 +1070,8 @@ function renderAnalysis(){
     if(analysisTab==="overview"||analysisTab==="rounds"){
       if(analysisTab==="overview")root.append(node("p","Validation curves are measured per round; test metrics are final-only. This single-run comparison is descriptive, not a statistical significance test."));
       root.append(b?roundChart(b,a,true,true):roundChart(a,null));
-    }else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
+    }else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
+    else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
     else if(analysisTab==="matrices")root.append(matrixAnalysis(a,b,compatible));
     else root.append(perClassAnalysis(a,b,compatible,true));
   }

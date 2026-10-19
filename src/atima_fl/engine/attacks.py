@@ -108,3 +108,24 @@ def statistical_knowledge(context):
         if knowledge == "oracle"
         else list(context.config.malicious_clients)
     )
+
+
+def reported_samples(config, client, round_id, original):
+    """A separate, audited attack surface: client-claimed FedAvg sample mass.
+
+    This is calculated independently in both Flower protocol phases. Actual
+    shard size remains in metadata["original_samples"] for offline auditing.
+    """
+    if type(original) is not int or original <= 0:
+        raise ValueError("Actual sample count must be a positive integer")
+    context = AttackContext(config, client, round_id)
+    hook = component(context).hooks.get("report_count") if context.active else None
+    claimed = hook(original, context) if hook is not None else original
+    if type(claimed) is not int or not 0 < claimed <= 2**31 - 1:
+        raise ValueError("Invalid claimed sample count")
+    return claimed, {
+        "reported_samples": claimed,
+        "count_spoofed": claimed != original,
+        "actual_sample_mass": original,
+        "sample_mass_claim_scope": "untrusted_client_report",
+    }

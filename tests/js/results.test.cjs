@@ -35,6 +35,7 @@ const document={body,documentElement:{dataset:{}},getElementById:id=>ids.get(id)
 const context=vm.createContext({document,localStorage:{getItem(){return null;}},console});
 vm.runInContext(fs.readFileSync(path.join(base,"i18n.js"),"utf8"),context);
 const source=fs.readFileSync(path.join(base,"app.js"),"utf8").split("\nsetTheme(theme);\n")[0];vm.runInContext(source,context);
+vm.runInContext(fs.readFileSync(path.join(base,"fl-diagnostics.js"),"utf8"),context);
 const evaluate=script=>vm.runInContext(script,context),plain=value=>JSON.parse(JSON.stringify(value));
 function run(id,attack="none"){
   return {id,status:"complete",round:5,classes:["benign","dos"],config:{dataset:"edge_iiot",model:"mlp",attack,seed:1,rounds:5,dataset_params:{task:"prepared_5"}},dataset_identity:{task:"prepared_5",hashes:Object.fromEntries(["train","validation","test","feature_schema.json","label_mapping.json","preprocessor.json"].map(key=>[key,key+"-same"]))},metrics:{test:{accuracy:.6,macro_f1:.55,weighted_f1:.57,balanced_accuracy:.58,mcc:.2,loss:.9,samples:5,per_class:{benign:{precision:.7,recall:2/3,"f1-score":.6,support:3},dos:{precision:.5,recall:.5,"f1-score":.5,support:2}},confusion_matrix:[[2,1],[1,1]]}},history:[{round:1,macro_f1:.7,loss:.8},{round:3,macro_f1:.6,loss:.9},{round:4,loss:1},{round:5,macro_f1:.8,loss:.7}]};
@@ -81,5 +82,24 @@ check("only-compatible filter and saved view controls survive local refresh",()=
   ids.get("only-compatible").checked=true;evaluate("refreshManualFromChoices()");assert.equal(evaluate("chosenComparison.second"),context.b.id);assert.equal(ids.get("compare-experiment-b").options.length,2);
   const tab=ids.get("tab-classes");tab.dispatch("click");let choice=ids.get("analysis-panel").querySelector("select");choice.value="precision";choice.dispatch("change");evaluate("renderAnalysis()");assert.equal(ids.get("analysis-panel").querySelector("select").value,"precision");
   evaluate("matrixNormalized=true");assert.equal(evaluate("matrixAnalysis(a,b,true)").querySelector("input").checked,true);
+});
+check("federated telemetry has real evidence, paired zoom and legacy no-data behavior",()=>{
+  context.a.metrics.federated={rounds:[
+    {round:1,reported_malicious_mass_fraction:0,actual_malicious_mass_fraction:0,global_step_l2:1.2,mean_client_update_l2:1.5,attack_applied_clients:0,count_mismatch_clients:0},
+    {round:2,reported_malicious_mass_fraction:0,actual_malicious_mass_fraction:0,global_step_l2:.9,mean_client_update_l2:1.1,attack_applied_clients:0,count_mismatch_clients:0}
+  ]};
+  context.b.metrics.federated={rounds:[
+    {round:1,reported_malicious_mass_fraction:0,actual_malicious_mass_fraction:0,global_step_l2:1.2,mean_client_update_l2:1.5,attack_applied_clients:0,count_mismatch_clients:0},
+    {round:2,reported_malicious_mass_fraction:.55,actual_malicious_mass_fraction:.2,global_step_l2:2.0,mean_client_update_l2:2.5,attack_applied_clients:1,count_mismatch_clients:1}
+  ]};
+  const view=evaluate("federatedAnalysis(a,b)");
+  assert.equal(view.querySelectorAll("svg").length,1);
+  assert.equal(view.querySelectorAll("circle").length,4);
+  assert.ok(view.textContent.includes("55.00%"));
+  const zoom=view.querySelectorAll("button").find(btn=>btn.textContent==="Zoom +");
+  zoom.dispatch("click");assert.equal(view.querySelectorAll("circle").length,2);
+  const legacy=structuredClone(context.a);delete legacy.metrics.federated;context.legacy=legacy;
+  const empty=evaluate("federatedAnalysis(legacy,null)");
+  assert.ok(empty.textContent.includes("Historical experiments"));
 });
 console.log(checks+" functional Results checks passed.");
