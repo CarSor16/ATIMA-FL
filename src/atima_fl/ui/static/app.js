@@ -633,7 +633,8 @@ function deltaScore(value, reference, percent=true){
 const DERIVED_METRICS = [
   ["macro_precision","Macro precision",true],
   ["worst_supported_recall","Worst class recall",true],
-  ["intrusion_miss_rate","Intrusion miss rate",true]
+  ["intrusion_miss_rate","Macro intrusion FN rate",true],
+  ["benign_false_alarm_rate","Benign false-alarm rate",true]
 ];
 const FINAL_METRICS = [...RESULT_METRICS,...DERIVED_METRICS];
 function testMetrics(value){
@@ -643,12 +644,15 @@ function testMetrics(value){
   const supported=entries.filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
   const precisions=entries.filter(([,v])=>numeric(v?.precision));
   const intrusions=supported.filter(([name])=>!/^(benign|normal)$/i.test(name));
-  const hasBenign=entries.some(([name])=>/^(benign|normal)$/i.test(name));
+  const benign=entries.find(([name])=>/^(benign|normal)$/i.test(name));
+  const hasBenign=Boolean(benign);
   return {...test,
     macro_precision:precisions.length?precisions.reduce((s,[,v])=>s+v.precision,0)/precisions.length:null,
     worst_supported_recall:supported.length?Math.min(...supported.map(([,v])=>v.recall)):null,
     intrusion_miss_rate:hasBenign&&intrusions.length
-      ?intrusions.reduce((s,[,v])=>s+(1-v.recall),0)/intrusions.length:null
+      ?intrusions.reduce((s,[,v])=>s+(1-v.recall),0)/intrusions.length:null,
+    benign_false_alarm_rate:benign&&numeric(benign[1]?.support)&&benign[1].support>0&&numeric(benign[1]?.recall)
+      ?1-benign[1].recall:null
   };
 }
 function classNames(value){
@@ -910,7 +914,7 @@ function verifiedPair(run,byId){
 function metricDirection(key,first,second){
   if(!numeric(first)||!numeric(second))return "unavailable";
   const difference=second-first;if(Math.abs(difference)<1e-12)return "unchanged";
-  return (["loss","intrusion_miss_rate"].includes(key)?difference<0:difference>0)?"improved":"degraded";
+  return (["loss","intrusion_miss_rate","benign_false_alarm_rate"].includes(key)?difference<0:difference>0)?"improved":"degraded";
 }
 function selectedRun(root,run,tag){
   root.replaceChildren();if(!run){root.append(node("p","No experiment selected."));return;}
