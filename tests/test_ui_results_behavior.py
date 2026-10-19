@@ -13,4 +13,4 @@ def test_results_interactions_and_scientific_gates():
     script = Path(__file__).parent / "js" / "results.test.cjs"
     result = subprocess.run([node, str(script)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "12 functional Results checks passed." in result.stdout
+    assert "13 functional Results checks passed." in result.stdout
