@@ -629,7 +629,28 @@ function deltaScore(value, reference, percent=true){
   const difference=(value-reference)*(percent?100:1);
   return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
 }
-function testMetrics(value){return value?.metrics?.test || null;}
+// Additional scores are calculated from recorded per-class final test metrics.
+const DERIVED_METRICS = [
+  ["macro_precision","Macro precision",true],
+  ["worst_supported_recall","Worst class recall",true],
+  ["intrusion_miss_rate","Intrusion miss rate",true]
+];
+const FINAL_METRICS = [...RESULT_METRICS,...DERIVED_METRICS];
+function testMetrics(value){
+  const test=value?.metrics?.test||null;
+  if(!test)return null;
+  const entries=Object.entries(test.per_class||{});
+  const supported=entries.filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
+  const precisions=entries.filter(([,v])=>numeric(v?.precision));
+  const intrusions=supported.filter(([name])=>!/^(benign|normal)$/i.test(name));
+  const hasBenign=entries.some(([name])=>/^(benign|normal)$/i.test(name));
+  return {...test,
+    macro_precision:precisions.length?precisions.reduce((s,[,v])=>s+v.precision,0)/precisions.length:null,
+    worst_supported_recall:supported.length?Math.min(...supported.map(([,v])=>v.recall)):null,
+    intrusion_miss_rate:hasBenign&&intrusions.length
+      ?intrusions.reduce((s,[,v])=>s+(1-v.recall),0)/intrusions.length:null
+  };
+}
 function classNames(value){
   const test=testMetrics(value);
   const listed=Array.isArray(value?.classes)?value.classes:[];
@@ -651,7 +672,7 @@ function dataTable(headers, rows, className=""){
 }
 function metricCards(metric){
   const grid=node("div",undefined,"result-kpis");
-  for(const [key,label,percent] of RESULT_METRICS){
+  for(const [key,label,percent] of FINAL_METRICS){
     if(!numeric(metric[key]))continue;
     const item=node("div",undefined,"result-kpi");
     item.append(node("span",label),node("strong",score(metric[key],percent)));grid.append(item);
@@ -865,14 +886,16 @@ function verifiedPair(run,byId){
 function metricDirection(key,first,second){
   if(!numeric(first)||!numeric(second))return "unavailable";
   const difference=second-first;if(Math.abs(difference)<1e-12)return "unchanged";
-  return (key==="loss"?difference<0:difference>0)?"improved":"degraded";
+  return (["loss","intrusion_miss_rate"].includes(key)?difference<0:difference>0)?"improved":"degraded";
 }
 function selectedRun(root,run,tag){
   root.replaceChildren();if(!run){root.append(node("p","No experiment selected."));return;}
   root.append(node("strong",run.id));
   const metadata=node("dl",undefined,"run-metadata");
   const fields=[["Dataset",run.config?.dataset],["Task",run.dataset_identity?.task],
-    ["Classes",classNames(run).length||null],["Model",run.config?.model],["Attack",run.config?.attack],
+    ["Classes",classNames(run).length||null],["Model",run.config?.model],
+     ["Partition",run.config?.partition],["Aggregator",run.config?.aggregation],
+     ["Clients",run.config?.clients],["Attack",run.config?.attack],
     ["Status",run.status],["Rounds",run.round],["Accuracy",score(testMetrics(run)?.accuracy)],
     ["Macro-F1",score(testMetrics(run)?.macro_f1)]];
   for(const [title,value] of fields){metadata.append(node("dt",title),node("dd",value===null||value===undefined?"—":String(value)));}
@@ -884,7 +907,7 @@ function performanceOverview(first,second,compatible){
   const table=node("table",undefined,"result-table performance-table"),head=node("thead"),tr=node("tr");
   for(const label of ["Metric","A",...(second?["B","Δ B − A","Classifier performance"]:[])])tr.append(node("th",label));
   head.append(tr);table.append(head);const body=node("tbody");
-  for(const [key,label,percent] of RESULT_METRICS){
+  for(const [key,label,percent] of FINAL_METRICS){
     const a=testMetrics(first)?.[key],b=testMetrics(second)?.[key],row=node("tr");
     row.append(node("th",label),node("td",score(a,percent)));
     if(second){
