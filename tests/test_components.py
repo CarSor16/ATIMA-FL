@@ -304,3 +304,24 @@ def test_nested_array_plugin_parameters_are_validated_without_mutating_inputs():
         validate_parameters(plugin, {"unknown": 1})
     with pytest.raises(ValueError, match="parameters must be an object"):
         validate_parameters(plugin, None)
+
+
+def test_hierarchical_component_parameters_resolved_once_per_selection(monkeypatch):
+    """Group-level validator reuses validated parameters without changing routing."""
+    original = Registry.parameters
+    calls = []
+
+    def tracked(registry, kind, identifier, values):
+        calls.append((kind, identifier))
+        return original(registry, kind, identifier, values)
+
+    monkeypatch.setattr(Registry, "parameters", tracked)
+    config = ExperimentConfig(
+        clients=6,
+        servers=2,
+        client_servers=(0, 0, 0, 1, 1, 1),
+        aggregation="krum",
+    ).validate()
+    assert config.server_assignment() == (0, 0, 0, 1, 1, 1)
+    assert calls.count(("aggregator", "krum")) == 1
+    assert len(calls) == len(config.selections())
