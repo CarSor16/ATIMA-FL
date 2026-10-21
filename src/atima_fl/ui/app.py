@@ -47,6 +47,29 @@ def deployment_defaults(workspace):
     return values
 
 
+_DATASET_HASH_KEYS = (
+    "train", "validation", "test", "feature_schema.json",
+    "label_mapping.json", "preprocessor.json",
+)
+
+
+def _result_dataset_identity(manifest):
+    audit = manifest.get("dataset_audit", {})
+    hashes = audit.get("hashes", {})
+    return {
+        "task": audit.get("task"),
+        "hashes": {key: hashes.get(key) for key in _DATASET_HASH_KEYS},
+    }
+
+
+def _result_runtime_identity(manifest):
+    source = manifest.get("source_identity")
+    runtime = manifest.get("runtime")
+    if isinstance(source, dict) and source and isinstance(runtime, dict) and runtime:
+        return json.dumps([source, runtime], sort_keys=True)
+    return None
+
+
 def results(workspace):
     values = []
     root = workspace / "results"
@@ -64,26 +87,10 @@ def results(workspace):
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
-            "dataset_identity": {
-                "task": manifest.get("dataset_audit", {}).get("task"),
-                "hashes": {
-                    key: manifest.get("dataset_audit", {}).get("hashes", {}).get(key)
-                    for key in (
-                        "train", "validation", "test", "feature_schema.json",
-                        "label_mapping.json", "preprocessor.json",
-                    )
-                },
-            },
+            "dataset_identity": _result_dataset_identity(manifest),
             "history": read_local_history(path.parent / "validation_history.json"),
             "baseline_id": None,
-            "_identity": json.dumps(
-                [manifest["source_identity"], manifest["runtime"]], sort_keys=True
-            ) if (
-                isinstance(manifest.get("source_identity"), dict)
-                and manifest["source_identity"]
-                and isinstance(manifest.get("runtime"), dict)
-                and manifest["runtime"]
-            ) else None,
+            "_identity": _result_runtime_identity(manifest),
         })
     # Only make comparisons between explicitly paired, complete runs from
     # identical software/runtime identities and with equal valid round caps.
