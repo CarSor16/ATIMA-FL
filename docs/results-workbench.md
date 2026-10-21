@@ -26,9 +26,17 @@ Visual tokens follow the inspected [ATIMA-FL Figma Designer concept](https://www
 
 The scientific engine, attack/defense plugins, data preparation, SSH credentials/protocol, APIs and TOML schema are unchanged. Dataset adapters and multi-seed scientific studies remain separate work. The imported legacy runs can legitimately lack audited task metadata; this page blocks their deltas rather than inventing an audit.
 
+## Frontend module boundary
+
+The loopback GUI loads `i18n.js`, `app.js` (shared Designer and navigation),
+`results.js` (Results analysis and comparisons), and `fl-diagnostics.js`
+(federated round diagnostics), in that order. All four are local, dependency-free
+classic scripts. The Results module uses the shared DOM and translation helpers;
+the engine, TOML schema and serialized experiment evidence remain unchanged.
+
 ## Verification
 
-Run `python -m pytest -q`, `python -m ruff check src tests`, `node --check src/atima_fl/ui/static/app.js`, `node --check src/atima_fl/ui/static/i18n.js` and `node tests/js/results.test.cjs`. The JavaScript tests use small explicit test fixtures only; they never populate a production workspace. CI runs UI/behavior checks on Windows, Ubuntu and macOS.
+Run `python -m pytest -q`, `python -m ruff check src tests`, `node --check src/atima_fl/ui/static/app.js`, `node --check src/atima_fl/ui/static/i18n.js`, `node --check src/atima_fl/ui/static/results.js` and `node tests/js/results.test.cjs`. The JavaScript tests use small explicit test fixtures only; they never populate a production workspace. CI runs UI/behavior checks on Windows, Ubuntu and macOS.
 
 ## Windows update and start
 
