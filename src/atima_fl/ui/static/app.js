@@ -629,11 +629,17 @@ function deltaScore(value, reference, percent=true){
   const difference=(value-reference)*(percent?100:1);
   return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
 }
-// Additional scores are calculated from recorded per-class final test metrics.
+function supportedClassEntries(test){
+  return Object.entries(test.per_class||{}).filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
+}
+function average(values){
+  return values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : null;
+}
+// Additional scores are derived from recorded test evidence, never fabricated.
 const DERIVED_METRICS = [
   ["macro_precision","Macro precision",true],
   ["worst_supported_recall","Worst class recall",true],
-  ["intrusion_miss_rate","Macro intrusion FN rate",true],
+  ["intrusion_miss_rate","Macro intrusion classification error",true],
   ["benign_false_alarm_rate","Benign false-alarm rate",true]
 ];
 const FINAL_METRICS = [...RESULT_METRICS,...DERIVED_METRICS];
@@ -641,16 +647,15 @@ function testMetrics(value){
   const test=value?.metrics?.test||null;
   if(!test)return null;
   const entries=Object.entries(test.per_class||{});
-  const supported=entries.filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
-  const precisions=entries.filter(([,v])=>numeric(v?.precision));
+  const supported=supportedClassEntries(test);
   const intrusions=supported.filter(([name])=>!/^(benign|normal)$/i.test(name));
   const benign=entries.find(([name])=>/^(benign|normal)$/i.test(name));
-  const hasBenign=Boolean(benign);
   return {...test,
-    macro_precision:precisions.length?precisions.reduce((s,[,v])=>s+v.precision,0)/precisions.length:null,
+    macro_precision:average(entries.filter(([,v])=>numeric(v?.precision)).map(([,v])=>v.precision)),
     worst_supported_recall:supported.length?Math.min(...supported.map(([,v])=>v.recall)):null,
-    intrusion_miss_rate:hasBenign&&intrusions.length
-      ?intrusions.reduce((s,[,v])=>s+(1-v.recall),0)/intrusions.length:null,
+    // Legacy key: 1-recall includes confusion between different intrusion families.
+    intrusion_miss_rate:benign&&intrusions.length
+      ?average(intrusions.map(([,v])=>1-v.recall)):null,
     benign_false_alarm_rate:benign&&numeric(benign[1]?.support)&&benign[1].support>0&&numeric(benign[1]?.recall)
       ?1-benign[1].recall:null
   };
