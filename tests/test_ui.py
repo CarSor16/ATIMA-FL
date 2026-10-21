@@ -148,7 +148,7 @@ def test_gui_theme_toggle_brand_and_assets(gui):
     _, url = gui
     index = urlopen(url + "/").read().decode("utf-8")
     css = urlopen(url + "/style.css").read().decode("utf-8")
-    app = urlopen(url + "/app.js").read().decode("utf-8")
+    app = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     translation = urlopen(url + "/i18n.js").read().decode("utf-8")
 
     assert "Adversarial Testing Infrastructure for Model Aggregation — Federated Learning" in index
@@ -171,7 +171,7 @@ def test_gui_theme_toggle_brand_and_assets(gui):
 
 def test_defense_pipeline_drag_and_keyboard_preserve_stage_export_order(gui):
     _, url = gui
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     page = urlopen(url + "/").read().decode("utf-8")
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     styles = urlopen(url + "/style.css").read().decode("utf-8")
@@ -322,7 +322,7 @@ def test_gui_exports_symbolic_cluster_dataset_root_without_local_data(gui):
 def test_readable_label_selector_and_grouped_component_catalog(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     css = urlopen(url + "/style.css").read().decode("utf-8")
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
 
@@ -348,9 +348,10 @@ def test_readable_label_selector_and_grouped_component_catalog(gui):
 def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     css = urlopen(url + "/style.css").read().decode("utf-8")
     assert 'id="result-comparisons"' in html
+    assert '<script defer src="/results.js"></script>' in html
     assert "function renderResults(values)" in script
     assert "function roundChart(value,baseline,manual=false,alignedClasses=true)" in script
     assert "function matrixAnalysis(first,second,compatible)" in script
@@ -368,7 +369,7 @@ def test_result_dashboard_contains_safe_client_rendering_and_round_controls(gui)
 def test_manual_results_compare_and_auto_attack_model_names(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     css = urlopen(url + "/style.css").read().decode("utf-8")
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     for element in ["manual-comparison-output", "compare-experiment-a",
@@ -396,7 +397,7 @@ def test_manual_results_compare_and_auto_attack_model_names(gui):
 
 def test_manual_comparison_fails_closed_for_mismatched_dataset_metadata(gui):
     _, url = gui
-    javascript = urlopen(url + "/app.js").read().decode("utf-8")
+    javascript = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     index = urlopen(url + "/").read().decode("utf-8")
     assert "function manualWarnings(first,second)" in javascript
     assert '"train","validation","test","feature_schema.json"' in javascript
@@ -415,7 +416,7 @@ def test_manual_comparison_fails_closed_for_mismatched_dataset_metadata(gui):
 def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
     _, url = gui
     page = urlopen(url + "/").read().decode("utf-8")
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     styles = urlopen(url + "/style.css").read().decode("utf-8")
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     with urlopen(url + "/brand-mark.svg") as response:
@@ -464,7 +465,7 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
     css = urlopen(url + "/style.css").read().decode("utf-8")
-    script = urlopen(url + "/app.js").read().decode("utf-8")
+    script = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     title = "Create a federated learning security experiment"
     assert f"<h2>{title}</h2>" in html
