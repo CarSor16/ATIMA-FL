@@ -35,6 +35,7 @@ const document={body,documentElement:{dataset:{}},getElementById:id=>ids.get(id)
 const context=vm.createContext({document,localStorage:{getItem(){return null;}},console});
 vm.runInContext(fs.readFileSync(path.join(base,"i18n.js"),"utf8"),context);
 const source=fs.readFileSync(path.join(base,"app.js"),"utf8").split("\nsetTheme(theme);\n")[0];vm.runInContext(source,context);
+vm.runInContext(fs.readFileSync(path.join(base,"results.js"),"utf8"),context);
 vm.runInContext(fs.readFileSync(path.join(base,"fl-diagnostics.js"),"utf8"),context);
 const evaluate=script=>vm.runInContext(script,context),plain=value=>JSON.parse(JSON.stringify(value));
 function run(id,attack="none"){
