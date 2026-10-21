@@ -41,6 +41,16 @@ def aggregate(updates, counts, config):
     }
 
 
+def _run_group_aggregation(tasks, pool):
+    """Run the same aggregation tasks through serial, executor, or Slurm pools."""
+    if pool is not None and hasattr(pool, "aggregate_many"):
+        return pool.aggregate_many(tasks)
+    if pool is None:
+        return [aggregate(*task) for task in tasks]
+    futures = [pool.submit(aggregate, *task) for task in tasks]
+    return [future.result() for future in futures]
+
+
 def aggregate_topology(updates, counts, config, pool=None):
     """Client updates -> assigned servers -> sample-weighted coordinator.
 
@@ -60,13 +70,7 @@ def aggregate_topology(updates, counts, config, pool=None):
     tasks = [
         ([updates[cid] for cid in ids], [counts[cid] for cid in ids], config) for ids in groups
     ]
-    if pool is not None and hasattr(pool, "aggregate_many"):
-        results = pool.aggregate_many(tasks)
-    elif pool is None:
-        results = [aggregate(*task) for task in tasks]
-    else:
-        futures = [pool.submit(aggregate, *task) for task in tasks]
-        results = [future.result() for future in futures]
+    results = _run_group_aggregation(tasks, pool)
     masses = [sum(counts[cid] for cid in ids) for ids in groups]
     matrix = np.stack([flatten(delta) for delta, _ in results])
     combined = np.average(matrix, axis=0, weights=masses)
