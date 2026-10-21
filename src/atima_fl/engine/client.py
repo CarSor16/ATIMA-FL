@@ -8,6 +8,24 @@ from atima_fl.engine.models import attackable_indices, train
 from atima_fl.engine.storage import raw_path, write_raw, read_raw
 
 
+
+def _training_data_altered(original, batch):
+    """Preserve the existing base-sample comparison semantics."""
+    return (
+        len(batch.y) != len(original.y)
+        or not np.array_equal(batch.x[: len(original.y)], original.x)
+        or not np.array_equal(batch.y[: len(original.y)], original.y)
+    )
+
+
+def _merge_attack_metadata(metadata, attack_notes):
+    """Retain data-stage attack evidence when update poisoning does not apply."""
+    prepared_applied = metadata.get("attack_applied", False)
+    metadata.update(attack_notes)
+    metadata["attack_applied"] = prepared_applied or attack_notes.get("attack_applied", False)
+
+
+
 def train_local(config, run, client, round_id, before, data, device):
     original = data.shard(client)
     context = AttackContext(config, client, round_id)
@@ -34,11 +52,7 @@ def train_local(config, run, client, round_id, before, data, device):
         "local_reference_scope": "local training conditional on incoming global; attacked runs are not paired-clean counterfactuals",
         **batch.notes,
     }
-    metadata["local_training_data_altered"] = (
-        len(batch.y) != len(original.y)
-        or not np.array_equal(batch.x[: len(original.y)], original.x)
-        or not np.array_equal(batch.y[: len(original.y)], original.y)
-    )
+    metadata["local_training_data_altered"] = _training_data_altered(original, batch)
     # Base-sample trained labels are stored separately from appended trigger copies.
     write_raw(
         raw_path(run, round_id, client),
@@ -68,9 +82,7 @@ def submit_local(config, run, client, round_id, before, counts):
         cid: read_raw(raw_path(run, round_id, cid))[0] for cid in knowledge_ids(context)
     }
     submitted, attack_notes = poison_update(context)
-    prepared_applied = metadata.get("attack_applied", False)
-    metadata.update(attack_notes)
-    metadata["attack_applied"] = prepared_applied or attack_notes.get("attack_applied", False)
+    _merge_attack_metadata(metadata, attack_notes)
     metadata["submitted_differs_from_local"] = any(
         not np.array_equal(a, b) for a, b in zip(submitted, local)
     )
