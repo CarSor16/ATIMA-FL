@@ -54,10 +54,9 @@ def aggregate_topology(updates, counts, config, pool=None):
     if config.servers == 1:
         return aggregate(updates, counts, config)
     assignment = config.server_assignment()
-    groups = [
-        [cid for cid, sid in enumerate(assignment) if sid == server]
-        for server in range(config.servers)
-    ]
+    groups = [[] for _ in range(config.servers)]
+    for cid, server in enumerate(assignment):
+        groups[server].append(cid)
     tasks = [
         ([updates[cid] for cid in ids], [counts[cid] for cid in ids], config) for ids in groups
     ]
