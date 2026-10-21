@@ -22,6 +22,17 @@ FOLDERS = {
     "metrics": "metrics",
 }
 
+_REQUIRED_HOOKS = {
+    "model": "build",
+    "dataset": "open",
+    "partition": "location",
+    "aggregator": "aggregate",
+    "defense": "apply",
+    "optimizer": "build",
+    "loss": "build",
+    "metrics": "evaluate",
+}
+
 _FILE_DIGESTS = {}
 _REGISTRY_LOCK = RLock()
 
@@ -63,6 +74,7 @@ def validate_parameters(component, values):
         )
         for name, spec in component.parameters.items()
     }
+
 
 class Registry:
     def __init__(self, extra_directory=None, fresh=False):
@@ -109,16 +121,7 @@ class Registry:
                         raise ValueError(f"{path.name}: component kind/contract mismatch")
                     if not component.id or component.id in self.components[kind]:
                         raise ValueError(f"Duplicate or empty {kind} ID: {component.id}")
-                    required = {
-                        "model": "build",
-                        "dataset": "open",
-                        "partition": "location",
-                        "aggregator": "aggregate",
-                        "defense": "apply",
-                        "optimizer": "build",
-                        "loss": "build",
-                        "metrics": "evaluate",
-                    }.get(kind)
+                    required = _REQUIRED_HOOKS.get(kind)
                     if required and required not in component.hooks:
                         raise ValueError(f"{component.id}: missing {required} hook")
                     if any(not callable(hook) for hook in component.hooks.values()):
