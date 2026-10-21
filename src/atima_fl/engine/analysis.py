@@ -75,13 +75,10 @@ def compare(clean, attacked, destination):
             cp, ap = cw, aw
     # AUD: trapezoidal integral of positive clean-attacked macro-F1 gaps vs round.
     gaps = np.maximum(0, [-v["delta_macro_f1"] for v in rows])
-    summary = {
-        "pair_id": cm["pair_id"],
-        "attack": am["config"]["attack"],
-        "rounds": rows,
-        "aud_positive_macro_f1_gap": float(np.trapezoid(gaps, x=[v["round"] for v in rows])),
-        "aud_definition": "trapezoidal integral of max(0,F1_clean-F1_attack) against round; single-round area=0",
-    }
+    aud = float(np.trapezoid(gaps, x=[v["round"] for v in rows]))
+    aud_definition = (
+        "trapezoidal integral of max(0,F1_clean-F1_attack) against round; single-round area=0"
+    )
     cf = json.loads((clean / "final_metrics.json").read_text())
     af = json.loads((attacked / "final_metrics.json").read_text())
     condition = dict(am["config"])
@@ -100,8 +97,8 @@ def compare(clean, attacked, destination):
             "delta_test_macro_f1": af["test"]["macro_f1"] - cf["test"]["macro_f1"],
             "clean_test": cf["test"],
             "attacked_test": af["test"],
-            "aud_positive_macro_f1_gap": summary["aud_positive_macro_f1_gap"],
-            "aud_definition": summary["aud_definition"],
+            "aud_positive_macro_f1_gap": aud,
+            "aud_definition": aud_definition,
             "pair_id": cm["pair_id"],
             "attack": am["config"]["attack"],
             "clean_attack_metrics": cf.get("attack_metrics"),
