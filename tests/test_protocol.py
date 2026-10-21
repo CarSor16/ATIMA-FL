@@ -332,3 +332,39 @@ def test_pre_attack_pair_divergence_is_rejected(dataset, tmp_path):
         _run_protocol(BadGrid(), attacked, "cpu")
     manifest = json.loads((tmp_path / "runs" / "bad_pair" / "manifest.json").read_text())
     assert manifest["status"] == "failed" and manifest["last_valid_round"] == 0
+
+
+def test_flower_reply_validation_keeps_identity_round_and_sample_guards():
+    from types import SimpleNamespace
+    from atima_fl.adapters.flower.server import _validated_reply
+
+    config = ExperimentConfig(clients=2).validate()
+    before = [np.array([1.0, 2.0], dtype=np.float32)]
+    metadata = {
+        "client": 0, "round": 3, "aggregation_server": 0, "device": "cpu"
+    }
+
+    def reply(meta, count=5):
+        return SimpleNamespace(
+            has_error=lambda: False,
+            content={
+                "metrics": {"client-id": 0, "num-examples": count},
+                "arrays": SimpleNamespace(to_numpy_ndarrays=lambda: [before[0].copy()]),
+                "audit": {"metadata_json": json.dumps(meta)},
+            },
+        )
+
+    cid, record = _validated_reply(
+        reply(metadata), config, 3, before, "submit", {0: 5}, "cpu"
+    )
+    assert cid == 0
+    assert record["count"] == 5
+    np.testing.assert_array_equal(record["values"][0], before[0])
+    with pytest.raises(ValueError, match="identity/round"):
+        _validated_reply(reply(dict(metadata, round_=4) | {"round": 4}), config, 3,
+                         before, "train", {}, "cpu")
+    with pytest.raises(ValueError, match="Sample count"):
+        _validated_reply(reply(metadata, count=6), config, 3, before, "submit", {0: 5}, "cpu")
+    with pytest.raises(ValueError, match="device"):
+        _validated_reply(reply(dict(metadata, device="cuda")), config, 3, before,
+                         "train", {}, "cpu")

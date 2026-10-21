@@ -3,8 +3,8 @@ import json
 import numpy as np
 import pytest
 from atima_fl.core.configuration import ExperimentConfig
-from atima_fl.core.contracts import AttackContext
-from atima_fl.core.registry import Registry
+from atima_fl.core.contracts import AttackContext, Component
+from atima_fl.core.registry import Registry, validate_parameters
 from atima_fl.engine.attacks import poison_update, prepare_training
 from atima_fl.engine.aggregation import aggregate
 
@@ -271,3 +271,148 @@ def test_seed_statistics_are_independent_units(tmp_path):
         summarize([files[0]] * 3, tmp_path / "bad")
     with pytest.raises(ValueError, match="three"):
         summarize(files[:2], tmp_path / "bad")
+
+
+def test_nested_array_plugin_parameters_are_validated_without_mutating_inputs():
+    plugin = Component(
+        "nested_fixture", "attack", "Nested", "",
+        parameters={
+            "groups": {
+                "type": "array",
+                "default": [[1, 2], [3]],
+                "items": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 0, "maximum": 9},
+                },
+            },
+        },
+    )
+    values = {"groups": [[1, 2], [3]]}
+    result = validate_parameters(plugin, values)
+    assert result == values
+    assert result["groups"] is not values["groups"]
+    result["groups"][0][0] = 9
+    assert values["groups"][0][0] == 1
+    assert validate_parameters(plugin, {})["groups"] == [[1, 2], [3]]
+    with pytest.raises(ValueError, match="nested_fixture.groups: minimum 0"):
+        validate_parameters(plugin, {"groups": [[-1]]})
+    with pytest.raises(ValueError, match="nested_fixture.groups: expected integer"):
+        validate_parameters(plugin, {"groups": [[True]]})
+    with pytest.raises(ValueError, match="nested_fixture.groups: expected array"):
+        validate_parameters(plugin, {"groups": [1]})
+    with pytest.raises(ValueError, match="unknown parameters"):
+        validate_parameters(plugin, {"unknown": 1})
+    with pytest.raises(ValueError, match="parameters must be an object"):
+        validate_parameters(plugin, None)
+
+
+def test_hierarchical_component_parameters_resolved_once_per_selection(monkeypatch):
+    """Group-level validator reuses validated parameters without changing routing."""
+    original = Registry.parameters
+    calls = []
+
+    def tracked(registry, kind, identifier, values):
+        calls.append((kind, identifier))
+        return original(registry, kind, identifier, values)
+
+    monkeypatch.setattr(Registry, "parameters", tracked)
+    config = ExperimentConfig(
+        clients=6,
+        servers=2,
+        client_servers=(0, 0, 0, 1, 1, 1),
+        aggregation="fedavg",
+    ).validate()
+    assert config.server_assignment() == (0, 0, 0, 1, 1, 1)
+    assert calls.count(("aggregator", "fedavg")) == 1
+    assert len(calls) == len(config.selections())
+
+
+def test_registry_plugin_reload_preserves_source_fingerprints(tmp_path):
+    folder = tmp_path / "attacks"
+    folder.mkdir()
+    source = folder / "custom.py"
+    source.write_text(
+        "from atima_fl.core.contracts import Component\n"
+        "PLUGIN=Component('custom','attack','First','')\n",
+        encoding="utf-8",
+    )
+    first = Registry(tmp_path)
+    second = Registry(tmp_path)
+    assert first.sources["attack/custom"] == second.sources["attack/custom"]
+    assert second.get("attack", "custom").title == "First"
+    source.write_text(
+        "from atima_fl.core.contracts import Component\n"
+        "PLUGIN=Component('custom','attack','Second version','')\n",
+        encoding="utf-8",
+    )
+    refreshed = Registry(tmp_path, fresh=True)
+    assert refreshed.get("attack", "custom").title == "Second version"
+    assert refreshed.sources["attack/custom"] != first.sources["attack/custom"]
+
+
+def test_client_audit_helpers_preserve_stage_semantics():
+    from types import SimpleNamespace
+    from atima_fl.engine.client import _training_data_altered, _merge_attack_metadata
+
+    original = SimpleNamespace(
+        x=np.ones((3, 2), dtype=np.float32),
+        y=np.array([0, 1, 0], dtype=np.int64),
+    )
+    unchanged = SimpleNamespace(x=original.x.copy(), y=original.y.copy())
+    assert not _training_data_altered(original, unchanged)
+
+    relabeled = SimpleNamespace(x=original.x.copy(), y=np.array([0, 0, 0]))
+    assert _training_data_altered(original, relabeled)
+    original_input = original.x.copy()
+    modified = SimpleNamespace(x=original.x.copy(), y=original.y.copy())
+    modified.x[1, 0] = 2
+    assert _training_data_altered(original, modified)
+    np.testing.assert_array_equal(original.x, original_input)
+
+    metadata = {"attack_applied": True, "withheld_samples": 2}
+    _merge_attack_metadata(metadata, {"attack_applied": False, "parameter_scope": "trainable_parameters"})
+    assert metadata["attack_applied"] is True
+    assert metadata["withheld_samples"] == 2
+    assert metadata["parameter_scope"] == "trainable_parameters"
+    inactive = {"attack_applied": False}
+    _merge_attack_metadata(inactive, {"attack_applied": False})
+    assert inactive["attack_applied"] is False
+
+
+def test_portable_plan_archive_preserves_explicit_filenames(tmp_path):
+    import zipfile
+    from atima_fl.engine.plans import _archive_files
+
+    source = tmp_path / "experiment.toml"
+    source.write_text("[experiment]\nname='fixture'\n", encoding="utf-8")
+    destination = tmp_path / "plan.zip"
+    _archive_files(destination, [(source, "experiment.toml")])
+    with zipfile.ZipFile(destination) as archive:
+        assert archive.namelist() == ["experiment.toml"]
+        assert archive.read("experiment.toml") == source.read_bytes()
+    with pytest.raises(FileExistsError):
+        _archive_files(destination, [(source, "experiment.toml")])
+
+
+def test_group_dispatch_accepts_batch_pool_and_executor():
+    from atima_fl.engine.aggregation import _run_group_aggregation
+
+    config = ExperimentConfig().validate()
+    updates = [[np.array([0.0], dtype=np.float32)], [np.array([4.0], dtype=np.float32)]]
+    tasks = [(updates, [3, 1], config)]
+
+    class BatchPool:
+        def aggregate_many(self, planned):
+            assert planned == tasks
+            return [aggregate(*task) for task in planned]
+
+    class Executor:
+        def submit(self, fn, *args):
+            class Completed:
+                def result(self):
+                    return fn(*args)
+            return Completed()
+
+    for pool in (None, BatchPool(), Executor()):
+        outcomes = _run_group_aggregation(tasks, pool)
+        np.testing.assert_array_equal(outcomes[0][0][0], [1.0])

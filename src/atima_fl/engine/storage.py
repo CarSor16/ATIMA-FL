@@ -65,14 +65,14 @@ class RoundStorage:
         for client in clients:
             group = root.create_group(f"clients/client_{client['id']:02d}")
             group.attrs["metadata_json"] = json.dumps(client["metadata"], allow_nan=False)
-            self.weights(
-                group.create_group("local_update"),
-                [a.astype(np.float64) - b for a, b in zip(client["raw"], before)],
-            )
-            self.weights(
-                group.create_group("submitted_update"),
-                [a.astype(np.float64) - b for a, b in zip(client["sent"], before)],
-            )
+            for name, arrays in (
+                ("local_update", client["raw"]),
+                ("submitted_update", client["sent"]),
+            ):
+                self.weights(
+                    group.create_group(name),
+                    [a.astype(np.float64) - b for a, b in zip(arrays, before)],
+                )
             for key, value in client["extra"].items():
                 group.create_dataset(key, data=value, compression="gzip")
         root.attrs["numerically_valid"] = valid

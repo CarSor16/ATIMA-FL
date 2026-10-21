@@ -21,6 +21,7 @@ jobs:
       - name: Validate browser JavaScript syntax
         run: |
           node --check src/atima_fl/ui/static/app.js
+          node --check src/atima_fl/ui/static/results.js
           node --check src/atima_fl/ui/static/fl-diagnostics.js
           node --check src/atima_fl/ui/static/i18n.js
           node --check tests/js/results.test.cjs

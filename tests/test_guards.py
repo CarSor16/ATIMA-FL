@@ -156,3 +156,21 @@ def test_model_optimizer_training_is_seeded(model, optimizer):
     for av, bv in zip(a, b):
         np.testing.assert_array_equal(av, bv)
     assert any(not np.array_equal(av, gv) for av, gv in zip(a, g))
+
+
+def test_round_storage_keeps_local_and_submitted_delta_schema(tmp_path):
+    store = RoundStorage(tmp_path / "deltas.h5", {})
+    before = [np.array([1.0, 3.0], dtype=np.float32)]
+    client = {
+        "id": 0,
+        "raw": [np.array([2.0, 4.0], dtype=np.float32)],
+        "sent": [np.array([0.0, 5.0], dtype=np.float32)],
+        "metadata": {"client": 0, "round": 1},
+        "extra": {},
+    }
+    store.commit(1, before, before, [client], {}, {})
+    group = store.file["rounds/round_0001/clients/client_00"]
+    np.testing.assert_array_equal(group["local_update/layer_000"][...], [1.0, 1.0])
+    np.testing.assert_array_equal(group["submitted_update/layer_000"][...], [-1.0, 2.0])
+    assert group.attrs["metadata_json"] == '{"client": 0, "round": 1}'
+    store.close()

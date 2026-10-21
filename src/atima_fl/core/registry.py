@@ -22,8 +22,44 @@ FOLDERS = {
     "metrics": "metrics",
 }
 
+_REQUIRED_HOOKS = {
+    "model": "build",
+    "dataset": "open",
+    "partition": "location",
+    "aggregator": "aggregate",
+    "defense": "apply",
+    "optimizer": "build",
+    "loss": "build",
+    "metrics": "evaluate",
+}
+
 _FILE_DIGESTS = {}
 _REGISTRY_LOCK = RLock()
+
+
+def _validate_parameter(component_id, name, spec, value):
+    """Validate a scalar or nested array item without constructing a Component."""
+    kind = spec["type"]
+    valid = {
+        "integer": lambda: type(value) is int,
+        "number": lambda: type(value) in (int, float) and math.isfinite(value),
+        "boolean": lambda: type(value) is bool,
+        "string": lambda: type(value) is str,
+        "array": lambda: type(value) is list,
+        "object": lambda: type(value) is dict,
+    }[kind]()
+    if not valid:
+        raise ValueError(f"{component_id}.{name}: expected {kind}")
+    if "choices" in spec and value not in spec["choices"]:
+        raise ValueError(f"{component_id}.{name}: choose from {spec['choices']}")
+    if "minimum" in spec and value < spec["minimum"]:
+        raise ValueError(f"{component_id}.{name}: minimum {spec['minimum']}")
+    if "maximum" in spec and value > spec["maximum"]:
+        raise ValueError(f"{component_id}.{name}: maximum {spec['maximum']}")
+    if kind == "array" and "items" in spec:
+        for item in value:
+            _validate_parameter(component_id, name, spec["items"], item)
+    return value
 
 
 def validate_parameters(component, values):
@@ -32,32 +68,43 @@ def validate_parameters(component, values):
     unknown = set(values) - set(component.parameters)
     if unknown:
         raise ValueError(f"{component.id}: unknown parameters {sorted(unknown)}")
-    result = {}
-    for name, spec in component.parameters.items():
-        value = deepcopy(values.get(name, spec.get("default")))
-        kind = spec["type"]
-        valid = {
-            "integer": lambda: type(value) is int,
-            "number": lambda: type(value) in (int, float) and math.isfinite(value),
-            "boolean": lambda: type(value) is bool,
-            "string": lambda: type(value) is str,
-            "array": lambda: type(value) is list,
-            "object": lambda: type(value) is dict,
-        }[kind]()
-        if not valid:
-            raise ValueError(f"{component.id}.{name}: expected {kind}")
-        if "choices" in spec and value not in spec["choices"]:
-            raise ValueError(f"{component.id}.{name}: choose from {spec['choices']}")
-        if "minimum" in spec and value < spec["minimum"]:
-            raise ValueError(f"{component.id}.{name}: minimum {spec['minimum']}")
-        if "maximum" in spec and value > spec["maximum"]:
-            raise ValueError(f"{component.id}.{name}: maximum {spec['maximum']}")
-        if kind == "array" and "items" in spec:
-            for item in value:
-                check = Component(component.id, component.kind, "", "", {name: spec["items"]})
-                validate_parameters(check, {name: item})
-        result[name] = value
-    return result
+    return {
+        name: _validate_parameter(
+            component.id, name, spec, deepcopy(values.get(name, spec.get("default")))
+        )
+        for name, spec in component.parameters.items()
+    }
+
+
+def _source_digest(path, fresh):
+    """Return the source fingerprint, retaining the existing stat-based cache."""
+    stat = path.stat()
+    signature = (stat.st_mtime_ns, stat.st_size)
+    cached_file = _FILE_DIGESTS.get(str(path))
+    if fresh or cached_file is None or cached_file[0] != signature:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        _FILE_DIGESTS[str(path)] = (signature, digest)
+    else:
+        digest = cached_file[1]
+    return digest
+
+
+def _load_component(path, digest):
+    """Load one plugin under its source-derived module name."""
+    name = "atima_component_" + hashlib.sha256((str(path) + digest).encode()).hexdigest()[:20]
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = sys.modules.get(name)
+    cached = module is not None
+    if not cached:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+    try:
+        if not cached:
+            spec.loader.exec_module(module)
+        return module.PLUGIN
+    except Exception as error:
+        sys.modules.pop(name, None)
+        raise ValueError(f"Invalid component file {path.name}: {error}") from error
 
 
 class Registry:
@@ -76,45 +123,13 @@ class Registry:
                 for path in sorted((root / folder).glob("*.py")):
                     if path.name.startswith("_"):
                         continue
-                    stat = path.stat()
-                    signature = (stat.st_mtime_ns, stat.st_size)
-                    cached_file = _FILE_DIGESTS.get(str(path))
-                    if fresh or cached_file is None or cached_file[0] != signature:
-                        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                        _FILE_DIGESTS[str(path)] = (signature, digest)
-                    else:
-                        digest = cached_file[1]
-                    name = (
-                        "atima_component_"
-                        + hashlib.sha256((str(path) + digest).encode()).hexdigest()[:20]
-                    )
-                    spec = importlib.util.spec_from_file_location(name, path)
-                    module = sys.modules.get(name)
-                    cached = module is not None
-                    if not cached:
-                        module = importlib.util.module_from_spec(spec)
-                        sys.modules[name] = module
-                    try:
-                        if not cached:
-                            spec.loader.exec_module(module)
-                        component = module.PLUGIN
-                    except Exception as error:
-                        sys.modules.pop(name, None)
-                        raise ValueError(f"Invalid component file {path.name}: {error}") from error
+                    digest = _source_digest(path, fresh)
+                    component = _load_component(path, digest)
                     if not isinstance(component, Component) or component.kind != kind:
                         raise ValueError(f"{path.name}: component kind/contract mismatch")
                     if not component.id or component.id in self.components[kind]:
                         raise ValueError(f"Duplicate or empty {kind} ID: {component.id}")
-                    required = {
-                        "model": "build",
-                        "dataset": "open",
-                        "partition": "location",
-                        "aggregator": "aggregate",
-                        "defense": "apply",
-                        "optimizer": "build",
-                        "loss": "build",
-                        "metrics": "evaluate",
-                    }.get(kind)
+                    required = _REQUIRED_HOOKS.get(kind)
                     if required and required not in component.hooks:
                         raise ValueError(f"{component.id}: missing {required} hook")
                     if any(not callable(hook) for hook in component.hooks.values()):

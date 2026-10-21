@@ -35,6 +35,7 @@ const document={body,documentElement:{dataset:{}},getElementById:id=>ids.get(id)
 const context=vm.createContext({document,localStorage:{getItem(){return null;}},console});
 vm.runInContext(fs.readFileSync(path.join(base,"i18n.js"),"utf8"),context);
 const source=fs.readFileSync(path.join(base,"app.js"),"utf8").split("\nsetTheme(theme);\n")[0];vm.runInContext(source,context);
+vm.runInContext(fs.readFileSync(path.join(base,"results.js"),"utf8"),context);
 vm.runInContext(fs.readFileSync(path.join(base,"fl-diagnostics.js"),"utf8"),context);
 const evaluate=script=>vm.runInContext(script,context),plain=value=>JSON.parse(JSON.stringify(value));
 function run(id,attack="none"){
@@ -102,4 +103,13 @@ check("federated telemetry has real evidence, paired zoom and legacy no-data beh
   const empty=evaluate("federatedAnalysis(legacy,null)");
   assert.ok(empty.textContent.includes("Historical experiments"));
 });
+
+{
+  const value=evaluate("testMetrics({metrics:{test:{per_class:{benign:{support:10,recall:1,precision:1},dos:{support:10,recall:0.5,precision:0.75},infog:{support:10,recall:0.9,precision:0.25}}}}})");
+  assert.equal(value.macro_precision,(1+0.75+0.25)/3);
+  assert.equal(value.worst_supported_recall,0.5);
+  assert.ok(Math.abs(value.intrusion_miss_rate-0.3)<1e-12);
+  assert.equal(value.benign_false_alarm_rate,0);
+  assert.equal(evaluate("testMetrics({})"),null);
+}
 console.log(checks+" functional Results checks passed.");

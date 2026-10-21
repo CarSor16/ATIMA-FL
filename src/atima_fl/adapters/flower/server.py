@@ -57,6 +57,28 @@ def runtime_identity(device, config):
     }
 
 
+def _validated_reply(reply, config, round_id, before, phase, counts, device):
+    """Verify one client message before making it eligible for aggregation."""
+    if reply.has_error():
+        raise RuntimeError(f"Flower client error: {reply.error}")
+    cid = int(reply.content["metrics"]["client-id"])
+    if not 0 <= cid < config.clients:
+        raise ValueError("Duplicate/out-of-range logical client")
+    values = reply.content["arrays"].to_numpy_ndarrays()
+    check_arrays(values, before)
+    metadata = json.loads(reply.content["audit"]["metadata_json"])
+    if metadata.get("device") != device:
+        raise ValueError("Client device differs from selected experiment device")
+    if metadata["client"] != cid or metadata["round"] != round_id:
+        raise ValueError("Reply identity/round mismatch")
+    if metadata["aggregation_server"] != config.server_assignment()[cid]:
+        raise ValueError("Reply aggregation server differs from configured routing")
+    count = int(reply.content["metrics"]["num-examples"])
+    if phase == "submit" and count != counts[cid]:
+        raise ValueError("Sample count changed between phases")
+    return cid, {"values": values, "metadata": metadata, "count": count}
+
+
 def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device):
     commands = ConfigRecord(
         {
@@ -78,24 +100,10 @@ def exchange(grid, node_ids, config, run, round_id, before, phase, counts, devic
     replies = list(grid.send_and_receive(messages=messages, timeout=3600))
     result = {}
     for reply in replies:
-        if reply.has_error():
-            raise RuntimeError(f"Flower client error: {reply.error}")
-        cid = int(reply.content["metrics"]["client-id"])
-        if cid in result or not 0 <= cid < config.clients:
+        cid, record = _validated_reply(reply, config, round_id, before, phase, counts, device)
+        if cid in result:
             raise ValueError("Duplicate/out-of-range logical client")
-        values = reply.content["arrays"].to_numpy_ndarrays()
-        check_arrays(values, before)
-        metadata = json.loads(reply.content["audit"]["metadata_json"])
-        if metadata.get("device") != device:
-            raise ValueError("Client device differs from selected experiment device")
-        if metadata["client"] != cid or metadata["round"] != round_id:
-            raise ValueError("Reply identity/round mismatch")
-        if metadata["aggregation_server"] != config.server_assignment()[cid]:
-            raise ValueError("Reply aggregation server differs from configured routing")
-        count = int(reply.content["metrics"]["num-examples"])
-        if phase == "submit" and count != counts[cid]:
-            raise ValueError("Sample count changed between phases")
-        result[cid] = {"values": values, "metadata": metadata, "count": count}
+        result[cid] = record
     if set(result) != set(range(config.clients)):
         raise ValueError("Incomplete round: all configured logical clients are required")
     return result
