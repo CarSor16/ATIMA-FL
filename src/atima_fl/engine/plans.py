@@ -7,6 +7,13 @@ from dataclasses import replace
 from atima_fl.core.io import atomic_json
 
 
+def _archive_files(destination, files):
+    """Write a new portable ZIP from explicit paths and archive names."""
+    with zipfile.ZipFile(destination, "x", zipfile.ZIP_DEFLATED) as archive:
+        for path, name in files:
+            archive.write(path, name)
+
+
 def save_plan(config, workspace):
     config.validate()
     root = Path(workspace).resolve() / "plans"
@@ -46,9 +53,10 @@ esac
         encoding="utf-8",
     )
     archive = directory / "plan.zip"
-    with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as stream:
-        for name in ("experiment.toml", "run_cluster.sh", "plan.json"):
-            stream.write(directory / name, name)
+    _archive_files(
+        archive,
+        ((directory / name, name) for name in ("experiment.toml", "run_cluster.sh", "plan.json")),
+    )
     return directory
 
 
@@ -111,8 +119,12 @@ def save_defense_study(config, workspace):
             "inference": "One seed is diagnostic; use at least three independent matched quartets for uncertainty",
         },
     )
-    with zipfile.ZipFile(root / "plan.zip", "x", zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(root.rglob("*")):
-            if path.is_file() and path.name != "plan.zip":
-                archive.write(path, path.relative_to(root).as_posix())
+    _archive_files(
+        root / "plan.zip",
+        (
+            (path, path.relative_to(root).as_posix())
+            for path in sorted(root.rglob("*"))
+            if path.is_file() and path.name != "plan.zip"
+        ),
+    )
     return root
