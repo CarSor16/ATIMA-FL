@@ -320,8 +320,8 @@ def test_hierarchical_component_parameters_resolved_once_per_selection(monkeypat
         clients=6,
         servers=2,
         client_servers=(0, 0, 0, 1, 1, 1),
-        aggregation="krum",
+        aggregation="fedavg",
     ).validate()
     assert config.server_assignment() == (0, 0, 0, 1, 1, 1)
-    assert calls.count(("aggregator", "krum")) == 1
+    assert calls.count(("aggregator", "fedavg")) == 1
     assert len(calls) == len(config.selections())
