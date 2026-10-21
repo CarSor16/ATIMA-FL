@@ -3,8 +3,8 @@ import json
 import numpy as np
 import pytest
 from atima_fl.core.configuration import ExperimentConfig
-from atima_fl.core.contracts import AttackContext
-from atima_fl.core.registry import Registry
+from atima_fl.core.contracts import AttackContext, Component
+from atima_fl.core.registry import Registry, validate_parameters
 from atima_fl.engine.attacks import poison_update, prepare_training
 from atima_fl.engine.aggregation import aggregate
 
@@ -271,3 +271,36 @@ def test_seed_statistics_are_independent_units(tmp_path):
         summarize([files[0]] * 3, tmp_path / "bad")
     with pytest.raises(ValueError, match="three"):
         summarize(files[:2], tmp_path / "bad")
+
+
+def test_nested_array_plugin_parameters_are_validated_without_mutating_inputs():
+    plugin = Component(
+        "nested_fixture", "attack", "Nested", "",
+        parameters={
+            "groups": {
+                "type": "array",
+                "default": [[1, 2], [3]],
+                "items": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 0, "maximum": 9},
+                },
+            },
+        },
+    )
+    values = {"groups": [[1, 2], [3]]}
+    result = validate_parameters(plugin, values)
+    assert result == values
+    assert result["groups"] is not values["groups"]
+    result["groups"][0][0] = 9
+    assert values["groups"][0][0] == 1
+    assert validate_parameters(plugin, {})["groups"] == [[1, 2], [3]]
+    with pytest.raises(ValueError, match="nested_fixture.groups: minimum 0"):
+        validate_parameters(plugin, {"groups": [[-1]]})
+    with pytest.raises(ValueError, match="nested_fixture.groups: expected integer"):
+        validate_parameters(plugin, {"groups": [[True]]})
+    with pytest.raises(ValueError, match="nested_fixture.groups: expected array"):
+        validate_parameters(plugin, {"groups": [1]})
+    with pytest.raises(ValueError, match="unknown parameters"):
+        validate_parameters(plugin, {"unknown": 1})
+    with pytest.raises(ValueError, match="parameters must be an object"):
+        validate_parameters(plugin, None)
