@@ -150,10 +150,10 @@ class ExperimentConfig:
         if self.paired_rounds and not 1 <= self.paired_rounds <= self.rounds:
             raise ValueError("Invalid paired round cap")
         for kind, identifier, params in self.selections():
-            registry.parameters(kind, identifier, params)
+            resolved_params = registry.parameters(kind, identifier, params)
             hook = registry.get(kind, identifier).hooks.get("validate")
             if hook:
-                hook(self, registry.parameters(kind, identifier, params))
+                hook(self, resolved_params)
                 if kind == "aggregator" and self.servers > 1:
                     from dataclasses import replace
 
@@ -170,7 +170,7 @@ class ExperimentConfig:
                             ),
                         )
                         try:
-                            hook(group_config, registry.parameters(kind, identifier, params))
+                            hook(group_config, resolved_params)
                         except ValueError as error:
                             raise ValueError(f"Aggregation server {sid}: {error}") from error
         for defense in self.defenses:
