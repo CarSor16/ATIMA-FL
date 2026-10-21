@@ -348,3 +348,32 @@ def test_registry_plugin_reload_preserves_source_fingerprints(tmp_path):
     refreshed = Registry(tmp_path, fresh=True)
     assert refreshed.get("attack", "custom").title == "Second version"
     assert refreshed.sources["attack/custom"] != first.sources["attack/custom"]
+
+
+def test_client_audit_helpers_preserve_stage_semantics():
+    from types import SimpleNamespace
+    from atima_fl.engine.client import _training_data_altered, _merge_attack_metadata
+
+    original = SimpleNamespace(
+        x=np.ones((3, 2), dtype=np.float32),
+        y=np.array([0, 1, 0], dtype=np.int64),
+    )
+    unchanged = SimpleNamespace(x=original.x.copy(), y=original.y.copy())
+    assert not _training_data_altered(original, unchanged)
+
+    relabeled = SimpleNamespace(x=original.x.copy(), y=np.array([0, 0, 0]))
+    assert _training_data_altered(original, relabeled)
+    original_input = original.x.copy()
+    modified = SimpleNamespace(x=original.x.copy(), y=original.y.copy())
+    modified.x[1, 0] = 2
+    assert _training_data_altered(original, modified)
+    np.testing.assert_array_equal(original.x, original_input)
+
+    metadata = {"attack_applied": True, "withheld_samples": 2}
+    _merge_attack_metadata(metadata, {"attack_applied": False, "parameter_scope": "trainable_parameters"})
+    assert metadata["attack_applied"] is True
+    assert metadata["withheld_samples"] == 2
+    assert metadata["parameter_scope"] == "trainable_parameters"
+    inactive = {"attack_applied": False}
+    _merge_attack_metadata(inactive, {"attack_applied": False})
+    assert inactive["attack_applied"] is False
