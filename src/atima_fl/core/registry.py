@@ -76,6 +76,37 @@ def validate_parameters(component, values):
     }
 
 
+def _source_digest(path, fresh):
+    """Return the source fingerprint, retaining the existing stat-based cache."""
+    stat = path.stat()
+    signature = (stat.st_mtime_ns, stat.st_size)
+    cached_file = _FILE_DIGESTS.get(str(path))
+    if fresh or cached_file is None or cached_file[0] != signature:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        _FILE_DIGESTS[str(path)] = (signature, digest)
+    else:
+        digest = cached_file[1]
+    return digest
+
+
+def _load_component(path, digest):
+    """Load one plugin under its source-derived module name."""
+    name = "atima_component_" + hashlib.sha256((str(path) + digest).encode()).hexdigest()[:20]
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = sys.modules.get(name)
+    cached = module is not None
+    if not cached:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+    try:
+        if not cached:
+            spec.loader.exec_module(module)
+        return module.PLUGIN
+    except Exception as error:
+        sys.modules.pop(name, None)
+        raise ValueError(f"Invalid component file {path.name}: {error}") from error
+
+
 class Registry:
     def __init__(self, extra_directory=None, fresh=False):
         with _REGISTRY_LOCK:
@@ -92,31 +123,8 @@ class Registry:
                 for path in sorted((root / folder).glob("*.py")):
                     if path.name.startswith("_"):
                         continue
-                    stat = path.stat()
-                    signature = (stat.st_mtime_ns, stat.st_size)
-                    cached_file = _FILE_DIGESTS.get(str(path))
-                    if fresh or cached_file is None or cached_file[0] != signature:
-                        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                        _FILE_DIGESTS[str(path)] = (signature, digest)
-                    else:
-                        digest = cached_file[1]
-                    name = (
-                        "atima_component_"
-                        + hashlib.sha256((str(path) + digest).encode()).hexdigest()[:20]
-                    )
-                    spec = importlib.util.spec_from_file_location(name, path)
-                    module = sys.modules.get(name)
-                    cached = module is not None
-                    if not cached:
-                        module = importlib.util.module_from_spec(spec)
-                        sys.modules[name] = module
-                    try:
-                        if not cached:
-                            spec.loader.exec_module(module)
-                        component = module.PLUGIN
-                    except Exception as error:
-                        sys.modules.pop(name, None)
-                        raise ValueError(f"Invalid component file {path.name}: {error}") from error
+                    digest = _source_digest(path, fresh)
+                    component = _load_component(path, digest)
                     if not isinstance(component, Component) or component.kind != kind:
                         raise ValueError(f"{path.name}: component kind/contract mismatch")
                     if not component.id or component.id in self.components[kind]:
