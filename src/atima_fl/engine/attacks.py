@@ -45,14 +45,8 @@ def prepare_training(x, y, context):
     return batch
 
 
-def poison_update(context):
-    check_arrays(context.local_arrays, context.global_arrays)
-    hook = component(context).hooks.get("transform")
-    if not context.active or hook is None:
-        return [a.copy() for a in context.local_arrays], {"attack_applied": False}
-    indices = context.attackable_indices
-    if not indices:
-        raise ValueError("Model did not declare attackable parameters")
+def _trainable_context(context, indices):
+    """Restrict a transformation to trainable arrays, preserving knowledge scope."""
     scoped = AttackContext(
         context.config,
         context.client,
@@ -65,6 +59,18 @@ def poison_update(context):
     )
     if hasattr(context, "run_dir"):
         scoped.run_dir = context.run_dir
+    return scoped
+
+
+def poison_update(context):
+    check_arrays(context.local_arrays, context.global_arrays)
+    hook = component(context).hooks.get("transform")
+    if not context.active or hook is None:
+        return [a.copy() for a in context.local_arrays], {"attack_applied": False}
+    indices = context.attackable_indices
+    if not indices:
+        raise ValueError("Model did not declare attackable parameters")
+    scoped = _trainable_context(context, indices)
     values, info = hook(scoped)
     check_arrays(values, scoped.global_arrays)
     submitted = [a.copy() for a in context.local_arrays]
