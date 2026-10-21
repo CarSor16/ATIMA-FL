@@ -377,3 +377,18 @@ def test_client_audit_helpers_preserve_stage_semantics():
     inactive = {"attack_applied": False}
     _merge_attack_metadata(inactive, {"attack_applied": False})
     assert inactive["attack_applied"] is False
+
+
+def test_portable_plan_archive_preserves_explicit_filenames(tmp_path):
+    import zipfile
+    from atima_fl.engine.plans import _archive_files
+
+    source = tmp_path / "experiment.toml"
+    source.write_text("[experiment]\nname='fixture'\n", encoding="utf-8")
+    destination = tmp_path / "plan.zip"
+    _archive_files(destination, [(source, "experiment.toml")])
+    with zipfile.ZipFile(destination) as archive:
+        assert archive.namelist() == ["experiment.toml"]
+        assert archive.read("experiment.toml") == source.read_bytes()
+    with pytest.raises(FileExistsError):
+        _archive_files(destination, [(source, "experiment.toml")])
