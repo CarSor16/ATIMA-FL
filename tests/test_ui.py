@@ -516,3 +516,27 @@ def test_unified_designer_without_hardware_resource_controls(gui):
     assert 'id="save-zip"' in html
     assert 'id="output_root"' in html and 'id="dataset_root"' in html
     assert 'action("toml")' in js
+
+
+def test_result_identity_helpers_preserve_complete_audit_and_missing_values():
+    from atima_fl.ui.app import _result_dataset_identity, _result_runtime_identity
+
+    manifest = {
+        "dataset_audit": {
+            "task": "macro5",
+            "hashes": {"train": "abc", "validation": "def", "unexpected": "ignored"},
+        },
+        "source_identity": {"core/file.py": "source-hash"},
+        "runtime": {"python": "3.11"},
+    }
+    identity = _result_dataset_identity(manifest)
+    assert identity["task"] == "macro5"
+    assert identity["hashes"]["train"] == "abc"
+    assert identity["hashes"]["validation"] == "def"
+    assert identity["hashes"]["test"] is None
+    assert "unexpected" not in identity["hashes"]
+    assert _result_runtime_identity(manifest) == json.dumps(
+        [manifest["source_identity"], manifest["runtime"]], sort_keys=True
+    )
+    assert _result_runtime_identity({"source_identity": {}, "runtime": {"python": "3.11"}}) is None
+    assert _result_dataset_identity({})["hashes"]["test"] is None
