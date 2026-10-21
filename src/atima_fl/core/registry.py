@@ -26,39 +26,43 @@ _FILE_DIGESTS = {}
 _REGISTRY_LOCK = RLock()
 
 
+def _validate_parameter(component_id, name, spec, value):
+    """Validate a scalar or nested array item without constructing a Component."""
+    kind = spec["type"]
+    valid = {
+        "integer": lambda: type(value) is int,
+        "number": lambda: type(value) in (int, float) and math.isfinite(value),
+        "boolean": lambda: type(value) is bool,
+        "string": lambda: type(value) is str,
+        "array": lambda: type(value) is list,
+        "object": lambda: type(value) is dict,
+    }[kind]()
+    if not valid:
+        raise ValueError(f"{component_id}.{name}: expected {kind}")
+    if "choices" in spec and value not in spec["choices"]:
+        raise ValueError(f"{component_id}.{name}: choose from {spec['choices']}")
+    if "minimum" in spec and value < spec["minimum"]:
+        raise ValueError(f"{component_id}.{name}: minimum {spec['minimum']}")
+    if "maximum" in spec and value > spec["maximum"]:
+        raise ValueError(f"{component_id}.{name}: maximum {spec['maximum']}")
+    if kind == "array" and "items" in spec:
+        for item in value:
+            _validate_parameter(component_id, name, spec["items"], item)
+    return value
+
+
 def validate_parameters(component, values):
     if not isinstance(values, dict):
         raise ValueError(f"{component.id}: parameters must be an object")
     unknown = set(values) - set(component.parameters)
     if unknown:
         raise ValueError(f"{component.id}: unknown parameters {sorted(unknown)}")
-    result = {}
-    for name, spec in component.parameters.items():
-        value = deepcopy(values.get(name, spec.get("default")))
-        kind = spec["type"]
-        valid = {
-            "integer": lambda: type(value) is int,
-            "number": lambda: type(value) in (int, float) and math.isfinite(value),
-            "boolean": lambda: type(value) is bool,
-            "string": lambda: type(value) is str,
-            "array": lambda: type(value) is list,
-            "object": lambda: type(value) is dict,
-        }[kind]()
-        if not valid:
-            raise ValueError(f"{component.id}.{name}: expected {kind}")
-        if "choices" in spec and value not in spec["choices"]:
-            raise ValueError(f"{component.id}.{name}: choose from {spec['choices']}")
-        if "minimum" in spec and value < spec["minimum"]:
-            raise ValueError(f"{component.id}.{name}: minimum {spec['minimum']}")
-        if "maximum" in spec and value > spec["maximum"]:
-            raise ValueError(f"{component.id}.{name}: maximum {spec['maximum']}")
-        if kind == "array" and "items" in spec:
-            for item in value:
-                check = Component(component.id, component.kind, "", "", {name: spec["items"]})
-                validate_parameters(check, {name: item})
-        result[name] = value
-    return result
-
+    return {
+        name: _validate_parameter(
+            component.id, name, spec, deepcopy(values.get(name, spec.get("default")))
+        )
+        for name, spec in component.parameters.items()
+    }
 
 class Registry:
     def __init__(self, extra_directory=None, fresh=False):
