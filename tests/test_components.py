@@ -325,3 +325,26 @@ def test_hierarchical_component_parameters_resolved_once_per_selection(monkeypat
     assert config.server_assignment() == (0, 0, 0, 1, 1, 1)
     assert calls.count(("aggregator", "fedavg")) == 1
     assert len(calls) == len(config.selections())
+
+
+def test_registry_plugin_reload_preserves_source_fingerprints(tmp_path):
+    folder = tmp_path / "attacks"
+    folder.mkdir()
+    source = folder / "custom.py"
+    source.write_text(
+        "from atima_fl.core.contracts import Component\n"
+        "PLUGIN=Component('custom','attack','First','')\n",
+        encoding="utf-8",
+    )
+    first = Registry(tmp_path)
+    second = Registry(tmp_path)
+    assert first.sources["attack/custom"] == second.sources["attack/custom"]
+    assert second.get("attack", "custom").title == "First"
+    source.write_text(
+        "from atima_fl.core.contracts import Component\n"
+        "PLUGIN=Component('custom','attack','Second version','')\n",
+        encoding="utf-8",
+    )
+    refreshed = Registry(tmp_path, fresh=True)
+    assert refreshed.get("attack", "custom").title == "Second version"
+    assert refreshed.sources["attack/custom"] != first.sources["attack/custom"]
