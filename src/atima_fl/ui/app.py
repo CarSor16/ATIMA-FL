@@ -194,6 +194,7 @@ class Handler(BaseHTTPRequestHandler):
             assets = {
                 "/": ("index.html", "text/html; charset=utf-8"),
                 "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                "/results.js": ("results.js", "text/javascript; charset=utf-8"),
                 "/fl-diagnostics.js": ("fl-diagnostics.js", "text/javascript; charset=utf-8"),
                 "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
                 "/style.css": ("style.css", "text/css; charset=utf-8"),
