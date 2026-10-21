@@ -392,3 +392,27 @@ def test_portable_plan_archive_preserves_explicit_filenames(tmp_path):
         assert archive.read("experiment.toml") == source.read_bytes()
     with pytest.raises(FileExistsError):
         _archive_files(destination, [(source, "experiment.toml")])
+
+
+def test_group_dispatch_accepts_batch_pool_and_executor():
+    from atima_fl.engine.aggregation import _run_group_aggregation
+
+    config = ExperimentConfig().validate()
+    updates = [[np.array([0.0], dtype=np.float32)], [np.array([4.0], dtype=np.float32)]]
+    tasks = [(updates, [3, 1], config)]
+
+    class BatchPool:
+        def aggregate_many(self, planned):
+            assert planned == tasks
+            return [aggregate(*task) for task in planned]
+
+    class Executor:
+        def submit(self, fn, *args):
+            class Completed:
+                def result(self):
+                    return fn(*args)
+            return Completed()
+
+    for pool in (None, BatchPool(), Executor()):
+        outcomes = _run_group_aggregation(tasks, pool)
+        np.testing.assert_array_equal(outcomes[0][0][0], [1.0])
