@@ -102,4 +102,13 @@ check("federated telemetry has real evidence, paired zoom and legacy no-data beh
   const empty=evaluate("federatedAnalysis(legacy,null)");
   assert.ok(empty.textContent.includes("Historical experiments"));
 });
+
+{
+  const value=evaluate("testMetrics({metrics:{test:{per_class:{benign:{support:10,recall:1,precision:1},dos:{support:10,recall:0.5,precision:0.75},infog:{support:10,recall:0.9,precision:0.25}}}}})");
+  assert.equal(value.macro_precision,(1+0.75+0.25)/3);
+  assert.equal(value.worst_supported_recall,0.5);
+  assert.ok(Math.abs(value.intrusion_miss_rate-0.3)<1e-12);
+  assert.equal(value.benign_false_alarm_rate,0);
+  assert.equal(evaluate("testMetrics({})"),null);
+}
 console.log(checks+" functional Results checks passed.");
