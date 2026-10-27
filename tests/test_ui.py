@@ -425,8 +425,8 @@ def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
     assert 'viewBox="0 0 96 96"' in logo
     assert "federated clients" in logo
     assert '<span class="mark" aria-hidden="true">▲</span>' not in page
-    assert 'class="brand-mark" src="/brand-mark.svg"' in page
-    assert 'rel="icon" type="image/svg+xml" href="/brand-mark.svg"' in page
+    assert 'class="brand-mark" src="/atima-original-shield.png"' in page
+    assert 'rel="icon" type="image/png" href="/atima-original-shield.png"' in page
     assert 'href="#main-content"' in page
     assert 'id="page-glyph"' in page
     assert 'id="quick-new-experiment"' in page
@@ -469,7 +469,8 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     title = "Create a federated learning security experiment"
     assert f"<h2>{title}</h2>" in html
-    assert f'<h1 id="page-title">{title}</h1>' in html
+    assert '<h1 id="page-title">Dashboard</h1>' in html
+    assert '<section id="designer" class="page">' in html
     assert "Build an experiment with confidence" not in html
     assert "single experiment.toml for atima run in Slurm" in html
     assert "legacy ZIP export remains available" in html
@@ -552,7 +553,7 @@ def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
     assert "brand-illustration.png" not in html
     assert "object-fit:contain" in css
     image = urlopen(url + "/atima-original-shield.png").read()
-    assert image.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+    assert image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
     # The independent icon is square and contains no screenshot lettering.
     width = int.from_bytes(image[16:20], "big")
     height = int.from_bytes(image[20:24], "big")
