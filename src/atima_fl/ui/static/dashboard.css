@@ -1,0 +1,215 @@
+/* ATIMA Dashboard art direction — based on user-supplied 1536x1024 reference.
+ * Designed for existing semantic controls; no fake data or rasterized UI.
+ * All glyphs use device fonts only. No proprietary font bundles.
+ */
+:root[data-theme="dark"]{
+  --bg:#0c1623;--ink:#edf4ff;--muted:#a7bad3;--line:#2a3c51;
+  --teal:#69c5ff;--side:#172638;
+}
+body{font-family:"Bahnschrift","Segoe UI Variable",Inter,system-ui,-apple-system,sans-serif;letter-spacing:.005em}
+:root[data-theme="dark"] body{
+  background:radial-gradient(ellipse at 62% -24%,#142b42 0%,transparent 50%),#0c1623;
+  color:#ecf3ff;
+}
+:root[data-theme="dark"] .sidebar{
+  background:linear-gradient(140deg,#203247 0%,#162434 41%,#131f30 100%);
+  box-shadow:inset -1px 0 #273951,8px 0 36px #040c1520;
+}
+.sidebar{width:272px;padding:18px 13px}
+main{margin-left:272px;padding:30px 24px 38px;max-width:none}
+.sidebar .brand{min-height:222px;padding:0 16px 16px;margin-bottom:8px;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:flex-start;gap:4px}
+.sidebar .brand-mark{width:136px!important;height:136px!important;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 6px 24px #03bffc1a)}
+.brand .brand-name{font-family:"Bahnschrift SemiCondensed","Arial Narrow",system-ui,sans-serif;font-size:36px;font-weight:750;line-height:1;letter-spacing:.16em;color:#f2f7ff}
+.brand .brand-name span{color:#d9e8ff}
+.sidebar .brand-subtitle{display:block;max-width:212px;margin:8px auto 0;font-size:9px!important;line-height:1.55;letter-spacing:.1em;text-transform:uppercase;color:#c8d8ec!important}
+.sidebar .nav-group-label{display:none}
+.sidebar nav{margin-top:0;display:grid;gap:2px}
+.sidebar .nav{
+  display:flex;align-items:center;gap:20px;width:100%;
+  min-height:53px;padding:12px 22px;box-sizing:border-box;
+  border:1px solid transparent;border-radius:9px;
+  font-size:15px;font-weight:500;letter-spacing:0;
+  color:#c3d0e4;background:transparent;text-align:left;cursor:pointer;
+}
+.sidebar .nav .nav-icon{width:24px;height:24px;min-width:24px;color:#a3bddb}
+.sidebar .nav:hover:not(.active){background:#203650;border-color:#2c496a}
+.sidebar .nav.active,:root[data-theme="dark"] .nav.active{
+  background:linear-gradient(110deg,#224c81,#1c497e);
+  border:1px solid #4095f5;
+  box-shadow:inset 0 0 20px #2595ff24,0 0 15px #0966d322;
+  color:#fff;
+}
+.sidebar .nav.active .nav-icon{color:#e4f4ff}
+.sidebar .side-note{
+  padding:17px 17px;margin-top:auto;background:#1c2b3c;
+  border:1px solid #304258;border-radius:12px;color:#d5e1f1;
+}
+.sidebar .side-note small{color:#9bb4d2}
+main>.app-header,main>header.app-header{min-height:82px;margin-bottom:20px;gap:18px}
+.app-header .header-identity{display:flex;gap:12px;align-items:center}
+.app-header .page-glyph{display:none}
+.app-header .eyebrow{display:none}
+.app-header h1,.app-header #page-title{font-family:"Bahnschrift SemiCondensed","Segoe UI Variable",system-ui,sans-serif;font-size:34px;font-weight:750;line-height:1.15;letter-spacing:-.025em;margin:0 0 5px}
+.app-header #page-subtitle{font-size:18px;color:#bfcee3;margin:0}
+:root[data-theme="dark"] .app-header .badge{
+  display:inline-flex;align-items:center;gap:8px;background:#111f2e;
+  border-color:#31445e;color:#2ae6a0;font-size:13px;padding:8px 12px;
+}
+:root[data-theme="dark"] .app-header .badge::before{content:"";width:10px;height:10px;border-radius:50%;background:#1cd799;box-shadow:0 0 10px #21e4a66b}
+:root[data-theme="dark"] .card,:root[data-theme="dark"] .mode-bar{
+  background:#19293a;border-color:#2c4158;box-shadow:0 8px 25px #050d1730;
+}
+:root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{
+  background:#101e2d;border-color:#3a5065;color:#e7f1ff;
+}
+:root[data-theme="dark"] .primary{background:#176ed8;color:#fff}
+:root[data-theme="dark"] .primary:hover{background:#2381ed}
+:root[data-theme="dark"] .secondary{background:#1e3246;border-color:#3b5771;color:#deefff}
+:root[data-theme="dark"] .secondary:hover{background:#294361}
+
+/* Dashboard page — screenshot grid: four statistics, one wide hero, two panels. */
+#dashboard{--dash-bg:#1b2b3d;--dash-border:#2b3f54;--dash-muted:#a1b6d0}
+#dashboard .dashboard-metrics{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:20px
+}
+#dashboard .dash-stat{
+  display:flex;align-items:center;gap:17px;min-height:122px;padding:16px 15px;
+  border:1px solid var(--dash-border);border-radius:12px;
+  background:linear-gradient(135deg,#1d3046,#1a2a3b);
+  box-shadow:0 6px 20px #040c151d;
+}
+#dashboard .dash-stat-icon{
+  flex:none;display:flex;align-items:center;justify-content:center;
+  width:72px;height:72px;border-radius:11px;
+  background:#28425e;color:#72bfff
+}
+#dashboard .dash-stat-icon svg{width:35px;height:35px}
+#dashboard .dash-stat-icon.warm{background:#3d3941;color:#ffc55f}
+#dashboard .dash-stat-icon.cyan{background:#203f50;color:#61ddf5}
+#dashboard .dash-stat strong{display:block;font-size:25px;line-height:1.1;color:#fff;font-variant-numeric:tabular-nums;font-weight:750}
+#dashboard .dash-stat span{display:block;color:#f0f5ff;font-weight:600;font-size:15px;margin-top:7px;line-height:1.1}
+#dashboard .dash-stat small{display:block;color:var(--dash-muted);font-size:12px;margin-top:7px;line-height:1.32}
+#dashboard .dash-hero{
+  display:grid;grid-template-columns:60% 40%;height:404px;overflow:hidden;
+  border:1px solid var(--dash-border);border-radius:12px;
+  background:linear-gradient(110deg,#0c1e30,#0f2134 55%,#132638);
+  margin-bottom:17px;position:relative
+}
+#dashboard .dash-hero-visual{
+  background-image:url("/federated-world.svg");
+  background-position:49% center;background-repeat:no-repeat;background-size:cover;
+  position:relative;min-width:0;
+}
+#dashboard .dash-hero-visual::after{content:"";position:absolute;inset:0;background:linear-gradient(to right,transparent 55%,#112234 100%)}
+#dashboard .dash-hero-copy{
+  padding:38px 31px 30px 10px;position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center
+}
+#dashboard .dash-kicker{font-size:10px;font-weight:750;letter-spacing:.16em;color:#68bff5;margin-bottom:10px}
+#dashboard .dash-hero-copy h2{
+  color:#f5f8ff;font-family:"Bahnschrift SemiCondensed","Segoe UI Variable",system-ui,sans-serif;
+  font-size:34px;line-height:1.23;letter-spacing:-.025em;margin:0 0 14px;font-weight:750
+}
+#dashboard .dash-hero-copy p{color:#bdcde3;font-size:15px;line-height:1.55;margin:0 0 19px;max-width:415px}
+#dashboard .dash-hero-copy ul{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+#dashboard .dash-hero-copy li{display:flex;gap:14px;color:#d1ddec;font-size:14px;align-items:center}
+#dashboard .dash-hero-copy li span{font-size:22px;color:#6bccff;min-width:24px;text-align:center}
+#dashboard .dash-cta{
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  min-height:49px;padding:12px 22px;border:1px solid #64b6ff;
+  background:linear-gradient(140deg,#1268d4,#268af2);border-radius:9px;
+  box-shadow:0 4px 20px #0368c72e;color:#fff;font:600 14px/1.2 inherit;
+  cursor:pointer
+}
+#dashboard .dash-cta:hover{filter:brightness(1.13)}
+#dashboard .dash-cta:focus-visible,#dashboard button:focus-visible,.sidebar .nav:focus-visible{outline:3px solid #70b6ff;outline-offset:2px}
+#dashboard .dash-bottom{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,1fr);gap:17px}
+#dashboard .dash-panel{
+  background:linear-gradient(145deg,#1b2d41,#182839);border:1px solid var(--dash-border);
+  border-radius:12px;padding:18px 17px 16px;min-width:0;min-height:290px
+}
+#dashboard .dash-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+#dashboard .dash-panel-heading h2{color:#f2f6fe;font-size:18px;letter-spacing:-.01em;font-weight:730;margin:0;display:flex;gap:12px;align-items:center}
+#dashboard .dash-panel-heading h2 span{color:#acbdd9;font-size:25px;font-weight:400}
+#dashboard .dash-text-link{padding:4px 2px;background:transparent;border:0;color:#61aefa;text-decoration:underline;font-size:13px;cursor:pointer}
+#dashboard .dash-table-scroller{max-width:100%;overflow-x:auto;border:1px solid #30445c;border-radius:10px}
+#dashboard .dash-table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:12px;color:#e4edfa}
+#dashboard .dash-table th{background:#26394e;text-align:left;color:#e3eefc;font-size:12px;font-weight:500;padding:12px 10px}
+#dashboard .dash-table td{padding:12px 10px;border-top:1px solid #2a3f53;background:#1b2c3d}
+#dashboard .dash-table tbody tr:nth-child(even) td{background:#223347}
+#dashboard .dash-table .dash-run-link{border:0;background:none;color:#eaf5ff;cursor:pointer;padding:0;font:inherit;text-align:left}
+#dashboard .dash-table .dash-run-link:hover{color:#6ab9ff;text-decoration:underline}
+#dashboard .dash-status-dot{display:inline-block;width:9px;height:9px;margin-right:7px;background:#78a0c6;border-radius:50%}
+#dashboard .dash-status-dot.complete{background:#1bd69b}
+#dashboard .dash-status-dot.running{background:#318dff}
+#dashboard .dash-status-dot.failed{background:#f1767b}
+#dashboard .dash-data-note{color:#8fabc3;font-size:11px;margin:10px 2px 0}
+#dashboard .dash-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+#dashboard .dash-action{
+  display:flex;align-items:center;text-align:left;gap:13px;min-height:102px;
+  border:1px solid #2c435b;border-radius:10px;background:linear-gradient(135deg,#23364a,#1b2d41);
+  color:#f3f6fe;padding:11px;cursor:pointer;font:inherit
+}
+#dashboard .dash-action:hover{background:#2a405b;border-color:#539ee6;transform:translateY(-1px)}
+#dashboard .dash-action-icon{
+  min-width:57px;width:57px;height:61px;border-radius:10px;display:grid;place-items:center;
+  background:#27435e;color:#80bfff;font-size:34px;font-weight:600
+}
+#dashboard .dash-action-icon.warm{background:#3b3a3d;color:#ffd476}
+#dashboard .dash-action strong{display:block;font-size:13px;line-height:1.25}
+#dashboard .dash-action small{display:block;color:#abc0d9;font-size:11px;line-height:1.35;margin-top:6px}
+#settings .card{max-width:720px}
+/* Screenshot proportions at the reference desktop size, safe responsive fallback. */
+@media(max-width:1400px){
+  #dashboard .dash-stat{gap:11px}
+  #dashboard .dash-stat-icon{width:55px;height:60px}
+  #dashboard .dash-stat-icon svg{width:30px;height:30px}
+  #dashboard .dash-stat small{font-size:11px}
+  #dashboard .dash-hero-copy h2{font-size:31px}
+  #dashboard .dash-hero-copy{padding-right:22px}
+}
+@media(max-width:1130px){
+  .sidebar{width:220px;padding:16px 10px}
+  main{margin-left:220px;padding:22px}
+  .sidebar .brand{min-height:198px}
+  .sidebar .brand-mark{width:116px!important;height:116px!important}
+  .brand .brand-name{font-size:28px}
+  .sidebar .nav{gap:12px;padding:10px 13px;font-size:13px;min-height:46px}
+  #dashboard .dashboard-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #dashboard .dash-bottom{grid-template-columns:1fr}
+  #dashboard .dash-hero{grid-template-columns:52% 48%}
+}
+@media(max-width:760px){
+  .sidebar{position:static;width:auto;padding:10px}
+  .sidebar .brand{min-height:auto;padding:6px;flex-direction:row;text-align:left;gap:12px;justify-content:flex-start}
+  .sidebar .brand-mark{width:76px!important;height:76px!important}
+  .sidebar .brand-identity{width:auto;max-width:320px}
+  .sidebar .brand-name{font-size:23px}
+  .sidebar .brand-subtitle{max-width:none;margin:4px 0 0;font-size:8px!important}
+  .sidebar nav{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  .sidebar .nav{width:auto;min-height:39px;padding:8px 11px;font-size:12px;gap:6px}
+  .sidebar .nav .nav-icon{width:17px;height:17px;min-width:17px}
+  .sidebar .side-note{display:none}
+  main{margin-left:0;padding:16px}
+  main>.app-header{min-height:auto}
+  #dashboard .dash-hero{height:auto;display:block}
+  #dashboard .dash-hero-visual{height:215px;background-size:cover}
+  #dashboard .dash-hero-copy{padding:18px 24px 24px}
+  #dashboard .dash-hero-copy h2{font-size:27px}
+  #dashboard .dash-hero-copy p{font-size:13px}
+}
+@media(max-width:490px){
+  #dashboard .dashboard-metrics{grid-template-columns:1fr 1fr;gap:8px}
+  #dashboard .dash-stat{min-height:98px;gap:9px;padding:10px 9px}
+  #dashboard .dash-stat-icon{width:39px;height:44px;border-radius:7px}
+  #dashboard .dash-stat-icon svg{width:23px;height:23px}
+  #dashboard .dash-stat strong{font-size:19px}
+  #dashboard .dash-stat span{font-size:12px}
+  #dashboard .dash-stat small{font-size:10px}
+  #dashboard .dash-actions-grid{grid-template-columns:1fr}
+  #dashboard .dash-action{min-height:82px}
+  #dashboard .dash-panel{padding:14px}
+  .app-header #page-title{font-size:29px}
+  .app-header #page-subtitle{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){#dashboard .dash-action{transition:none}#dashboard .dash-cta{transition:none}}
