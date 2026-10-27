@@ -118,7 +118,7 @@ main>.app-header,main>header.app-header{min-height:82px;margin-bottom:20px;gap:1
   display:flex;align-items:center;justify-content:center;gap:14px;
   min-height:49px;padding:12px 22px;border:1px solid #64b6ff;
   background:linear-gradient(140deg,#1268d4,#268af2);border-radius:9px;
-  box-shadow:0 4px 20px #0368c72e;color:#fff;font:600 14px/1.2 inherit;
+  box-shadow:0 4px 20px #0368c72e;color:#fff;font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;
   cursor:pointer
 }
 #dashboard .dash-cta:hover{filter:brightness(1.13)}
@@ -213,3 +213,26 @@ main>.app-header,main>header.app-header{min-height:82px;margin-bottom:20px;gap:1
   .app-header #page-subtitle{font-size:13px}
 }
 @media(prefers-reduced-motion:reduce){#dashboard .dash-action{transition:none}#dashboard .dash-cta{transition:none}}
+
+/* Header controls: status and gear replace catalog badge only on home. */
+.dash-health,.dash-settings-gear{display:none}
+.dashboard-open .dash-health{
+  display:inline-flex;align-items:center;gap:10px;padding:9px 14px;
+  border:1px solid #324a62;border-radius:50px;background:#121f2e;
+  color:#36e0a5;font-size:13px;white-space:nowrap
+}
+.dashboard-open .dash-health::before{content:"";width:11px;height:11px;border-radius:50%;background:#21d99a;box-shadow:0 0 8px #21d99a55}
+.dashboard-open .dash-health[data-ready="false"]{color:#f2c36f}
+.dashboard-open .dash-health[data-ready="false"]::before{background:#edbd67;box-shadow:none}
+.dashboard-open .dash-settings-gear{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:37px;height:37px;border:0;background:transparent;
+  color:#b1c6e3;cursor:pointer;font-size:28px;line-height:1
+}
+.dashboard-open .dash-settings-gear:hover{color:#fff}
+.dashboard-open .app-header #catalog-status,
+.dashboard-open .app-header .language-label,
+.dashboard-open .app-header #theme-toggle,
+.dashboard-open .app-header #quick-new-experiment{display:none!important}
+.dashboard-open .app-header .header-tools{display:flex;gap:18px;align-items:center}
+@media(max-width:600px){.dashboard-open .app-header .header-tools{width:100%;justify-content:space-between}}
