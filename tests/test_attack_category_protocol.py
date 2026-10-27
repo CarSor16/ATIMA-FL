@@ -14,7 +14,12 @@ import torch
 
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.adapters.flower.server import _run_protocol
-from test_protocol import SoftwareGrid, dataset  # noqa: F401
+from test_protocol import SoftwareGrid, dataset as _protocol_dataset
+
+
+@pytest.fixture(name="dataset")
+def category_dataset(tmp_path):
+    return _protocol_dataset.__wrapped__(tmp_path)
 
 
 CASES = [
