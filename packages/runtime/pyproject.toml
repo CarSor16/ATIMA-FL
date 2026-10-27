@@ -27,7 +27,6 @@ only-include = []
 "../../src/atima_fl/adapters" = "atima_fl/adapters"
 "../../src/atima_fl/engine/aggregation.py" = "atima_fl/engine/aggregation.py"
 "../../src/atima_fl/engine/analysis.py" = "atima_fl/engine/analysis.py"
-"../../src/atima_fl/engine/attacks.py" = "atima_fl/engine/attacks.py"
 "../../src/atima_fl/engine/client.py" = "atima_fl/engine/client.py"
 "../../src/atima_fl/engine/data.py" = "atima_fl/engine/data.py"
 "../../src/atima_fl/engine/defense_analysis.py" = "atima_fl/engine/defense_analysis.py"
