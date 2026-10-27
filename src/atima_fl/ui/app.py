@@ -1,6 +1,7 @@
 """Loopback-only GUI: metadata, validation, portable plans and local results."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import secrets
@@ -81,6 +82,9 @@ def results(workspace):
         config = manifest.get("config", {})
         values.append({
             "id": path.parent.name,
+            "updated_at": datetime.fromtimestamp(
+                path.stat().st_mtime, timezone.utc
+            ).isoformat(),
             "status": manifest.get("status", "unknown"),
             "round": manifest.get("last_valid_round"),
             "config": config,
