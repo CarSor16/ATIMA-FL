@@ -207,6 +207,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
                 "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
                 "/federated-world.svg": ("federated-world.svg", "image/svg+xml"),
+                "/dashboard-icons.svg": ("dashboard-icons.svg", "image/svg+xml"),
             }
             if path in assets:
                 name, kind = assets[path]
