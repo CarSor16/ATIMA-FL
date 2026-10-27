@@ -30,7 +30,8 @@
       run.config?.dataset || "—",
       Number.isInteger(run.config?.clients) ? run.config.clients : "—",
       run.status || "unknown",
-      Number.isInteger(run.round) ? run.round : "—"
+      typeof run.updated_at === "string" && !Number.isNaN(Date.parse(run.updated_at))
+        ? run.updated_at.slice(0, 10) : "—"
     ];
     for (let i = 0; i < cells.length; i++) {
       const cell = document.createElement("td");
@@ -65,11 +66,14 @@
       text("dash-recent-status", "Could not read the local results catalog.");
       return;
     }
-    // The backend returns IDs in a stable order. No unsupported date inference.
-    for (const run of [...values].reverse().slice(0, 4)) body.append(runRow(run));
+    // Use the manifest modification time actually recorded on disk, never the run ID as a date.
+    const ordered = [...values].sort((a, b) =>
+      (Date.parse(b.updated_at || "") || 0) - (Date.parse(a.updated_at || "") || 0) ||
+      String(b.id || "").localeCompare(String(a.id || "")));
+    for (const run of ordered.slice(0, 4)) body.append(runRow(run));
     if (!values.length) body.append(emptyRow("No imported experiments yet. Create an experiment to begin."));
     text("dash-recent-status", values.length
-      ? "Showing " + Math.min(values.length, 4) + " of " + values.length + " local workspace runs (by ID)."
+      ? "Showing " + Math.min(values.length, 4) + " of " + values.length + " local workspace runs (newest manifest first)."
       : "Only completed/imported workspace evidence appears here; sample rows are not invented.");
   }
   async function refreshDashboard() {
