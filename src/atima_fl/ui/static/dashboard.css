@@ -236,3 +236,15 @@ main>.app-header,main>header.app-header{min-height:82px;margin-bottom:20px;gap:1
 .dashboard-open .app-header #quick-new-experiment{display:none!important}
 .dashboard-open .app-header .header-tools{display:flex;gap:18px;align-items:center}
 @media(max-width:600px){.dashboard-open .app-header .header-tools{width:100%;justify-content:space-between}}
+
+/* Precise ATIMA SVG symbols; internal vector artwork, no platform emoji glyphs. */
+.sidebar .nav-icon{display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#dashboard .dash-stat-svg{width:35px;height:35px;display:block}
+#dashboard .dash-bullet-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:25px;height:25px}
+#dashboard .dash-bullet-icon svg{width:23px;height:23px;display:block}
+#dashboard .dash-heading-icon{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#dashboard .dash-action-svg{display:block;width:34px;height:34px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dashboard-open .dash-header-gear-icon{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#dashboard .dash-hero-visual{background-position:50% 50%;background-size:cover}
+@media(max-width:1400px){#dashboard .dash-stat-svg{width:30px;height:30px}}
+@media(max-width:490px){#dashboard .dash-stat-svg{width:23px;height:23px}#dashboard .dash-action-svg{width:29px;height:29px}}
