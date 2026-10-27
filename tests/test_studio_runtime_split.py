@@ -42,3 +42,18 @@ def test_runtime_package_import_is_lightweight():
     assert callable(api.run_profile)
     assert callable(api.launch_profile)
     assert callable(api.compare_profiles)
+
+
+def test_separate_console_entry_points_restrict_commands(tmp_path, capsys):
+    import pytest
+    from atima_fl.studio.cli import main as studio_main
+    from atima_fl.runtime.cli import main as runtime_main
+
+    profile = tmp_path / "profile.toml"
+    ExperimentConfig(name="SplitEntrypoint").validate().save(profile)
+    studio_main(["validate", "--config", str(profile)])
+    assert json.loads(capsys.readouterr().out)["configuration"] == "valid"
+    with pytest.raises(SystemExit, match="ATIMA Studio commands"):
+        studio_main(["run", str(profile)])
+    with pytest.raises(SystemExit, match="ATIMA Runtime commands"):
+        runtime_main(["ui"])
