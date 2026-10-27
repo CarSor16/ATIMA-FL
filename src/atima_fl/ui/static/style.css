@@ -264,7 +264,7 @@ body{
   background:linear-gradient(160deg,#0a2a3d 0%,#061b2b 56%,#061522 100%);
 }
 .brand{align-items:center;gap:12px;padding:0 5px 23px;border-bottom:1px solid rgba(137,218,225,.17)}
-.brand-mark{display:block;width:58px;height:58px;flex:none;filter:drop-shadow(0 3px 12px rgba(32,211,225,.22))}
+.brand-mark{display:block;width:66px;height:66px;flex:none;object-fit:contain;filter:drop-shadow(0 3px 12px rgba(32,211,225,.22))}
 .brand-name{font-size:23px;letter-spacing:-.65px;color:#eafcff}
 .brand-name span{color:#69e9e5}
 .brand .brand-subtitle{max-width:156px;margin-top:3px;color:#92b6c7;font-size:9px;line-height:1.42;letter-spacing:.1px}
