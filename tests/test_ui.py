@@ -590,3 +590,39 @@ def test_dashboard_reference_layout_assets_and_real_data(gui):
     assert json.load(urlopen(url + "/api/results")) == []
     assert "exp_001" not in index
     assert "CIC-IDS2017" not in index
+
+
+def test_dashboard_cc0_map_and_original_svg_icons_are_served(gui):
+    from xml.etree import ElementTree as ET
+
+    _, url = gui
+    index = urlopen(url + "/").read().decode("utf-8")
+    styles = urlopen(url + "/dashboard.css").read().decode("utf-8")
+    sprite = urlopen(url + "/dashboard-icons.svg").read()
+    map_svg = urlopen(url + "/federated-world.svg").read()
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    icons = ET.fromstring(sprite)
+    names = {
+        element.attrib["id"]
+        for element in icons.findall(".//svg:symbol", ns)
+    }
+    assert {"dashboard", "experiments", "datasets", "attacks",
+            "aggregators", "clients", "results", "visualization",
+            "settings", "documentation", "shield", "play",
+            "clock", "bolt", "analytics", "network"} <= names
+    for name in ("dashboard", "experiments", "datasets", "attacks",
+                 "aggregators", "clients", "results", "visualization",
+                 "settings", "documentation"):
+        assert f'href="/dashboard-icons.svg#{name}"' in index
+    assert index.count('class="dash-action-svg"') == 4
+    assert index.count('class="dash-stat-svg"') == 4
+    assert 'class="dash-heading-icon"' in index
+    assert "dash-action-svg" in styles and "dash-bullet-icon" in styles
+    image = ET.fromstring(map_svg)
+    assert image.attrib["width"] == "960"
+    assert image.attrib["height"] == "540"
+    assert image.attrib["viewBox"] == "0 10 960 540"
+    assert image.find(".//svg:clipPath", ns) is not None
+    assert len(image.findall(".//svg:circle", ns)) >= 100
+    assert b"prefers-reduced-motion" in map_svg
+    assert "federated-world.svg" in styles
