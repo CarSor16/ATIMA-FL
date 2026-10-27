@@ -733,3 +733,10 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
   .fl-metric-grid{grid-template-columns:minmax(0,1fr);gap:2px}
   .fl-metric-grid dd{text-align:left;margin-bottom:8px}
 }
+
+/* Illustrated ATIMA mark: preserve its aspect ratio and align the wordmark underneath. */
+.sidebar .brand{flex-direction:column;align-items:center;text-align:center;gap:6px}
+.sidebar .brand-mark{width:120px;height:95px;max-width:100%;object-fit:contain;filter:drop-shadow(0 4px 14px rgba(32,211,225,.24))}
+.sidebar .brand-identity{width:100%;min-width:0}
+.sidebar .brand-subtitle{line-height:1.4}
+@media(max-width:600px){.sidebar .brand{flex-direction:row;text-align:left;gap:10px}.sidebar .brand-mark{width:72px;height:57px}}
