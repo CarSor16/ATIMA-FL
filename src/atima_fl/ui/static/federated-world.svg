@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" role="img" aria-label="Illustrative world network map: glowing geographic clients connected by federated links">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 10 960 540" role="img" aria-label="Illustrative world network map: glowing geographic clients connected by federated links">
 <defs>
 <radialGradient id="void"><stop stop-color="#133550"/><stop offset=".6" stop-color="#0b2137"/><stop offset="1" stop-color="#061421"/></radialGradient>
 <linearGradient id="landShade" x1="0" y1="0" x2=".75" y2="1"><stop stop-color="#154364" stop-opacity=".92"/><stop offset=".55" stop-color="#10334f"/><stop offset="1" stop-color="#0b2a42" stop-opacity=".87"/></linearGradient>
