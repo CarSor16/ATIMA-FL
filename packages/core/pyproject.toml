@@ -21,3 +21,4 @@ only-include = []
 "../../src/atima_fl/core" = "atima_fl/core"
 "../../src/atima_fl/components" = "atima_fl/components"
 "../../src/atima_fl/engine/plans.py" = "atima_fl/engine/plans.py"
+"../../src/atima_fl/engine/attacks.py" = "atima_fl/engine/attacks.py"
