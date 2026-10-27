@@ -11,6 +11,7 @@ ATTACK_GROUPS = {
     ),
     "byzantine_aggregation_disruption": (
         "update_scaling", "sign_flip", "gaussian_noise", "alie", "ipm", "fang",
+        "min_max", "min_sum",
     ),
     "targeted_model_poisoning": ("local_class_gradient",),
     "backdoor": ("clean_label_trigger", "model_replacement"),
