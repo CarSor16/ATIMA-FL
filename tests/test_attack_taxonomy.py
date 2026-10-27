@@ -7,7 +7,7 @@ from atima_fl.core.registry import Registry
 def test_taxonomy_exactly_covers_implemented_attacks():
     catalog = Registry().catalog()
     ids = {item["id"] for item in catalog["attack"]} - {"none"}
-    assert len(ids) == 19
+    assert len(ids) == 20
     validate_taxonomy(ids)
     listed = {identifier for group in ATTACK_GROUPS.values() for identifier in group}
     assert listed == ids
@@ -31,3 +31,8 @@ def test_min_max_and_min_sum_are_real_plugins():
         assert callable(component.hooks["transform"])
         assert callable(component.hooks["validate"])
         assert component.references
+
+
+def test_random_byzantine_is_classified():
+    attacks = {item["id"]: item for item in Registry().catalog()["attack"]}
+    assert attacks["random_byzantine"]["category"] == "byzantine_aggregation_disruption"
