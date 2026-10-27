@@ -88,68 +88,45 @@ def main(argv=None):
     elif args.command == "catalog":
         print(json.dumps(Registry(args.plugins).catalog(), ensure_ascii=False, indent=2))
     elif args.command == "ui":
-        from .ui.app import serve
+        from .studio.api import serve
 
-        serve(Path(args.workspace), args.port, args.plugins)
+        serve(args.workspace, args.port, args.plugins)
     elif args.command == "validate":
-        config = ExperimentConfig.load(args.config)
-        print(
-            json.dumps(
-                {
-                    "configuration": "valid",
-                    "dataset": "not_checked",
-                    "gpu": "not_checked",
-                    "config": config.resolved(),
-                },
-                indent=2,
-            )
-        )
+        from .studio.api import validate_profile
+
+        print(json.dumps(validate_profile(args.config), indent=2))
     elif args.command == "plan":
-        from .engine.plans import save_plan
+        from .studio.api import export_plan
 
-        print(save_plan(ExperimentConfig.load(args.config), args.workspace))
+        print(export_plan(args.config, args.workspace))
     elif args.command == "defense-study":
-        from .engine.plans import save_defense_study
+        from .studio.api import export_defense_study
 
-        print(save_defense_study(ExperimentConfig.load(args.config), args.workspace))
+        print(export_defense_study(args.config, args.workspace))
     elif args.command == "compare-defenses":
-        from .engine.defense_analysis import compare_defenses
+        from .runtime.api import compare_defense_profiles
 
-        print(json.dumps(compare_defenses(args.unprotected, args.protected, args.output), indent=2))
+        print(json.dumps(compare_defense_profiles(args.unprotected, args.protected, args.output), indent=2))
     elif args.command == "run":
-        from .adapters.flower.launch import allocated_config, launch as run
+        from .runtime.api import run_profile
 
-        config = ExperimentConfig.load(args.profile)
-        if args.local:
-            from dataclasses import replace
-            import os
-
-            available = (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity")
-                         else os.cpu_count() or 0)
-            if available < config.servers + 2:
-                raise RuntimeError("Local run needs at least servers + 2 available CPU cores")
-            config = replace(config, cpu_budget=available, client_cpus=1,
-                             compute_device="cpu", client_gpu_fraction=1.0).validate()
-            run(config, preflight_only=args.preflight_only, local=True)
-        else:
-            config = allocated_config(config)
-            run(config, preflight_only=args.preflight_only)
+        run_profile(args.profile, preflight_only=args.preflight_only, local=args.local)
     elif args.command == "launch":
-        from .adapters.flower.launch import launch as run
+        from .runtime.api import launch_profile
 
-        run(ExperimentConfig.load(args.config), args.preflight_only)
+        launch_profile(args.config, preflight_only=args.preflight_only)
     elif args.command == "analyze":
-        from .engine.analysis import compare
+        from .runtime.api import compare_profiles
 
-        print(json.dumps(compare(args.clean, args.attack, args.output)["summary"], indent=2))
+        print(json.dumps(compare_profiles(args.clean, args.attack, args.output), indent=2))
     elif args.command == "statistics":
-        from .engine.statistics import summarize
+        from .runtime.api import summarize_profiles
 
-        print(json.dumps(summarize(args.inputs, args.output), indent=2))
+        print(json.dumps(summarize_profiles(args.inputs, args.output), indent=2))
     elif args.command == "defense-statistics":
-        from .engine.statistics import summarize_defenses
+        from .runtime.api import summarize_defense_profiles
 
-        print(json.dumps(summarize_defenses(args.inputs, args.output), indent=2))
+        print(json.dumps(summarize_defense_profiles(args.inputs, args.output), indent=2))
 
 
 if __name__ == "__main__":
