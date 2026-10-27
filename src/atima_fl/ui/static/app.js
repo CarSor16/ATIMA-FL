@@ -32,6 +32,8 @@ function setTheme(next, persist = false) {
 
 // Common shell shared by every page. Navigation preserves existing form state.
 const PAGE_META={
+  dashboard:{heading:"Dashboard",subtitle:"Adversarial Testing in Federated Machine Learning",crumb:"DASHBOARD"},
+  settings:{heading:"Settings",subtitle:"Customize the local Studio and review workspace options.",crumb:"SETTINGS"},
   designer:{heading:"Create a federated learning security experiment",subtitle:"Configure an FL security experiment and export a reproducible TOML plan.",crumb:"DESIGNER"},
   "dataset-manager":{heading:"Dataset Manager",subtitle:"Inspect and prepare a local dataset, or inspect remote metadata over optional SSH.",crumb:"DATASETS"},
   components:{heading:"Components",subtitle:"Registered plugins and their capabilities.",crumb:"LIBRARY"},
@@ -54,8 +56,9 @@ function navigateTo(page,focusHeading=false){
   $("page-breadcrumb").textContent="ATIMA-FL / "+meta.crumb;
   const icon=document.querySelector('.nav[data-page="'+page+'"] .nav-icon');
   if(icon)$("page-glyph").replaceChildren(icon.cloneNode(true));
-  $("quick-new-experiment").classList.toggle("hidden",page==="designer");
+  $("quick-new-experiment").classList.toggle("hidden",page==="designer" || page==="dashboard");
   if(page==="results")refreshResults();
+  document.dispatchEvent(new CustomEvent("atima:navigate",{detail:{page}}));
   if(focusHeading){
     window.scrollTo({top:0,behavior:"auto"});
     $("page-title").tabIndex=-1;
@@ -211,6 +214,7 @@ async function discoverClusterDatasets(){
 
 function renderComponentCatalog(){
   const query=String($("component-search")?.value||"").trim().toLocaleLowerCase();
+  const selectedKind=$("component-search")?.dataset.kind||"";
   let visible=0;
   const root=$("component-list");
   root.replaceChildren();
@@ -223,6 +227,7 @@ function renderComponentCatalog(){
     section.append(heading);
     const subgroups=node("div",undefined,"catalog-subgroups");
     for(const [kind,title] of group.kinds){
+      if(selectedKind && selectedKind!==kind)continue;
       const items=(catalog[kind]||[]).filter(component=>{
         if(!query)return true;
         const haystack=[component.id,component.title,component.description,
@@ -728,8 +733,8 @@ async function initialize(){
     refreshManualFromChoices();
   });
   $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
-  $("component-search").addEventListener("input",renderComponentCatalog);
-  for(const button of document.querySelectorAll(".nav"))
+  $("component-search").addEventListener("input",()=>{delete $("component-search").dataset.kind;renderComponentCatalog();});
+  for(const button of document.querySelectorAll(".nav[data-page]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
   for(const button of document.querySelectorAll("[data-page-target]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.pageTarget,true));
