@@ -541,3 +541,22 @@ def test_result_identity_helpers_preserve_complete_audit_and_missing_values():
     )
     assert _result_runtime_identity({"source_identity": {}, "runtime": {"python": "3.11"}}) is None
     assert _result_dataset_identity({})["hashes"]["test"] is None
+
+
+def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    assert '<link rel="icon" type="image/png" href="/atima-original-shield.png">' in html
+    assert 'src="/atima-original-shield.png"' in html
+    assert "brand-illustration.png" not in html
+    assert "object-fit:contain" in css
+    image = urlopen(url + "/atima-original-shield.png").read()
+    assert image.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+    # The independent icon is square and contains no screenshot lettering.
+    width = int.from_bytes(image[16:20], "big")
+    height = int.from_bytes(image[20:24], "big")
+    assert (width, height) == (96, 96)
+    with pytest.raises(HTTPError) as caught:
+        urlopen(url + "/brand-illustration.png")
+    assert caught.value.code == 404
