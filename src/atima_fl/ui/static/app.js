@@ -43,6 +43,7 @@ const PAGE_META={
 function navigateTo(page,focusHeading=false){
   const meta=PAGE_META[page];
   if(!meta)return;
+  document.body.classList.toggle("dashboard-open",page==="dashboard");
   for(const button of document.querySelectorAll(".nav")){
     const active=button.dataset.page===page;
     button.classList.toggle("active",active);
@@ -220,7 +221,7 @@ function renderComponentCatalog(){
   root.replaceChildren();
   for(const [index,group] of CATALOG_GROUPS.entries()){
     const section=node("details",undefined,"catalog-group");
-    section.open=Boolean(query)||index===0;
+    section.open=Boolean(query||selectedKind)||index===0;
     const heading=node("summary",undefined,"catalog-group-heading");
     const total=group.kinds.reduce((n,[kind])=>n+(catalog[kind]?.length||0),0);
     heading.append(node("strong",group.title),node("span",total+" "+uiText("components"),"catalog-count"));
@@ -238,7 +239,7 @@ function renderComponentCatalog(){
       if(!items.length)continue;
       visible+=items.length;
       const subgroup=node("details",undefined,"catalog-subgroup");
-      subgroup.open=Boolean(query);
+      subgroup.open=Boolean(query||selectedKind);
       const summary=node("summary",undefined,"catalog-subheading");
       summary.append(node("strong",title),node("span",String(items.length),"catalog-count"));
       subgroup.append(summary);
