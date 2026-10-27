@@ -149,7 +149,16 @@ class Registry:
         return validate_parameters(self.get(kind, identifier), values)
 
     def catalog(self):
-        return {
+        # Presentational metadata: execution hooks and saved profile IDs do not change.
+        from .attack_taxonomy import classify_attack
+
+        result = {
             kind: [value.public() for value in entries.values()]
             for kind, entries in self.components.items()
         }
+        for item in result["attack"]:
+            if item["id"] == "none":
+                item.update(category="baseline", implementation_status="baseline", survey_references=[])
+            else:
+                item.update(classify_attack(item["id"]))
+        return result
