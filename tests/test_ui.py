@@ -560,3 +560,32 @@ def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
     with pytest.raises(HTTPError) as caught:
         urlopen(url + "/brand-illustration.png")
     assert caught.value.code == 404
+
+
+def test_dashboard_reference_layout_assets_and_real_data(gui):
+    _, url = gui
+    index = urlopen(url + "/").read().decode("utf-8")
+    assert '<section id="dashboard" class="page active"' in index
+    assert '<section id="designer" class="page">' in index
+    for item in ("dash-datasets", "dash-clients", "dash-attacks", "dash-aggregators",
+                 "dash-recent-body", "dash-health", "dash-settings-theme"):
+        assert f'id="{item}"' in index
+    assert 'data-page="dashboard"' in index
+    assert 'data-page-target="designer"' in index
+    assert 'data-catalog-focus="aggregator"' in index
+    assert "Federated Learning" in index and "under Attack" in index
+    for route, marker in (
+        ("/dashboard.css", b".dash-hero"),
+        ("/dashboard.js", b'json("/api/catalog")'),
+        ("/federated-world.svg", b"<svg"),
+    ):
+        with urlopen(url + route) as response:
+            assert marker in response.read()
+            assert response.status == 200
+    catalog = json.load(urlopen(url + "/api/catalog"))["catalog"]
+    defaults = json.load(urlopen(url + "/api/defaults"))
+    assert len(catalog["attack"]) >= 21
+    assert defaults["clients"] > 0
+    assert json.load(urlopen(url + "/api/results")) == []
+    assert "exp_001" not in index
+    assert "CIC-IDS2017" not in index
