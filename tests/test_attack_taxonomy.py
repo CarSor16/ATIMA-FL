@@ -18,7 +18,8 @@ def test_attack_catalog_exposes_presentation_metadata_without_changing_ids():
     attacks = {entry["id"]: entry for entry in catalog["attack"]}
     assert attacks["none"]["category"] == "baseline"
     assert attacks["update_scaling"]["category"] == "byzantine_aggregation_disruption"
-    assert "min_max" not in attacks
+    assert attacks["min_max"]["category"] == "byzantine_aggregation_disruption"
+    assert attacks["min_sum"]["category"] == "byzantine_aggregation_disruption"
     assert attacks["update_scaling"]["survey_references"]
     assert all(a["implementation_status"] == "implemented" for k, a in attacks.items() if k != "none")
 
