@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "atima-core"
+version = "0.5.2"
+description = "ATIMA shared experiment schema, component registry and plan format"
+requires-python = ">=3.11,<3.13"
+dependencies = ["numpy==2.2.6", "tomli-w>=1.2,<2"]
+
+[project.scripts]
+atima = "atima_fl.cli:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = []
+
+[tool.hatch.build.targets.wheel.force-include]
+"../../src/atima_fl/__init__.py" = "atima_fl/__init__.py"
+"../../src/atima_fl/cli.py" = "atima_fl/cli.py"
+"../../src/atima_fl/core" = "atima_fl/core"
+"../../src/atima_fl/components" = "atima_fl/components"
+"../../src/atima_fl/engine/plans.py" = "atima_fl/engine/plans.py"
