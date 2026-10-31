@@ -74,8 +74,14 @@ causes an explicit error rather than inventing examples. The local web designer
 shows the task mapping and can inspect the actual label distribution per split
 and persisted client; inspection requires that the GUI process can access the
 prepared dataset directory. See [Edge-IIoT task documentation](docs/EDGE_IIOT_TASKS.md).
-The existing Dirichlet plugin reads **already-saved alpha=0.5 shards**, not
-new arbitrary non-IID partitions.
+The Dirichlet plugin now supports a selectable alpha (visible in Simple and
+Advanced modes). The historical alpha=0.5 partition still reads the existing
+`dirichlet/` directory. For any other value, prepare new immutable shards on
+the dataset host with
+`atima-runtime prepare-dirichlet --dataset-root /prepared/edge-iiot --alpha 0.1 --clients 10 --seed 2026`.
+The runtime validates class coverage and records seed and hashes; changing
+alpha requires a matched clean baseline and does not silently re-use the
+alpha=0.5 shards. The Studio form alone never creates dataset files.
 
 When preparing a plan without local data, the Edge-IIoT dataset path may be
 `env:ATIMA_EDGE_IIOT_ROOT` instead of a local or cluster-specific absolute path.
@@ -450,3 +456,15 @@ atima run profile.toml --local
 
 On an allocated Slurm job, run `atima run profile.toml` without the local flag.
 See [Universal datasets](docs/UNIVERSAL_DATASETS.md) for known limitations.
+
+
+## Python experiment launcher
+
+The Designer **Export Python + TOML bundle** writes a ZIP with
+`experiment.toml`, `run_experiment.py`, `run_cluster.sh` and `plan.json`.
+Execute `python run_experiment.py preflight --local` to check a local CPU
+run, then `python run_experiment.py train --local` for local training.
+On an appropriately allocated Slurm compute node omit `--local`.
+This Python script requires the matching ATIMA Runtime, Flower and
+training dependencies; it is a launch wrapper, not a self-contained vendor
+copy of the training engine.
