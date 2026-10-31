@@ -63,7 +63,7 @@ def main():
 if __name__ == "__main__":
     main()
 '''
-    (directory / "run_experiment.py").write_text(py_script, encoding="utf-8", newline="\\n")
+    (directory / "run_experiment.py").write_text(py_script, encoding="utf-8", newline="\n")
     (directory / "plan.json").write_text(
         json.dumps(
             {
