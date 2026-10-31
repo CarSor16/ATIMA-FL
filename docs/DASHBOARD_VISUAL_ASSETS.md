@@ -49,3 +49,32 @@ recent runs correctly, including the empty-workspace state.
 
 A final *pixel-comparison screenshot* is separate from these functional tests
 and must be assessed from the locally running Studio browser UI before merge.
+
+
+## October 2026 refresh
+
+The vector sprite now uses corrected cog/gear geometry for **Settings** and a
+history-clock arrow for **Recent Experiments**, avoiding platform-dependent
+Unicode glyphs. The original shapes in `dashboard-icons.svg` are supplied
+for ATIMA use under the Creative Commons Zero 1.0 Universal dedication
+(https://creativecommons.org/publicdomain/zero/1.0/) to the extent that
+copyright subsists in them; no commercial icon-library artwork was copied.
+
+The new `atima-shield-transparent.png` is a generated, text-free ATIMA
+symbol supplied with an indexed PNG transparency channel and referenced
+as the sidebar emblem and favicon. The previous mark is retained for
+provenance but not used as active brand art. The new image should not be
+represented as a registered or exclusively owned trademark without a
+separate clearance.
+
+The implementation draws on the **design principles** of the
+[shadcn/ui dashboard and sidebar blocks](https://ui.shadcn.com/blocks):
+sharper elevation hierarchy, consistent panels, subtle dividers and
+coherent interactions. The frontend remains the existing no-React
+HTML/CSS/JavaScript Studio architecture.
+
+The chosen technical display font is the GGBotNet **Alpha Prota** face
+(CC0 1.0, https://github.com/ggbotnet/fonts-cc0). For offline/privacy
+reasons it is used via `local()` when installed on the workstation;
+without that local font, the same system fallback is used in light and
+dark mode. The binary font is **not included** with ATIMA.
