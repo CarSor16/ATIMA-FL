@@ -416,3 +416,21 @@ def test_group_dispatch_accepts_batch_pool_and_executor():
     for pool in (None, BatchPool(), Executor()):
         outcomes = _run_group_aggregation(tasks, pool)
         np.testing.assert_array_equal(outcomes[0][0][0], [1.0])
+
+
+def test_dirichlet_alpha_selects_matching_persisted_shards_and_rejects_invalid(tmp_path):
+    from atima_fl.components.partitions.dirichlet import location
+
+    old = ExperimentConfig(partition="dirichlet",
+                           partition_params={"alpha": 0.5}).validate()
+    altered = ExperimentConfig(partition="dirichlet",
+                               partition_params={"alpha": 0.1}).validate()
+    assert location(tmp_path, old, {"alpha": 0.5}) == tmp_path / "dirichlet"
+    assert location(tmp_path, altered, {"alpha": 0.1}) == tmp_path / "dirichlet_alpha_0.1"
+    assert location(tmp_path, altered, {"alpha": 0.75}) == tmp_path / "dirichlet_alpha_0.75"
+    # No dataset is silently created or substituted when changing alpha.
+    assert not (tmp_path / "dirichlet_alpha_0.1").exists()
+    for invalid in (-1, 0, 101, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="Dirichlet alpha"):
+            ExperimentConfig(partition="dirichlet",
+                             partition_params={"alpha": invalid}).validate()
