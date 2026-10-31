@@ -40,7 +40,7 @@ PLUGIN = Component(
     "For alpha=0.5 the historic 'dirichlet' directory is used; other values "
     "require an independently prepared 'dirichlet_alpha_<alpha>' directory. "
     "ATIMA never relabels alpha=0.5 shards as a different alpha.",
-    {"alpha": {"type": "number", "default": 0.5, "min": 0.01, "max": 100.0}},
+    {"alpha": {"type": "number", "default": 0.5, "minimum": 0.01, "maximum": 100.0}},
     {"location": location, "validate": validate},
     translations={
         "it": {
