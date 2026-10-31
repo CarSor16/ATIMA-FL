@@ -425,8 +425,8 @@ def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
     assert 'viewBox="0 0 96 96"' in logo
     assert "federated clients" in logo
     assert '<span class="mark" aria-hidden="true">▲</span>' not in page
-    assert 'class="brand-mark" src="/atima-original-shield.png"' in page
-    assert 'rel="icon" type="image/png" href="/atima-original-shield.png"' in page
+    assert 'class="brand-mark" src="/atima-shield-transparent.png"' in page
+    assert 'rel="icon" type="image/png" href="/atima-shield-transparent.png"' in page
     assert 'href="#main-content"' in page
     assert 'id="page-glyph"' in page
     assert 'id="quick-new-experiment"' in page
