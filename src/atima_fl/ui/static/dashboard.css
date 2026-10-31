@@ -304,3 +304,20 @@ body,button,input,select,textarea{font-family:"ATIMA Technical",system-ui,-apple
 :root[data-theme="dark"] #dashboard .dash-hero-copy h2{
   font-family:"ATIMA Technical",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
+
+/* Nested component configuration: secondary subtable, not another main card. */
+#designer .component-block>.fields,
+#designer .defense-params,
+#designer .component-card .fields{
+  border:1px solid var(--atima-separator);border-radius:10px;
+  background:var(--atima-panel-2);padding:14px;
+}
+#designer .component-block .param-subheading,
+#designer .defense-params .param-subheading{
+  grid-column:1/-1;font-size:11px;font-weight:750;letter-spacing:.085em;
+  text-transform:uppercase;opacity:.73;padding-bottom:7px;
+  border-bottom:1px solid var(--atima-separator);
+}
+#designer .component-block>.fields label,#designer .defense-params label{
+  min-width:0;
+}
