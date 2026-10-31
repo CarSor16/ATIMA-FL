@@ -548,16 +548,16 @@ def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
     css = urlopen(url + "/style.css").read().decode("utf-8")
-    assert '<link rel="icon" type="image/png" href="/atima-original-shield.png">' in html
-    assert 'src="/atima-original-shield.png"' in html
+    assert '<link rel="icon" type="image/png" href="/atima-shield-transparent.png">' in html
+    assert 'src="/atima-shield-transparent.png"' in html
     assert "brand-illustration.png" not in html
     assert "object-fit:contain" in css
-    image = urlopen(url + "/atima-original-shield.png").read()
+    image = urlopen(url + "/atima-shield-transparent.png").read()
     assert image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
-    # The independent icon is square and contains no screenshot lettering.
+    # Transparent palette PNG, square with no embedded lettering.
     width = int.from_bytes(image[16:20], "big")
     height = int.from_bytes(image[20:24], "big")
-    assert (width, height) == (96, 96)
+    assert (width, height) == (80, 80)
     with pytest.raises(HTTPError) as caught:
         urlopen(url + "/brand-illustration.png")
     assert caught.value.code == 404
