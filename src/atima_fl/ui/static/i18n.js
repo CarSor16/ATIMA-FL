@@ -371,7 +371,7 @@ const UI_TRANSLATIONS = {
   "Local artifacts only. No automatic cluster connections.": "Solo artefatti locali. Non sono previste connessioni automatiche al cluster.",
   "Refresh results": "Aggiorna risultati",
   "From profile to comparison": "Dal profilo al confronto",
-  "Adversarial Testing Infrastructure for Model Aggregation. FL denotes Federated Learning.": "Adversarial Testing Infrastructure for Model Aggregation. FL indica il contesto Federated Learning.",
+  "Adversarial Testing Infrastructure for Model Attacks. FL denotes Federated Learning.": "Infrastruttura di test avversari per attacchi ai modelli. FL indica il Federated Learning.",
   "Choose components, data, seed and budget. Displayed parameters come from component files.": "Scegli componenti, dati, seed e budget. I parametri mostrati provengono dai file dei componenti.",
   "Validate the configuration and export the plan. Saving does not start training.": "Verifica la configurazione ed esporta il piano. Il salvataggio non avvia un training.",
   "Transfer the plan to the cluster. Request a real GPU and the specified CPUs in New Batch Job.": "Trasferisci il piano nel cluster. In New Batch Job richiedi una GPU reale e le CPU indicate.",
