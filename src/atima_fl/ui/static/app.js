@@ -338,6 +338,7 @@ function updateTaskUi() {
 }
 function parameterFields(component, target, values={}) {
   target.replaceChildren();
+  if(Object.keys(component.parameters).length) target.append(node("div","Component parameters · "+component.id,"param-subheading"));
   for(const [key,schema] of Object.entries(component.parameters)) {
     const label=node("label",schema.description || key);
     let input;
