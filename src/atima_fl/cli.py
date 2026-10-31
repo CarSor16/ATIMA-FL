@@ -23,6 +23,13 @@ def main(argv=None):
     dp.add_argument("--clients", type=int, default=10)
     dp.add_argument("--seed", type=int, default=2026)
     dp.add_argument("--max-rows", type=int, default=500000)
+    dirichlet = commands.add_parser(
+        "prepare-dirichlet", help="Create immutable Edge-IIoT Dirichlet client shards"
+    )
+    dirichlet.add_argument("--dataset-root", required=True)
+    dirichlet.add_argument("--alpha", required=True, type=float)
+    dirichlet.add_argument("--clients", type=int, default=10)
+    dirichlet.add_argument("--seed", type=int, default=2026)
     catalog = commands.add_parser("catalog", help="List discovered interchangeable components")
     catalog.add_argument("--plugins")
     ui = commands.add_parser("ui", help="Open the local experiment designer")
@@ -83,6 +90,12 @@ def main(argv=None):
                            benign_label=args.benign_label, exclude_columns=args.exclude,
                            clients=args.clients, seed=args.seed, max_rows=args.max_rows)
         print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif args.command == "prepare-dirichlet":
+        from .runtime.dirichlet import prepare_dirichlet
+
+        print(prepare_dirichlet(
+            args.dataset_root, alpha=args.alpha, clients=args.clients, seed=args.seed
+        ))
     elif args.command == "catalog":
         print(json.dumps(Registry(args.plugins).catalog(), ensure_ascii=False, indent=2))
     elif args.command == "ui":
