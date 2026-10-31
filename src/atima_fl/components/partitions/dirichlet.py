@@ -18,6 +18,11 @@ def alpha_directory(alpha):
     return format(value.normalize(), "f")
 
 
+def validate(config, params):
+    """Reject invalid Dirichlet values during TOML/UI validation."""
+    alpha_directory(params["alpha"])
+
+
 def location(root, config, params):
     alpha = alpha_directory(params["alpha"])
     # Preserve compatibility with the audited historical alpha=0.5 corpus.
@@ -36,7 +41,7 @@ PLUGIN = Component(
     "require an independently prepared 'dirichlet_alpha_<alpha>' directory. "
     "ATIMA never relabels alpha=0.5 shards as a different alpha.",
     {"alpha": {"type": "number", "default": 0.5, "min": 0.01, "max": 100.0}},
-    {"location": location},
+    {"location": location, "validate": validate},
     translations={
         "it": {
             "title": "Partizione Dirichlet persistita (α selezionabile)",
