@@ -626,3 +626,23 @@ def test_dashboard_cc0_map_and_original_svg_icons_are_served(gui):
     assert len(image.findall(".//svg:circle", ns)) >= 100
     assert b"prefers-reduced-motion" in map_svg
     assert "federated-world.svg" in styles
+
+
+def test_exported_python_launcher_uses_runtime_without_copying_training_engine(gui):
+    _, url = gui
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    c = json.load(urlopen(url + "/api/defaults"))
+    c["name"] = "PythonRunner_fixture"
+    response = json.load(urlopen(Request(
+        url + "/api/plans", json.dumps(c).encode(), headers=headers
+    )))
+    with zipfile.ZipFile(io.BytesIO(urlopen(url + response["download"]).read())) as archive:
+        files = set(archive.namelist())
+        assert {"experiment.toml", "run_experiment.py", "run_cluster.sh", "plan.json"} == files
+        script = archive.read("run_experiment.py").decode()
+        assert "from atima_fl.runtime.api import run_profile" in script
+        assert 'choices=("preflight", "train")' in script
+        assert "args.local" in script
+        assert 'Path(__file__).resolve().parent / "experiment.toml"' in script
+        compile(script, "run_experiment.py", "exec")
