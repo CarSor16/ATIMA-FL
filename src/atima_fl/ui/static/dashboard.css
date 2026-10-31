@@ -286,3 +286,21 @@ body,button,input,select,textarea{font-family:"ATIMA Technical",system-ui,-apple
 @media(prefers-reduced-motion:reduce){
   #dashboard .dash-stat,#dashboard .dash-panel,#dashboard .dash-action{transition:none;transform:none}
 }
+
+/* CC0 Alpha Prota (GGBotNet) is used locally if installed; no third-party CDN.
+   Same typography in both color themes, with safe legible system fallback. */
+@font-face{font-family:"ATIMA Technical";src:local("Alpha Prota"),local("AlphaProta-Regular");font-weight:400;font-style:normal;font-display:swap}
+:root[data-theme="light"] body,:root[data-theme="dark"] body,
+:root[data-theme="light"] button,:root[data-theme="dark"] button,
+:root[data-theme="light"] input,:root[data-theme="dark"] input,
+:root[data-theme="light"] select,:root[data-theme="dark"] select{
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+.brand .brand-name{font-family:"ATIMA Technical","Arial Narrow",system-ui,sans-serif;font-weight:650}
+.sidebar .brand-subtitle{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+:root[data-theme="light"] .app-header #page-title,
+:root[data-theme="dark"] .app-header #page-title,
+:root[data-theme="light"] #dashboard .dash-hero-copy h2,
+:root[data-theme="dark"] #dashboard .dash-hero-copy h2{
+  font-family:"ATIMA Technical",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
