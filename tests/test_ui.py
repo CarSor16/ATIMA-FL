@@ -151,7 +151,7 @@ def test_gui_theme_toggle_brand_and_assets(gui):
     app = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     translation = urlopen(url + "/i18n.js").read().decode("utf-8")
 
-    assert "Adversarial Testing Infrastructure for Model Aggregation — Federated Learning" in index
+    assert "Adversarial Testing Infrastructure for Model Attacks" in index
     assert 'id="theme-toggle"' in index
     assert 'id="theme-label"' in index
     assert 'id="theme-symbol"' in index
