@@ -258,3 +258,31 @@ body,button,input,select,textarea{font-family:"ATIMA Technical",system-ui,-apple
 :root[data-theme="light"] body,:root[data-theme="dark"] body{font-family:"ATIMA Technical",system-ui,-apple-system,"Segoe UI",sans-serif}
 @media(max-width:1130px){.brand .brand-name{font-size:25px;letter-spacing:.04em}}
 @media(max-width:760px){.sidebar .brand{min-height:auto}.sidebar .brand-subtitle{max-width:240px}}
+
+/* Shadcn-inspired polished application surfaces. No React dependency or fake data. */
+:root[data-theme="dark"]{--atima-panel:#182a3e;--atima-panel-2:#1d3147;--atima-separator:#2e4560}
+:root[data-theme="light"]{--atima-panel:#fff;--atima-panel-2:#f1f5fa;--atima-separator:#dbe5ee}
+#dashboard .dash-stat,#dashboard .dash-panel,#dashboard .dash-action{
+  transition:border-color .17s ease,box-shadow .17s ease,transform .17s ease;
+}
+#dashboard .dash-stat:hover{border-color:#50799c;box-shadow:0 10px 24px #06152534}
+#dashboard .dash-panel-heading{padding-bottom:12px;border-bottom:1px solid #2e455d}
+#dashboard .dash-table th{letter-spacing:.018em}
+#dashboard .dash-table tbody tr:hover td{background:#2b4058}
+#dashboard .dash-table :is(th,td):first-child{padding-left:14px}
+#dashboard .dash-action:focus-visible,#dashboard .dash-text-link:focus-visible{outline:2px solid #5dafff;outline-offset:3px}
+#designer .selector .params,#designer .component-card .params,
+#designer .defense-stage .params{
+  margin-top:12px;padding:12px 14px;border:0;border-left:2px solid #448ed1;
+  border-radius:0 8px 8px 0;background:var(--atima-panel-2);
+}
+#designer .review .card details{border-top:1px solid var(--atima-separator);padding-top:12px}
+#designer .review .card details>summary{cursor:pointer;font-weight:650}
+#designer .review .card details>pre{margin-top:12px;border:1px solid var(--atima-separator);border-radius:8px}
+#designer .fields>.wide,#designer .params>.wide{min-width:0}
+:root[data-theme="light"] #dashboard .dash-stat,
+:root[data-theme="light"] #dashboard .dash-panel,
+:root[data-theme="light"] #dashboard .dash-action{border-color:#d4e0ea}
+@media(prefers-reduced-motion:reduce){
+  #dashboard .dash-stat,#dashboard .dash-panel,#dashboard .dash-action{transition:none;transform:none}
+}
