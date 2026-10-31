@@ -204,6 +204,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/style.css": ("style.css", "text/css; charset=utf-8"),
                 "/brand-mark.svg": ("brand-mark.svg", "image/svg+xml"),
                 "/atima-original-shield.png": ("atima-original-shield.png", "image/png"),
+                "/atima-shield-transparent.png": ("atima-shield-transparent.png", "image/png"),
                 "/dashboard.css": ("dashboard.css", "text/css; charset=utf-8"),
                 "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
                 "/federated-world.svg": ("federated-world.svg", "image/svg+xml"),
