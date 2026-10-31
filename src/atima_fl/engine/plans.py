@@ -36,6 +36,34 @@ case "$MODE" in
 esac
 """
     (directory / "run_cluster.sh").write_text(script, encoding="utf-8", newline="\n")
+    # Python entry point uses installed ATIMA Runtime; it is NOT a standalone
+    # copy of the Flower engine, attacks, datasets or environment.
+    py_script = '''#!/usr/bin/env python3
+"""Run a validated ATIMA experiment with the installed Runtime/Flower stack.
+
+Usage: python run_experiment.py preflight [--local]
+       python run_experiment.py train [--local]
+
+Requires the matching ATIMA Runtime installation and prepared dataset.
+"""
+import argparse
+from pathlib import Path
+from atima_fl.runtime.api import run_profile
+
+def main():
+    parser = argparse.ArgumentParser(description="ATIMA experiment launcher")
+    parser.add_argument("mode", choices=("preflight", "train"))
+    parser.add_argument("--local", action="store_true",
+                        help="Run on local CPU rather than allocated Slurm")
+    args = parser.parse_args()
+    profile = Path(__file__).resolve().parent / "experiment.toml"
+    return run_profile(profile, preflight_only=args.mode == "preflight",
+                       local=args.local)
+
+if __name__ == "__main__":
+    main()
+'''
+    (directory / "run_experiment.py").write_text(py_script, encoding="utf-8", newline="\\n")
     (directory / "plan.json").write_text(
         json.dumps(
             {
@@ -55,7 +83,7 @@ esac
     archive = directory / "plan.zip"
     _archive_files(
         archive,
-        ((directory / name, name) for name in ("experiment.toml", "run_cluster.sh", "plan.json")),
+        ((directory / name, name) for name in ("experiment.toml", "run_cluster.sh", "run_experiment.py", "plan.json")),
     )
     return directory
 
