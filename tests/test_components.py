@@ -431,6 +431,6 @@ def test_dirichlet_alpha_selects_matching_persisted_shards_and_rejects_invalid(t
     # No dataset is silently created or substituted when changing alpha.
     assert not (tmp_path / "dirichlet_alpha_0.1").exists()
     for invalid in (-1, 0, 101, float("nan"), float("inf")):
-        with pytest.raises(ValueError, match="Dirichlet alpha"):
+        with pytest.raises(ValueError, match=r"(?:Dirichlet alpha|dirichlet\.alpha)"):
             ExperimentConfig(partition="dirichlet",
                              partition_params={"alpha": invalid}).validate()
