@@ -42,7 +42,7 @@ def test_gui_catalog_validate_export_no_overwrite_and_token(gui):
     assert checked["checks"]["cuda"] == "not_checked"
     result = json.load(urlopen(Request(url + "/api/plans", body, headers=headers)))
     with zipfile.ZipFile(io.BytesIO(urlopen(url + result["download"]).read())) as file:
-        assert set(file.namelist()) == {"experiment.toml", "run_cluster.sh", "plan.json"}
+        assert set(file.namelist()) == {"experiment.toml", "run_cluster.sh", "run_experiment.py", "plan.json"}
     with pytest.raises(HTTPError) as caught:
         urlopen(Request(url + "/api/plans", body, headers=headers))
     assert caught.value.code == 409
