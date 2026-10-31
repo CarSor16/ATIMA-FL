@@ -248,3 +248,13 @@ main>.app-header,main>header.app-header{min-height:82px;margin-bottom:20px;gap:1
 #dashboard .dash-hero-visual{background-position:50% 50%;background-size:cover}
 @media(max-width:1400px){#dashboard .dash-stat-svg{width:30px;height:30px}}
 @media(max-width:490px){#dashboard .dash-stat-svg{width:23px;height:23px}#dashboard .dash-action-svg{width:29px;height:29px}}
+
+/* Shadcn-inspired consistent typography and compact horizontal identity. */
+body,button,input,select,textarea{font-family:"ATIMA Technical",system-ui,-apple-system,"Segoe UI",sans-serif}
+.brand .brand-name{font-family:"ATIMA Technical",system-ui,sans-serif;white-space:nowrap;font-size:29px;letter-spacing:.07em;line-height:1.1}
+.sidebar .brand{gap:8px}
+.sidebar .brand-subtitle{max-width:235px;font-family:"ATIMA Technical",system-ui,sans-serif;font-size:10px!important;line-height:1.35;letter-spacing:.025em;text-transform:none;overflow-wrap:normal}
+.app-header h1,.app-header #page-title,#dashboard .dash-hero-copy h2{font-family:"ATIMA Technical",system-ui,sans-serif}
+:root[data-theme="light"] body,:root[data-theme="dark"] body{font-family:"ATIMA Technical",system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(max-width:1130px){.brand .brand-name{font-size:25px;letter-spacing:.04em}}
+@media(max-width:760px){.sidebar .brand{min-height:auto}.sidebar .brand-subtitle{max-width:240px}}
