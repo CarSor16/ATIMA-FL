@@ -554,6 +554,7 @@ def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
     assert "object-fit:contain" in css
     image = urlopen(url + "/atima-shield-transparent.png").read()
     assert image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
+    assert b"tRNS" in image  # PNG indexed-color alpha: outside of the shield is transparent.
     # Transparent palette PNG, square with no embedded lettering.
     width = int.from_bytes(image[16:20], "big")
     height = int.from_bytes(image[20:24], "big")
