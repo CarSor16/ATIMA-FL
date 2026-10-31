@@ -111,7 +111,7 @@ def test_one_file_discovery_removal_and_duplicate(tmp_path):
         {"attack": "sign_flip", "rounds": 2, "attack_start": 3},
         {"model_params": {"hidden": [0]}},
         {"attack_params": {"unexpected": 1}},
-        {"partition": "dirichlet", "partition_params": {"alpha": 0.1}},
+        {"partition": "dirichlet", "partition_params": {"alpha": -0.1}},
         {"learning_rate": float("nan")},
         {"servers": 0},
         {"servers": 11},
