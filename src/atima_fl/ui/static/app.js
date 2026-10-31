@@ -353,7 +353,7 @@ function selection(kind, field, target) {
   const block=node("div",undefined,"component-block"+(["optimizer","loss","metrics"].includes(kind)?" advanced-only":"")),label=node("label",titles[kind]),select=node("select"); select.id=field;
   for(const component of catalog[kind]) { const option=node("option",componentLabel(component,"title")); option.value=component.id;select.append(option); }
   select.value=defaults[field]; label.append(select);block.append(label);
-  const description=node("p",undefined,"component-description"),params=node("div",undefined,kind==="dataset"?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
+  const description=node("p",undefined,"component-description"),params=node("div",undefined,["dataset","partition"].includes(kind)?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
   function refresh(){const component=catalog[kind].find(c=>c.id===select.value);description.textContent=componentLabel(component,"description");parameterFields(component,params,select.value===defaults[field]?defaults[field+"_params"]:{});}
   select.addEventListener("change",()=>{
     refresh();
