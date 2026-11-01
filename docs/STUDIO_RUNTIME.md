@@ -152,3 +152,39 @@ ATIMA shield image is served locally. Settings and Recent Experiments use
 corrected geometric icons from the same local SVG sprite. No React/shadcn
 runtime was added: their block layout is a visual reference, not a frontend
 framework migration.
+
+## Transfer and launch the exported plan on a Slurm cluster
+
+The exported `plan.zip` contains `experiment.toml`, `run_experiment.py`,
+`run_cluster.sh` and `plan.json`. **Both launchers require the same installed
+version of ATIMA Runtime, Flower, the actual prepared dataset and an allocated
+compute environment**. Neither launcher submits a Slurm job by itself.
+
+- Inside an **already allocated Slurm job**, choose either
+  `python run_experiment.py preflight` then
+  `python run_experiment.py train`, **or** set
+  `ATIMA_PYTHON=/absolute/path/to/python` and use
+  `bash run_cluster.sh preflight` then `bash run_cluster.sh train`.
+  You **do not need to run both launchers**.
+- To request compute resources, use the university's New Batch Job portal
+  or a cluster-approved `sbatch` script that allocates CPU/GPU/memory/time and
+  calls one launcher. `run_cluster.sh` is a **wrapper, not an `sbatch`
+  submission script**; executing `bash run_cluster.sh train` on the login
+  node is not an acceptable substitute for a scheduled job.
+- If using `dataset_root = "env:ATIMA_EDGE_IIOT_ROOT"`, export that variable
+  inside the allocated job and verify the prepared dataset directory before
+  training. Ensure output directories are writable, and run the clean baseline
+  before the matched attacked profile.
+
+**Example commands within a verified allocation**, from the extracted ZIP folder:
+
+```bash
+export ATIMA_EDGE_IIOT_ROOT=/actual/verified/prepared/edge-iiot
+/path/to/python run_experiment.py preflight
+/path/to/python run_experiment.py train
+```
+
+The shell wrapper is an alternative, not an extra prerequisite. The generated
+Python script **is not standalone**: it imports `atima_fl.runtime.api` from the
+already installed ATIMA distribution. Maintain exact source/environment
+identity between local design and cluster execution.
