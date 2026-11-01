@@ -425,8 +425,8 @@ def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
     assert 'viewBox="0 0 96 96"' in logo
     assert "federated clients" in logo
     assert '<span class="mark" aria-hidden="true">▲</span>' not in page
-    assert 'class="brand-mark" src="/atima-shield-transparent.png"' in page
-    assert 'rel="icon" type="image/png" href="/atima-shield-transparent.png"' in page
+    assert 'class="brand-mark" src="/atima-shield-hd.png"' in page
+    assert 'rel="icon" type="image/png" href="/atima-shield-hd.png"' in page
     assert 'href="#main-content"' in page
     assert 'id="page-glyph"' in page
     assert 'id="quick-new-experiment"' in page
@@ -548,17 +548,17 @@ def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
     _, url = gui
     html = urlopen(url + "/").read().decode("utf-8")
     css = urlopen(url + "/style.css").read().decode("utf-8")
-    assert '<link rel="icon" type="image/png" href="/atima-shield-transparent.png">' in html
-    assert 'src="/atima-shield-transparent.png"' in html
+    assert '<link rel="icon" type="image/png" href="/atima-shield-hd.png">' in html
+    assert 'src="/atima-shield-hd.png"' in html
     assert "brand-illustration.png" not in html
     assert "object-fit:contain" in css
-    image = urlopen(url + "/atima-shield-transparent.png").read()
+    image = urlopen(url + "/atima-shield-hd.png").read()
     assert image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
     assert b"tRNS" in image  # PNG indexed-color alpha: outside of the shield is transparent.
     # Transparent palette PNG, square with no embedded lettering.
     width = int.from_bytes(image[16:20], "big")
     height = int.from_bytes(image[20:24], "big")
-    assert (width, height) == (80, 80)
+    assert (width, height) == (256, 256)
     with pytest.raises(HTTPError) as caught:
         urlopen(url + "/brand-illustration.png")
     assert caught.value.code == 404
