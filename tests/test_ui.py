@@ -472,7 +472,7 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     assert '<h1 id="page-title">Dashboard</h1>' in html
     assert '<section id="designer" class="page">' in html
     assert "Build an experiment with confidence" not in html
-    assert "single experiment.toml for atima run in Slurm" in html
+    assert "Python + TOML launch bundle for ATIMA Runtime" in html
     assert "legacy ZIP export remains available" in html
     assert "Exports experiment.toml" in html
     assert f'heading:"{title}"' in script
