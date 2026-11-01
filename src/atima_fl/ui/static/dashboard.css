@@ -321,3 +321,12 @@ body,button,input,select,textarea{font-family:"ATIMA Technical",system-ui,-apple
 #designer .component-block>.fields label,#designer .defense-params label{
   min-width:0;
 }
+
+/* Brand geometry correction: align visible alpha artwork and remove low-res enlargement. */
+.sidebar .brand{width:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;margin-left:auto;margin-right:auto}
+.sidebar .brand-mark{display:block;width:96px!important;height:96px!important;max-width:none;flex:0 0 96px;object-fit:contain;object-position:50% 50%;margin:0 auto;transform:none}
+.sidebar .brand-identity{width:100%;min-width:0;text-align:center}
+.sidebar .brand-name{white-space:nowrap;text-align:center}
+.sidebar .brand-subtitle{display:block;margin-left:auto;margin-right:auto;text-align:center;max-width:238px}
+@media(max-width:1130px){.sidebar .brand-mark{width:88px!important;height:88px!important;flex-basis:88px}}
+@media(max-width:600px){.sidebar .brand-mark{width:66px!important;height:66px!important;flex-basis:66px}}
