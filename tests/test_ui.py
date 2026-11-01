@@ -474,7 +474,7 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     assert "Build an experiment with confidence" not in html
     assert "Python + TOML launch bundle for ATIMA Runtime" in html
     assert "Export Python + TOML bundle" in html
-    assert "Exports experiment.toml" in html
+    assert "TOML · Python launcher · Slurm" in html
     assert f'heading:"{title}"' in script
     assert '"Exports experiment.toml": "Esporta experiment.toml"' in translations
     assert f'"{title}": "Crea un esperimento di sicurezza per il Federated Learning"' in translations
