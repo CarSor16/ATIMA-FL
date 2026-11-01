@@ -35,6 +35,8 @@ case "$MODE" in
   *) printf 'Use preflight or train\\n' >&2; exit 2 ;;
 esac
 """
+    # The .sh wrapper is for use INSIDE an allocated job; it is not sbatch.
+    # The Python entry point below is equally valid inside an allocation.
     (directory / "run_cluster.sh").write_text(script, encoding="utf-8", newline="\n")
     # Python entry point uses installed ATIMA Runtime; it is NOT a standalone
     # copy of the Flower engine, attacks, datasets or environment.
