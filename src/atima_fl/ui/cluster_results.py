@@ -133,12 +133,14 @@ def read_local_history(path):
     return round_summaries(json.loads(path.read_text(encoding="utf-8")))
 
 
-def sync_cluster_results(workspace, runner=subprocess.run):
+def sync_cluster_results(workspace, runner=subprocess.run, *, offset=0):
     """Fetch read-only JSON summaries and copy atomically into local workspace.
 
     Authenticate with a Windows Credential Manager password or existing SSH key.
     Verify host keys; do not open interactive prompts or write to the cluster.
     """
+    if type(offset) is not int or offset < 0 or offset > 9900 or offset % 100:
+        raise ValueError("Cluster result offset must be a multiple of 100 in 0..9900")
     settings = connection_settings(workspace)
     if not settings:
         raise ValueError(
@@ -153,9 +155,10 @@ base = Path({root!r})
 if not base.is_dir():
     raise ValueError("Configured cluster results directory does not exist")
 out = []
-for file in sorted(base.glob("*/manifest.json"))[:101]:
-    if len(out) >= 100:
-        raise ValueError("More than 100 experiments: narrow remote results directory")
+files = sorted(base.glob("*/manifest.json"))
+page = files[{offset}:{offset}+100]
+has_more = len(files) > {offset}+100
+for file in page:
     folder = file.parent
     if folder.is_symlink() or not folder.is_dir() or file.is_symlink():
         continue
@@ -185,7 +188,7 @@ for file in sorted(base.glob("*/manifest.json"))[:101]:
             raise ValueError("Invalid validation history entry")
     out.append({{"id":folder.name,"manifest":manifest,"final_metrics":metrics,
                  "validation_history":rounds}})
-print(json.dumps(out,allow_nan=False))
+print(json.dumps({{"entries":out,"has_more":has_more}},allow_nan=False))
 """
     command = [
         "ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
@@ -211,6 +214,12 @@ print(json.dumps(out,allow_nan=False))
         entries = json.loads(output)
     except (ValueError, TypeError) as exc:
         raise ValueError("Cluster returned invalid JSON results") from exc
+    has_more = False
+    if isinstance(entries, dict) and set(entries) == {"entries", "has_more"}:
+        has_more = entries["has_more"]
+        entries = entries["entries"]
+        if type(has_more) is not bool:
+            raise ValueError("Invalid cluster pagination metadata")
     if not isinstance(entries, list) or len(entries) > 100:
         raise ValueError("Invalid number of cluster results")
     target = Path(workspace) / "results"
@@ -257,4 +266,5 @@ print(json.dumps(out,allow_nan=False))
             temp.replace(dest)
         imported += 1
     return {"imported": imported, "source": "cluster SSH",
+            "next_offset": offset + 100 if has_more else None,
             "files": ["manifest.json", "final_metrics.json", "validation_history.json"]}
