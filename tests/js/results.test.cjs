@@ -134,10 +134,10 @@ check("new Results modes remain optional and do not alter paired A/B selection",
   ids.get("group-results-enabled").checked=false;
   ids.get("research-focus-enabled").checked=false;
   context.focusClean=run("FocusClean","none");
-  context.focusAttack=run("FocusAttack","alie");
+  context.focusAttack=run("FocusAttack","model_replacement");
   context.focusOther=run("Other","random_byzantine");
   context.focusClean.group={attack:"none",family:"Clean baseline"};
-  context.focusAttack.group={attack:"alie",family:"Byzantine / aggregation disruption"};
+  context.focusAttack.group={attack:"model_replacement",family:"Backdoor"};
   context.focusOther.group={attack:"random_byzantine",family:"Byzantine / aggregation disruption"};
   const originals=[context.focusClean,context.focusAttack,context.focusOther].map(v=>JSON.stringify(v));
   evaluate("renderResults([focusClean,focusAttack,focusOther])");
@@ -147,7 +147,7 @@ check("new Results modes remain optional and do not alter paired A/B selection",
   assert.ok(!ids.get("group-results-enabled").checked);
   ids.get("research-focus-enabled").checked=true;
   ids.get("research-focus-enabled").dispatch("change");
-  assert.equal(root.children.length,2); // Clean and selected ALIE; excludes other.
+  assert.equal(root.children.length,2); // Clean and selected ModelReplacement; excludes other.
   assert.ok(root.textContent.includes("FocusClean"));
   assert.ok(root.textContent.includes("FocusAttack"));
   assert.ok(!root.textContent.includes("Other"));
