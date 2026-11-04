@@ -635,7 +635,8 @@ async function syncClusterResults(){
     clusterImportOffset=Number.isInteger(next)&&next>start?next:0;
     button.textContent=clusterImportOffset?"Import next 100 results":"Import results and validation histories";
     output.textContent=`Imported ${response.imported} summaries (page starting at ${start}). `+
-      (clusterImportOffset?"More results available: use the button again. ":"All available pages reached. ")+
+      (response.pagination_limit_reached?"Import limit reached; use a narrower remote campaign directory. ":
+       clusterImportOffset?"More results available: use the button again. ":"All available pages reached. ")+
       "Dataset files and model weights remain on the cluster.";
     await refreshResults();
   }catch(error){output.textContent="Cluster import failed: "+error.message;}
