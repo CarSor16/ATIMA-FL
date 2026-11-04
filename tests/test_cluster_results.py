@@ -408,3 +408,19 @@ def test_import_rejects_invalid_pagination_payload_before_writes(tmp_path):
     with pytest.raises(ValueError, match="pagination"):
         sync_cluster_results(tmp_path, runner=runner)
     assert not (tmp_path / "results").exists()
+
+
+def test_last_allowed_page_does_not_offer_invalid_offset(tmp_path):
+    config(tmp_path)
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps({
+            "entries": [{"id": "PageEnd", "manifest": {"status": "complete"},
+                         "final_metrics": {}}],
+            "has_more": True,
+        }))
+
+    result = sync_cluster_results(tmp_path, runner=runner, offset=9900)
+    assert result["imported"] == 1
+    assert result["next_offset"] is None
+    assert result["pagination_limit_reached"] is True
