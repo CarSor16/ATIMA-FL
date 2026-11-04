@@ -12,6 +12,7 @@ from atima_fl.ui.cluster_results import (
     connection_settings, read_local_history, sync_cluster_results,
 )
 from atima_fl.ui.cluster_datasets import discover_cluster_datasets
+from atima_fl.ui.result_groups import classify_run
 
 STATIC = Path(__file__).parent / "static"
 
@@ -84,6 +85,7 @@ def results(workspace):
             "status": manifest.get("status", "unknown"),
             "round": manifest.get("last_valid_round"),
             "config": config,
+            "group": classify_run(manifest, path.parent.name),
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
