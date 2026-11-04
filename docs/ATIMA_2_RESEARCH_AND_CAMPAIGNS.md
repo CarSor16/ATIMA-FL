@@ -106,3 +106,35 @@ reproducible paired, multi-seed evidence under a frozen protocol.
 3. Manual browser checks: nested groups, empty/legacy runs, large result sets,
    safe HTML text rendering, and existing A/B comparison.
 4. Compare the output against actual historical manifests without changing them.
+
+## Optionality contract (requested)
+
+Every new workflow is **opt-in**. The legacy single-experiment config,
+TOML/ZIP export, and normal Results comparison remain available. The Results
+view starts **flat**, and the user may explicitly enable attack/campaign
+grouping. The optional research focus uses the attack IDs appearing in the
+user-supplied three-task graphs (`All_Attacks_By_Task.pdf`): ClassWithholding,
+LocalClassGradient, ModelReplacement, SampleWeightHijack, StaleReplay,
+UpdateScaling x5, PoisonedFL, FreeRider and LabelFlip to benign. These are
+**nine** named attacks with plotted or partially plotted results, not seven;
+ClientDropout is separately discussed as early termination rather than final
+classification efficacy. No unsupported assumption is made about which seven
+the researcher wants to select.
+
+Research focus is a **presentation filter only**, disabled by default.
+Users can select or deselect individual IDs; clean baselines remain visible.
+It does not modify pairing rules, campaign export, attack strength, historical
+manifests or experiment training. Attack ID matching alone does not establish
+that an individual run uses exactly the same parameters as the PDF (for
+example LabelFlip target or UpdateScaling multiplier); inspect each recorded
+configuration before scientific comparisons.
+
+The figures use one malicious client, 10 clients in total, one server,
+LopezCNN, FedAvg without defenses, 30 rounds, three local epochs and exploratory
+seed 2026. They contain IID/non-IID comparisons, not proven causal isolation:
+some configurations/shards differ. LocalClassGradient shows severe degradation,
+while ModelReplacement's reported triggered intrusion-to-benign rate differs
+sharply between IID and non-IID. In the original 16-class non-IID
+ModelReplacement run, the clean-with-trigger control is explicitly unverified;
+none of the graphical observations alone establishes real-world attack
+feasibility or multi-seed reliability.
