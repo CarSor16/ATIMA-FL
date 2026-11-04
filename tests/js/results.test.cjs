@@ -120,6 +120,7 @@ check("results explorer groups by taxonomy and Dirichlet alpha without changing 
     model:"mlp",dataset:"edge_iiot",task:"prepared_5"};
   context.groupB.group={...context.groupA.group,partition_detail:"Dirichlet alpha=0.5"};
   const originalA=JSON.stringify(context.groupA),originalB=JSON.stringify(context.groupB);
+  ids.get("group-results-enabled").checked=true;
   evaluate("renderResults([groupA,groupB])");
   const root=ids.get("results-list");
   assert.equal(root.children.length,1); // One taxonomy family
@@ -128,5 +129,38 @@ check("results explorer groups by taxonomy and Dirichlet alpha without changing 
   assert.ok(root.textContent.includes("Dirichlet alpha=0.5"));
   assert.equal(JSON.stringify(context.groupA),originalA);
   assert.equal(JSON.stringify(context.groupB),originalB);
+});
+check("new Results modes remain optional and do not alter paired A/B selection",()=>{
+  ids.get("group-results-enabled").checked=false;
+  ids.get("research-focus-enabled").checked=false;
+  context.focusClean=run("FocusClean","none");
+  context.focusAttack=run("FocusAttack","alie");
+  context.focusOther=run("Other","random_byzantine");
+  context.focusClean.group={attack:"none",family:"Clean baseline"};
+  context.focusAttack.group={attack:"alie",family:"Byzantine / aggregation disruption"};
+  context.focusOther.group={attack:"random_byzantine",family:"Byzantine / aggregation disruption"};
+  const originals=[context.focusClean,context.focusAttack,context.focusOther].map(v=>JSON.stringify(v));
+  evaluate("renderResults([focusClean,focusAttack,focusOther])");
+  const root=ids.get("results-list");
+  assert.equal(root.children.length,3); // Original flat view, all runs.
+  assert.ok(!ids.get("research-focus-enabled").checked);
+  assert.ok(!ids.get("group-results-enabled").checked);
+  ids.get("research-focus-enabled").checked=true;
+  ids.get("research-focus-enabled").dispatch("change");
+  assert.equal(root.children.length,2); // Clean and selected ALIE; excludes other.
+  assert.ok(root.textContent.includes("FocusClean"));
+  assert.ok(root.textContent.includes("FocusAttack"));
+  assert.ok(!root.textContent.includes("Other"));
+  const selections=ids.get("research-focus-choices").querySelectorAll("input");
+  assert.equal(selections.length,9);
+  ids.get("group-results-enabled").checked=true;
+  ids.get("group-results-enabled").dispatch("change");
+  assert.equal(root.children.length,2); // Two family groups
+  ids.get("research-focus-enabled").checked=false;
+  ids.get("research-focus-enabled").dispatch("change");
+  ids.get("group-results-enabled").checked=false;
+  ids.get("group-results-enabled").dispatch("change");
+  assert.equal(root.children.length,3);
+  assert.deepEqual([context.focusClean,context.focusAttack,context.focusOther].map(v=>JSON.stringify(v)),originals);
 });
 console.log(checks+" functional Results checks passed.");
