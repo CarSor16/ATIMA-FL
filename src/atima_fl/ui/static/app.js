@@ -623,13 +623,20 @@ async function previewSeedCampaign(){
   }catch(error){output.textContent="Campaign preview failed: "+error.message;}
   finally{button.disabled=false;}
 }
+let clusterImportOffset=0;
 async function syncClusterResults(){
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
   button.disabled=true;
-  output.textContent="Connecting securely over SSH and reading result summaries…";
+  output.textContent="Connecting securely over SSH and reading up to 100 result summaries…";
   try{
-    const response=await request("/api/sync-cluster-results",{});
-    output.textContent=`Imported ${response.imported} experiment summaries and available validation histories. Dataset files and model weights remain on the cluster.`;
+    const start=clusterImportOffset;
+    const response=await request("/api/sync-cluster-results",start?{offset:start}:{});
+    const next=response.next_offset;
+    clusterImportOffset=Number.isInteger(next)&&next>start?next:0;
+    button.textContent=clusterImportOffset?"Import next 100 results":"Import results and validation histories";
+    output.textContent=`Imported ${response.imported} summaries (page starting at ${start}). `+
+      (clusterImportOffset?"More results available: use the button again. ":"All available pages reached. ")+
+      "Dataset files and model weights remain on the cluster.";
     await refreshResults();
   }catch(error){output.textContent="Cluster import failed: "+error.message;}
   finally{button.disabled=false;}
