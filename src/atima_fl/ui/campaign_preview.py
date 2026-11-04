@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 import re
 
-_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\\Z")
+_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\Z")
 
 SEEDS_0_TO_10 = tuple(range(11))
 
