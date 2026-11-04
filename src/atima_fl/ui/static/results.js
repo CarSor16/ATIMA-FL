@@ -557,14 +557,61 @@ function renderPairedTable(values,byId){
   }
   metric.select.addEventListener("change",redraw);cls.select.addEventListener("change",redraw);redraw();
 }
+// Research-focus scope comes from the supplied 3-task comparison graphs.
+// It is an *optional view* and does not change the runtime attack catalog.
+// ClientDropout appears in the figure notes as an availability outcome,
+// not an ordinary final-classification attack; it remains visible with focus off.
+const RESEARCH_GRAPH_ATTACKS=[
+  ["class_withholding","ClassWithholding"],
+  ["local_class_gradient","LocalClassGradient"],
+  ["model_replacement","ModelReplacement"],
+  ["sample_weight_hijack","SampleWeightHijack"],
+  ["stale_replay","StaleReplay"],
+  ["update_scaling","UpdateScaling x5"],
+  ["poisoned_fl","PoisonedFL (historical adaptation)"],
+  ["free_rider","FreeRider"],
+  ["label_flip","LabelFlip to benign"]
+];
+let researchFocusInitialized=false;
+const researchFocusSelected=new Set(RESEARCH_GRAPH_ATTACKS.map(([id])=>id));
+function setupResearchFocus(){
+  if(researchFocusInitialized)return;
+  researchFocusInitialized=true;
+  const list=$("research-focus-choices");
+  for(const [id,label] of RESEARCH_GRAPH_ATTACKS){
+    const line=node("label",undefined,"research-focus-choice");
+    const checkbox=node("input");checkbox.type="checkbox";checkbox.checked=true;
+    checkbox.setAttribute("aria-label","Include "+label+" in research focus");
+    checkbox.addEventListener("change",()=>{
+      if(checkbox.checked)researchFocusSelected.add(id);
+      else researchFocusSelected.delete(id);
+      renderResults(availableResults);
+    });
+    line.append(checkbox,node("span",label));list.append(line);
+  }
+  $("research-focus-enabled").addEventListener("change",()=>renderResults(availableResults));
+}
+function researchFocusedRun(run){
+  if(!$("research-focus-enabled").checked)return true;
+  const id=String(run.group?.attack||run.config?.attack||"").toLowerCase();
+  // Clean remains visible to inspect the original baseline. Verified pairing
+  // and manual A/B comparisons do not inherit this presentation-only filter.
+  return id==="none"||researchFocusSelected.has(id);
+}
 function renderResults(values){
+  setupResearchFocus();
   const target=$("results-list");target.replaceChildren();
   availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
+  const focused=values.filter(researchFocusedRun);
+  $("research-focus-status").textContent=$("research-focus-enabled").checked
+    ?"Showing "+focused.length+" of "+values.length+" runs (clean baselines included). Selected graph attacks: "+researchFocusSelected.size+"."
+    :"Disabled — all experiments remain visible.";
+  if(values.length&&!focused.length)target.append(node("p","No experiments match this optional research selection."));
   // Organize imports for browsing, not for scientific comparison. Only the
   // separately verified pairing logic may authorize clean/attack deltas.
   const familyGroups=new Map(),campaignGroups=new Map();
-  const ordered=[...values].sort((a,b)=>{
+  const ordered=[...focused].sort((a,b)=>{
     const label=r=>[r.group?.family,r.group?.attack,r.group?.campaign_date,
       r.group?.distribution,r.group?.partition_detail,r.group?.model,
       r.group?.dataset,r.group?.task,r.id].join("|");
