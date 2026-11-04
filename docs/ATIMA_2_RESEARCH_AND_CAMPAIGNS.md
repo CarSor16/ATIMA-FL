@@ -67,14 +67,25 @@ confidence intervals and a practical damage threshold. Multiple metrics and
 strength sweeps require explicit multiplicity/selection caveats. Never label
 nonsignificance as proof of no effect.
 
-## Known operational gate
+## First follow-up implemented as a bounded preview/import milestone
 
-`src/atima_fl/ui/cluster_results.py` currently limits a cluster summary
-import to 100 experiments. A four-attack × two-partition × 11-seed campaign
-already requires 88 attacked runs + potentially 22 clean runs. Before that
-campaign, design bounded pagination or explicit per-campaign selection, retaining
-SSH host-key checks, file-size limits, path confinement, and read-only behavior.
-Do not merely increase the limit without a resource and security review.
+Studio now offers a session-token-protected **Preview paired campaign · seeds
+0–10** action. It shows 11 clean and 11 attacked run names, paths, order and
+a fixed stopping horizon for the currently configured attack. The preview
+validates configuration but does not check data, allocate resources, create
+TOML/ZIP plans or submit jobs. Seed planning for multiple attacks and actual
+batch-plan exports remain future work; the preview is not a scheduler.
+
+`src/atima_fl/ui/cluster_results.py` now supports **explicit pagination** of
+up to 100 result summaries per request. The original import button fetches
+the first page; when another page is available it offers a next-page action.
+Each page retains the existing bounded read-only SSH transport, JSON field
+whitelist and host-key checks. Remote directory churn between page requests
+can move the numeric offsets; for rigorous archives, freeze the remote
+campaign while importing or use a future stable snapshot/cursor protocol.
+For a four-attack × two-partition × 11-seed campaign (88 attacked runs plus
+potentially 22 clean runs), at least two page requests may be required.
+No implicit bulk sync or cluster jobs are started.
 
 ## Candidate narrow research gaps (not claims of novelty)
 
