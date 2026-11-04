@@ -561,7 +561,47 @@ function renderResults(values){
   const target=$("results-list");target.replaceChildren();
   availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
-  for(const value of values){
+  // Organize imports for browsing, not for scientific comparison. Only the
+  // separately verified pairing logic may authorize clean/attack deltas.
+  const familyGroups=new Map(),campaignGroups=new Map();
+  const ordered=[...values].sort((a,b)=>{
+    const label=r=>[r.group?.family,r.group?.attack,r.group?.campaign_date,
+      r.group?.distribution,r.group?.partition_detail,r.group?.model,
+      r.group?.dataset,r.group?.task,r.id].join("|");
+    return label(a).localeCompare(label(b));
+  });
+  for(const value of ordered){
+    const info=value.group||{},family=info.family||"Other / unclassified";
+    let familyGroup=familyGroups.get(family);
+    if(!familyGroup){
+      const wrapper=node("details",undefined,"result-report");
+      const summary=node("summary",undefined,"result-report-heading");
+      const familyBody=node("div",undefined,"result-report-content");
+      summary.append(node("strong",family));
+      wrapper.append(summary,familyBody);target.append(wrapper);
+      familyGroup={body:familyBody,summary,count:0};
+      familyGroups.set(family,familyGroup);
+    }
+    familyGroup.count++;
+    // Different Dirichlet alphas must never silently appear as one scenario.
+    const description=[info.attack||value.config?.attack||"unknown",
+      info.campaign_date||"Date unknown",info.distribution||"Unknown",
+      info.partition_detail||"Unknown",info.model||"Unknown",
+      info.dataset||"Unknown",info.task||"Unknown"];
+    const key=family+"|"+JSON.stringify(description);
+    let campaign=campaignGroups.get(key);
+    if(!campaign){
+      const wrapper=node("details",undefined,"result-report");
+      const summary=node("summary",undefined,"result-report-heading");
+      summary.append(node("strong",description.slice(0,3).join(" · ")),
+        node("span",description.slice(3).join(" · ")));
+      const campaignBody=node("div",undefined,"result-report-content");
+      wrapper.append(summary,campaignBody);
+      familyGroup.body.append(wrapper);
+      campaign={body:campaignBody,summary,count:0};
+      campaignGroups.set(key,campaign);
+    }
+    campaign.count++;
     const report=node("details",undefined,"result-report"),heading=node("summary",undefined,"result-report-heading");
     heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
     let rendered=false;
@@ -572,8 +612,10 @@ function renderResults(values){
       else content.append(node("p","Final test metrics are not available for this run."));
       content.append(perClassAnalysis(value,null,false),matrixAnalysis(value,null,false),roundChart(value,null));
       const raw=node("details",undefined,"result-raw");raw.append(node("summary","Raw final metrics"),node("pre",JSON.stringify(value.metrics,null,2)));content.append(raw);report.append(content);
-    });target.append(report);
+    });campaign.body.append(report);
   }
+  for(const group of familyGroups.values())group.summary.append(node("span",group.count+" runs"));
+  for(const group of campaignGroups.values())group.summary.append(node("span",group.count+" runs"));
 }
 function initializeAnalysisControls(){
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.addEventListener("click",()=>{analysisMode=button.dataset.analysisMode;refreshManualFromChoices();});
