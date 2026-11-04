@@ -603,7 +603,7 @@ function renderResults(values){
     }
     campaign.count++;
     const report=node("details",undefined,"result-report"),heading=node("summary",undefined,"result-report-heading");
-    heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
+    heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,Number.isInteger(value.group?.seed)?"Seed "+value.group.seed:null,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
     let rendered=false;
     report.addEventListener("toggle",()=>{
       if(!report.open||rendered)return;rendered=true;
@@ -611,6 +611,9 @@ function renderResults(values){
       if(metric)content.append(node("h4","Final test metrics"),metricCards(metric));
       else content.append(node("p","Final test metrics are not available for this run."));
       content.append(perClassAnalysis(value,null,false),matrixAnalysis(value,null,false),roundChart(value,null));
+      const configuration=node("details",undefined,"result-raw");
+      configuration.append(node("summary","Recorded configuration (including attack parameters)"),
+        node("pre",JSON.stringify(value.config||{},null,2)));content.append(configuration);
       const raw=node("details",undefined,"result-raw");raw.append(node("summary","Raw final metrics"),node("pre",JSON.stringify(value.metrics,null,2)));content.append(raw);report.append(content);
     });campaign.body.append(report);
   }
