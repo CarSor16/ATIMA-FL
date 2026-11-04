@@ -282,9 +282,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Cluster dataset discovery takes no client-side parameters")
                 return self.respond(200, discover_cluster_datasets(self.server.workspace))
             if self.path == "/api/sync-cluster-results":
-                if body != {}:
-                    raise ValueError("Cluster sync takes no client-side parameters")
-                return self.respond(200, sync_cluster_results(self.server.workspace))
+                if not isinstance(body, dict) or set(body) - {"offset"}:
+                    raise ValueError("Cluster sync accepts only an optional page offset")
+                if not body:
+                    return self.respond(200, sync_cluster_results(self.server.workspace))
+                return self.respond(
+                    200, sync_cluster_results(self.server.workspace, offset=body["offset"])
+                )
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
