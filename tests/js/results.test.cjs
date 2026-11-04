@@ -112,4 +112,21 @@ check("federated telemetry has real evidence, paired zoom and legacy no-data beh
   assert.equal(value.benign_false_alarm_rate,0);
   assert.equal(evaluate("testMetrics({})"),null);
 }
+check("results explorer groups by taxonomy and Dirichlet alpha without changing runs",()=>{
+  context.groupA=run("ALIE_Seed0","alie");
+  context.groupB=run("ALIE_Seed1","alie");
+  context.groupA.group={family:"Byzantine / aggregation disruption",attack:"alie",
+    campaign_date:"2026-10-28",distribution:"Non-IID",partition_detail:"Dirichlet alpha=0.1",
+    model:"mlp",dataset:"edge_iiot",task:"prepared_5"};
+  context.groupB.group={...context.groupA.group,partition_detail:"Dirichlet alpha=0.5"};
+  const originalA=JSON.stringify(context.groupA),originalB=JSON.stringify(context.groupB);
+  evaluate("renderResults([groupA,groupB])");
+  const root=ids.get("results-list");
+  assert.equal(root.children.length,1); // One taxonomy family
+  assert.equal(root.children[0].querySelectorAll("details").length,4);
+  assert.ok(root.textContent.includes("Dirichlet alpha=0.1"));
+  assert.ok(root.textContent.includes("Dirichlet alpha=0.5"));
+  assert.equal(JSON.stringify(context.groupA),originalA);
+  assert.equal(JSON.stringify(context.groupB),originalB);
+});
 console.log(checks+" functional Results checks passed.");
