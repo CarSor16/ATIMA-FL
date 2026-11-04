@@ -1,0 +1,97 @@
+# ATIMA 2.0 — Experiment organization and research gates
+
+Status: implementation roadmap; **not an authorization to launch experiments**.
+Target development base: `studio-runtime-split`. Keep the experimental
+Studio/Core/Runtime packaging separation and canonical attack taxonomy.
+
+## Evidence baseline
+
+- Existing archival results do **not** prove that a plugin is an effective attack.
+- Historical paired clean/attack validity depends on compatible source identity,
+  dataset hashes, label mapping, partition, seed, round horizon and initial state.
+- A result that is better than its clean baseline is not automatically a framework
+  bug; classify it as an observed positive/negative difference and investigate
+  noise, convergence, target metrics and the actual poisoning trace.
+- The full research question is not yet chosen. Prefer a narrow, falsifiable NIDS
+  scenario over a claim that adding more attacks to a benchmark is original.
+
+## First implementation: Results campaign explorer
+
+Use the core's `classify_attack` for *implemented* attacks. Preserve unknown
+historical IDs as unclassified, never silently add them to the runtime catalog.
+The grouping is a browse/search view, not a comparison eligibility gate.
+
+Identity and reporting dimensions:
+- Attack family, canonical attack ID, campaign date **if grounded**, model,
+  task, dataset, IID vs non-IID and persisted partition parameters (especially
+  Dirichlet alpha).
+- Seed and attack parameters must remain visible per run; do not collapse
+  attack intensities into an averaged causal effect without explicit strata.
+- No filesystem renames, manifest rewrites or cluster synchronization on page
+  load. Unknown campaign dates remain unknown.
+- Use the existing verified baseline pairing and dataset compatibility checks
+  for deltas. Never infer a clean baseline from a matching folder label.
+
+## Next stage: multi-seed planning
+
+Define an explicit, versioned **inclusive** seed schedule `0..10` (11 seeds).
+Each attacked run must point to a validated clean for the *same* seed and
+persisted partition. Reuse one clean per comparable seed/split/model/task
+configuration, not one clean across different data partitions or source versions.
+Separate attack RNG from initialization and partition RNG where possible and
+record how the streams are derived.
+
+Campaign planning must be a dry-run by default: preview unique run IDs,
+expected clean count, attack count, duplicate detection, approximate job budget,
+and export-only plans. Never schedule Slurm jobs implicitly from Studio.
+
+## Attack strength experiments
+
+Strength is **multidimensional and attack-specific**, not an arbitrary maximum
+of a single scale. Each comparison needs predeclared:
+- Threat model and attacker knowledge (local vs oracle, collusion, compromised
+  fraction and sample-mass fraction).
+- Timing, target metric, attack parameters, numerical validity safeguards and
+  realistic-feature constraints where applicable.
+- Distinct exploratory sweep (validation selection) and independent test
+  evaluation. No tuning to test labels/results.
+- Standard / Strong / Oracle are tagged hypotheses, not certified potency
+  levels. A very strong synthetic scenario can be a positive control, but not
+  evidence of real-world feasibility.
+
+## Statistical analysis and UI
+
+Store per-seed paired deltas, class-wise confusion/recall changes, trajectory
+statistics and positive attack-application evidence. Report variance, paired
+confidence intervals and a practical damage threshold. Multiple metrics and
+strength sweeps require explicit multiplicity/selection caveats. Never label
+nonsignificance as proof of no effect.
+
+## Known operational gate
+
+`src/atima_fl/ui/cluster_results.py` currently limits a cluster summary
+import to 100 experiments. A four-attack × two-partition × 11-seed campaign
+already requires 88 attacked runs + potentially 22 clean runs. Before that
+campaign, design bounded pagination or explicit per-campaign selection, retaining
+SSH host-key checks, file-size limits, path confinement, and read-only behavior.
+Do not merely increase the limit without a resource and security review.
+
+## Candidate narrow research gaps (not claims of novelty)
+
+1. Target-class failures invisible to global IDS metrics, especially DoS and
+   confusing related attack families.
+2. Conditional attack feasibility/effectiveness when malicious clients lack
+   target-class support under severe class imbalance/non-IID.
+3. Small or coherent malicious update directions that are hard to distinguish
+   from ordinary non-IID benign heterogeneity.
+
+Select a final question only after mapping relevant papers and obtaining
+reproducible paired, multi-seed evidence under a frozen protocol.
+
+## Acceptance before merging this PR
+
+1. Python regression tests for grouping; JS Results functional tests.
+2. Full current-branch suite and split-package installation/CI checks.
+3. Manual browser checks: nested groups, empty/legacy runs, large result sets,
+   safe HTML text rendering, and existing A/B comparison.
+4. Compare the output against actual historical manifests without changing them.
