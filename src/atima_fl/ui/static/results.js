@@ -561,7 +561,27 @@ function renderResults(values){
   const target=$("results-list");target.replaceChildren();
   availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
-  for(const value of values){
+  // Presentation groups are descriptive only. Existing verified pairing still
+  // determines which clean/attack comparisons are scientifically permitted.
+  const groups=new Map();
+  const sorted=[...values].sort((a,b)=>{
+    const tag=r=>[r.group?.family,r.group?.attack,r.group?.date,r.group?.distribution,r.group?.model,r.group?.task,r.group?.dataset].join("|");
+    return tag(a).localeCompare(tag(b))||a.id.localeCompare(b.id);
+  });
+  for(const value of sorted){
+    const g=value.group||{};
+    const key=[g.family||"Other / unclassified",g.attack||"unknown",g.date||"Unknown",g.distribution||"Unknown",g.model||"unknown",g.task||"unknown",g.dataset||"unknown"].join("|");
+    let group=groups.get(key);
+    if(!group){
+      const container=node("details",undefined,"result-report");
+      const summary=node("summary",undefined,"result-report-heading");
+      summary.append(node("strong",[g.attack||"unknown",g.date||"Unknown",g.distribution||"Unknown"].join(" · ")),
+        node("span",[g.family,g.model,g.dataset,g.task].filter(Boolean).join(" · ")));
+      container.append(summary);
+      const body=node("div",undefined,"result-report-content");container.append(body);
+      target.append(container);group={body,count:0,summary};groups.set(key,group);
+    }
+    group.count+=1;
     const report=node("details",undefined,"result-report"),heading=node("summary",undefined,"result-report-heading");
     heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
     let rendered=false;
@@ -572,8 +592,9 @@ function renderResults(values){
       else content.append(node("p","Final test metrics are not available for this run."));
       content.append(perClassAnalysis(value,null,false),matrixAnalysis(value,null,false),roundChart(value,null));
       const raw=node("details",undefined,"result-raw");raw.append(node("summary","Raw final metrics"),node("pre",JSON.stringify(value.metrics,null,2)));content.append(raw);report.append(content);
-    });target.append(report);
+    });group.body.append(report);
   }
+  for(const group of groups.values())group.summary.append(node("span",String(group.count)+" runs"));
 }
 function initializeAnalysisControls(){
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.addEventListener("click",()=>{analysisMode=button.dataset.analysisMode;refreshManualFromChoices();});
