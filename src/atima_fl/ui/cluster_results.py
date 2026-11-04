@@ -266,5 +266,6 @@ print(json.dumps({{"entries":out,"has_more":has_more}},allow_nan=False))
             temp.replace(dest)
         imported += 1
     return {"imported": imported, "source": "cluster SSH",
-            "next_offset": offset + 100 if has_more else None,
+            "next_offset": offset + 100 if has_more and offset < 9900 else None,
+            "pagination_limit_reached": bool(has_more and offset >= 9900),
             "files": ["manifest.json", "final_metrics.json", "validation_history.json"]}
