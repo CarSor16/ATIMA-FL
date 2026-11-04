@@ -14,6 +14,7 @@ from atima_fl.ui.cluster_results import (
 )
 from atima_fl.ui.cluster_datasets import discover_cluster_datasets
 from atima_fl.ui.result_groups import result_group
+from atima_fl.ui.campaign_preview import paired_seed_preview
 
 STATIC = Path(__file__).parent / "static"
 
@@ -287,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
+            if self.path == "/api/campaign-preview":
+                return self.respond(200, paired_seed_preview(config))
             if self.path == "/api/inspect-dataset":
                 registry = config.registry()
                 plugin = registry.get("dataset", config.dataset)
