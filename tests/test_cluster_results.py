@@ -355,3 +355,56 @@ def test_results_api_old_manifest_missing_audit_is_not_misrepresented(tmp_path):
     result = results(tmp_path)[0]
     assert result["dataset_identity"]["task"] is None
     assert all(value is None for value in result["dataset_identity"]["hashes"].values())
+
+
+def test_cluster_result_pages_are_bounded_and_deterministic(tmp_path):
+    config(tmp_path)
+    requests = []
+
+    def runner(*args, **kwargs):
+        script = kwargs["input"]
+        requests.append(script)
+        if "page = files[100:100+100]" in script:
+            return SimpleNamespace(returncode=0, stdout=json.dumps({
+                "entries": [{"id": "SecondPage", "manifest": {"status": "complete"},
+                             "final_metrics": {}}],
+                "has_more": False,
+            }))
+        assert "page = files[0:0+100]" in script
+        return SimpleNamespace(returncode=0, stdout=json.dumps({
+            "entries": [{"id": "FirstPage", "manifest": {"status": "complete"},
+                         "final_metrics": {}}],
+            "has_more": True,
+        }))
+
+    first = sync_cluster_results(tmp_path, runner=runner)
+    assert first["imported"] == 1
+    assert first["next_offset"] == 100
+    second = sync_cluster_results(tmp_path, runner=runner, offset=100)
+    assert second["imported"] == 1
+    assert second["next_offset"] is None
+    assert (tmp_path / "results/FirstPage/manifest.json").is_file()
+    assert (tmp_path / "results/SecondPage/manifest.json").is_file()
+    assert len(requests) == 2
+
+
+@pytest.mark.parametrize("offset", [-1, 1, True, 10000, 99.0, "100"])
+def test_cluster_result_offset_fails_closed(tmp_path, offset):
+    with pytest.raises(ValueError, match="offset"):
+        sync_cluster_results(tmp_path, offset=offset, runner=lambda *args, **kwargs: None)
+    assert not (tmp_path / "results").exists()
+
+
+def test_import_rejects_invalid_pagination_payload_before_writes(tmp_path):
+    config(tmp_path)
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps({
+            "entries": [{"id": "NeverWritten", "manifest": {"status": "complete"},
+                         "final_metrics": {}}],
+            "has_more": "yes",
+        }))
+
+    with pytest.raises(ValueError, match="pagination"):
+        sync_cluster_results(tmp_path, runner=runner)
+    assert not (tmp_path / "results").exists()
