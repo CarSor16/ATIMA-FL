@@ -81,3 +81,9 @@ def test_preview_api_is_session_protected_and_never_creates_plans(tmp_path):
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+@pytest.mark.parametrize("name", ["unsafe name", "A" * 111, "campagna_à"])
+def test_generated_names_must_remain_importable(name):
+    with pytest.raises(ValueError, match="run names"):
+        paired_seed_preview(profile(name=name))
