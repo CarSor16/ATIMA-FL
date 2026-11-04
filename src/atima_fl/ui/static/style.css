@@ -740,3 +740,11 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 .sidebar .brand-identity{width:100%;min-width:0}
 .sidebar .brand-subtitle{line-height:1.4}
 @media(max-width:600px){.sidebar .brand{flex-direction:row;text-align:left;gap:10px}.sidebar .brand-mark{width:72px;height:72px}}
+
+/* Optional research focus never changes the default results view. */
+.research-focus-controls{margin:12px 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:12px}
+.research-focus-controls>label{display:flex;align-items:center;gap:8px;font-weight:600}
+.research-focus-controls summary{cursor:pointer;margin:9px 0}
+#research-focus-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:7px 14px}
+.research-focus-choice{display:flex;align-items:center;gap:8px;font-size:13px}
+#research-focus-status{font-size:12px;color:var(--muted);margin:10px 0 0}
