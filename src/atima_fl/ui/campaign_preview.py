@@ -5,6 +5,9 @@ The user must explicitly export and execute plans in a separate operation.
 """
 from dataclasses import replace
 from pathlib import PurePosixPath
+import re
+
+_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\\Z")
 
 SEEDS_0_TO_10 = tuple(range(11))
 
@@ -39,6 +42,8 @@ def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
             minimum_rounds=config.rounds, paired_rounds=config.rounds,
             paired_clean=str(output / clean.name),
         )
+        if not _RUN_NAME.fullmatch(clean.name) or not _RUN_NAME.fullmatch(attack.name):
+            raise ValueError("Generated run names must be ASCII-safe and at most 120 characters")
         clean.validate()
         attack.validate()
         entries.append({
