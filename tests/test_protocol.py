@@ -157,6 +157,7 @@ def test_full_four_condition_defense_analysis_and_mismatch_guard(
             ("ipm", "oracle"),
             ("fang", "oracle"),
             ("model_replacement", "local"),
+            ("local_class_gradient", "local"),
             ("random_labels", "local"),
             ("feature_noise", "local"),
             ("sign_flip", "local"),
@@ -198,6 +199,10 @@ def test_full_two_phase_protocol_pair_and_hdf(dataset, tmp_path, attack, knowled
         meta = json.loads(file["rounds/round_0002/clients/client_00"].attrs["metadata_json"])
         assert meta["is_malicious"] and meta["active"]
         assert not meta["local_update_is_clean_counterfactual"]
+        if attack == "local_class_gradient":
+            assert meta["attack_applied"] is True
+            assert meta["target_support"] > 0
+            assert meta["submitted_differs_from_local"] is True
         assert meta["local_training_data_altered"] == (
             attack in {"label_flip", "random_labels", "feature_noise", "model_replacement"}
         )
