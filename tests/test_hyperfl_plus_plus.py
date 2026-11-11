@@ -18,7 +18,7 @@ def test_hyperfl_is_opt_in_and_preserves_private_head():
         rounds=1,
         local_epochs=2,
         batch_size=2,
-        num_classes=3,
+        num_classes=5,
         clients=10,
         servers=1,
     ).validate()
@@ -36,8 +36,8 @@ def test_hyperfl_is_opt_in_and_preserves_private_head():
     assert all(np.isfinite(value).all() for value in shared_after)
     assert all(np.isfinite(value).all() for value in private.values())
     assert private["__embedding__"].shape == (16,)
-    assert private["fc.weight"].shape == (3, 200)
-    assert private["fc.bias"].shape == (3,)
+    assert private["fc.weight"].shape == (5, 200)
+    assert private["fc.bias"].shape == (5,)
 
 
 def test_hyperfl_rejects_unsupported_model_and_epoch_budget():
