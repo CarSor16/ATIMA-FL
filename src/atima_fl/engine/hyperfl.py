@@ -83,8 +83,6 @@ def _hypernetwork(config, seed):
 
 
 def initial_shared_arrays(config):
-    import numpy as np
-
     network, _ = _hypernetwork(config, config.seed)
     return [value.detach().cpu().numpy().copy() for value in network.state_dict().values()]
 
