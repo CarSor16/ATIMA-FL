@@ -60,7 +60,10 @@ def handle_train(message: Message, context: Context):
             _save_private_state(context, private)
     elif command["phase"] == "submit":
         counts = {int(k): int(v) for k, v in json.loads(command["counts_json"]).items()}
-        values, metadata = submit_local(config, run, client, round_id, before, counts)
+        private = _load_private_state(context) if config.training_method == "hyperfl_plus_plus" else None
+        values, metadata = submit_local(
+            config, run, client, round_id, before, counts, client_state=private
+        )
     elif command["phase"] in {"validate", "test"}:
         if config.training_method != "hyperfl_plus_plus":
             raise ValueError("Client-side personalized evaluation is only used by HyperFL++")
