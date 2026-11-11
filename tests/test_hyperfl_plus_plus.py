@@ -7,6 +7,13 @@ import torch
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.engine.hyperfl import initial_shared_arrays, train_local
 
+from test_protocol import dataset as _protocol_dataset
+
+
+@pytest.fixture
+def dataset(tmp_path):
+    return _protocol_dataset.__wrapped__(tmp_path)
+
 
 def test_hyperfl_is_opt_in_and_preserves_private_head():
     assert ExperimentConfig().training_method == "standard"
