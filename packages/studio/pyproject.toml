@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atima-studio"
-version = "0.5.2"
+version = "0.5.3"
 description = "ATIMA local experiment designer and portable plan exporter"
 requires-python = ">=3.11,<3.13"
-dependencies = ["atima-core==0.5.2"]
+dependencies = ["atima-core==0.5.3"]
 
 [project.scripts]
 atima-studio = "atima_fl.studio.cli:main"
