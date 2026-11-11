@@ -13,6 +13,14 @@ def build(config, seed=None):
     )
 
 
+def initial_arrays(config):
+    if config.training_method == "hyperfl_plus_plus":
+        from atima_fl.engine.hyperfl import initial_shared_arrays
+
+        return initial_shared_arrays(config)
+    return arrays(build(config))
+
+
 def arrays(model):
     return [value.detach().cpu().numpy().copy() for value in model.state_dict().values()]
 

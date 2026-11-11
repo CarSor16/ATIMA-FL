@@ -56,6 +56,7 @@ class ExperimentConfig:
     paired_clean: str = ""
     paired_rounds: int = 0
     plugin_directory: str = ""
+    training_method: str = "standard"
 
     def registry(self):
         if not hasattr(self, "_component_snapshot"):
@@ -109,6 +110,13 @@ class ExperimentConfig:
             raise ValueError("Aggregation server count must be between 1 and total clients")
         if self.server_execution not in {"processes", "slurm_nodes"}:
             raise ValueError("Server execution must be processes or slurm_nodes")
+        if self.training_method not in {"standard", "hyperfl_plus_plus"}:
+            raise ValueError("Unknown federated training method")
+        if self.training_method == "hyperfl_plus_plus":
+            if self.model != "lopez_cnn":
+                raise ValueError("HyperFL++ currently supports only LopezCNN")
+            if self.local_epochs < 2:
+                raise ValueError("HyperFL++ needs at least two local epochs")
         if self.compute_device not in {"cpu", "cuda"}:
             raise ValueError("Compute device must be explicitly cpu or cuda")
         if self.server_execution == "slurm_nodes" and self.servers < 2:

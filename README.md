@@ -468,3 +468,10 @@ On an appropriately allocated Slurm compute node omit `--local`.
 This Python script requires the matching ATIMA Runtime, Flower and
 training dependencies; it is a launch wrapper, not a self-contained vendor
 copy of the training engine.
+
+
+### Optional HyperFL++ training method
+
+ATIMA keeps its standard model-training protocol as the default. An experimental, opt-in `hyperfl_plus_plus` method is available for LopezCNN. It shares only the RKD hypernetwork parameters; each logical client keeps its embedding, classifier head, and normalization buffers in Flower's client-local `Context.state`. Validation and test metrics are computed by the personalized client models and pooled from confusion matrices. The client receives the evaluation split in this simulation, so this evaluation path is not a claim of strict data isolation.
+
+The configured `local_epochs` is a total budget: one epoch updates the private classifier head and the remaining epochs update the shared hypernetwork and client embedding. This budget-preserving adaptation differs from the upstream training schedule and should be reported as an ATIMA adaptation. HyperFL++ targets gradient-inversion privacy; its inclusion does not establish attack robustness or privacy guarantees for ATIMA. Standard mode remains unchanged and is the default.
