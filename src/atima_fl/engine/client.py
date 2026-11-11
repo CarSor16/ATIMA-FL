@@ -78,7 +78,7 @@ def train_local(config, run, client, round_id, before, data, device, client_stat
     return local, metadata
 
 
-def submit_local(config, run, client, round_id, before, counts):
+def submit_local(config, run, client, round_id, before, counts, client_state=None):
     local, metadata, _ = read_raw(raw_path(run, round_id, client))
     context = AttackContext(
         config,
@@ -94,6 +94,7 @@ def submit_local(config, run, client, round_id, before, counts):
         ),
     )
     context.run_dir = run
+    context.client_state = client_state
     context.raw_by_client = {
         cid: read_raw(raw_path(run, round_id, cid))[0] for cid in knowledge_ids(context)
     }
