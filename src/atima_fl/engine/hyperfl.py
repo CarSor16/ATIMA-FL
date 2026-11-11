@@ -350,6 +350,7 @@ def local_class_gradient(config, client, global_arrays, local_arrays, client_sta
     loss = F.cross_entropy(functional_call(model, state, (xb,)), yb)
     if not torch.isfinite(loss).item():
         raise ValueError("Nonfinite HyperFL++ local target-class loss")
+    loss_before = float(loss.detach().cpu())
 
     named = dict(network.named_parameters())
     gradients = torch.autograd.grad(loss, tuple(named.values()))
@@ -385,6 +386,15 @@ def local_class_gradient(config, client, global_arrays, local_arrays, client_sta
         np.asarray(a + scale * gradient, dtype=a.dtype)
         for a, gradient in zip(local_arrays, gradient_arrays)
     ]
+    _load_arrays(network, values)
+    attacked_state = _live_state(model, shapes, device)
+    attacked_state.update(network(embedding))
+    with torch.no_grad():
+        loss_after = float(F.cross_entropy(
+            functional_call(model, attacked_state, (xb,)), yb
+        ).cpu())
+    if not math.isfinite(loss_after):
+        raise ValueError("Nonfinite HyperFL++ post-attack target-class loss")
     return values, {
         "attack_applied": True,
         "target_class": target_class,
@@ -393,6 +403,8 @@ def local_class_gradient(config, client, global_arrays, local_arrays, client_sta
         "gradient_l2": grad_norm,
         "local_delta_l2": delta_norm,
         "added_perturbation_l2_budget": relative_budget * delta_norm,
+        "local_target_loss_before": loss_before,
+        "local_target_loss_after": loss_after,
         "objective": "ascend_local_target_class_cross_entropy_through_hypernetwork",
         "knowledge": "local_shard_only",
     }
