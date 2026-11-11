@@ -59,6 +59,8 @@ def _trainable_context(context, indices):
     )
     if hasattr(context, "run_dir"):
         scoped.run_dir = context.run_dir
+    if hasattr(context, "client_state"):
+        scoped.client_state = context.client_state
     return scoped
 
 
