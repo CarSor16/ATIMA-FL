@@ -93,6 +93,7 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
                     counts = {int(k): int(v) for k, v in json.loads(command["counts_json"]).items()}
                     values, metadata = submit_local(
                         config, Path(command["run_dir"]), client, round_id, before, counts,
+                        client_state=self.private.get(client),
                     )
                 else:
                     data = data_engine.open_dataset(config)
@@ -156,3 +157,43 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
     assert sum(map(sum, result["confusion_matrix"])) == 40
     with h5py.File(run / "trajectory.h5") as trajectory:
         assert len(trajectory["initial"]) == len(trajectory["rounds/round_0001/global_after"])
+
+    paired_config = ExperimentConfig(
+        name="hyperfl_lcg_clean",
+        dataset_root=str(dataset),
+        output_root=str(tmp_path / "paired_runs"),
+        clients=2,
+        model="lopez_cnn",
+        training_method="hyperfl_plus_plus",
+        compute_device="cpu",
+        rounds=2,
+        local_epochs=2,
+        batch_size=10,
+    ).validate()
+    clean = _run_protocol(Grid(), paired_config, "cpu")
+    attacked_config = ExperimentConfig.from_dict({
+        **paired_config.resolved(),
+        "name": "hyperfl_lcg_attacked",
+        "attack": "local_class_gradient",
+        "attack_params": {"target_class": 0, "relative_budget": 0.5, "max_examples": 4},
+        "malicious_clients": [0],
+        "attack_start": 2,
+        "attack_end": 2,
+        "paired_clean": str(clean),
+    })
+    attacked = _run_protocol(Grid(), attacked_config, "cpu")
+    attacked_manifest = json.loads((attacked / "manifest.json").read_text())
+    assert attacked_manifest["status"] == "complete"
+    with h5py.File(attacked / "trajectory.h5") as trajectory:
+        client = trajectory["rounds/round_0002/clients/client_00"]
+        metadata = json.loads(client.attrs["metadata_json"])
+        assert metadata["attack_applied"] is True
+        assert metadata["knowledge"] == "local_shard_only"
+        assert metadata["target_support"] > 0
+        assert metadata["added_perturbation_l2_budget"] > 0
+        assert metadata["submitted_differs_from_local"] is True
+        for key in client["local_update"]:
+            assert not np.array_equal(
+                client[f"local_update/{key}"][...],
+                client[f"submitted_update/{key}"][...],
+            )
