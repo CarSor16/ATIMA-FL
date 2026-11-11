@@ -172,6 +172,7 @@ def test_full_two_phase_protocol_pair_and_hdf(dataset, tmp_path, attack, knowled
         name="clean",
         dataset_root=str(dataset),
         output_root=str(tmp_path / "runs"),
+        compute_device="cpu",
         rounds=2,
         model_params={"hidden": [8, 4]},
         local_epochs=1,
