@@ -1,6 +1,7 @@
 """Client work, independent of Flower and of specific attack IDs."""
 
 import time
+import hashlib
 import numpy as np
 from atima_fl.core.contracts import AttackContext
 from atima_fl.engine.attacks import knowledge_ids, prepare_training, poison_update
@@ -26,12 +27,23 @@ def _merge_attack_metadata(metadata, attack_notes):
 
 
 
-def train_local(config, run, client, round_id, before, data, device):
+def train_local(config, run, client, round_id, before, data, device, client_state=None):
     original = data.shard(client)
     context = AttackContext(config, client, round_id)
     batch = prepare_training(original.x, original.y, context)
     started = time.perf_counter()
-    local = train(before, batch.x, batch.y, config, client, round_id, device)
+    private_state = None
+    if config.training_method == "hyperfl_plus_plus":
+        from atima_fl.engine.hyperfl import train_local as train_hyperfl
+
+        local, private_state = train_hyperfl(
+            config, client, round_id, before, batch.x, batch.y, device, client_state
+        )
+        if client_state is not None:
+            client_state.clear()
+            client_state.update(private_state)
+    else:
+        local = train(before, batch.x, batch.y, config, client, round_id, device)
     registry = config.registry()
     params = registry.parameters("attack", config.attack, config.attack_params)
     metadata = {
@@ -48,11 +60,21 @@ def train_local(config, run, client, round_id, before, data, device):
         "poisoned_labels": len(batch.changed_label_indices),
         "backdoor_added_samples": len(batch.added_sample_indices),
         "device": str(device),
+        "training_method": config.training_method,
         "local_update_is_clean_counterfactual": config.attack == "none",
         "local_reference_scope": "local training conditional on incoming global; attacked runs are not paired-clean counterfactuals",
         **batch.notes,
     }
     metadata["local_training_data_altered"] = _training_data_altered(original, batch)
+    if private_state is not None:
+        digest = hashlib.sha256()
+        for name in sorted(private_state):
+            value = np.asarray(private_state[name])
+            digest.update(name.encode())
+            digest.update(value.dtype.str.encode())
+            digest.update(value.tobytes())
+        metadata["private_state_sha256"] = digest.hexdigest()
+        metadata["private_state_stays_client_side"] = True
     # Base-sample trained labels are stored separately from appended trigger copies.
     write_raw(
         raw_path(run, round_id, client),
@@ -75,7 +97,11 @@ def submit_local(config, run, client, round_id, before, counts):
         before,
         local,
         counts=counts,
-        attackable_indices=attackable_indices(config),
+        attackable_indices=(
+            tuple(range(len(before)))
+            if config.training_method == "hyperfl_plus_plus"
+            else attackable_indices(config)
+        ),
     )
     context.run_dir = run
     context.raw_by_client = {
