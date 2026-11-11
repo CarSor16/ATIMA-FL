@@ -67,18 +67,19 @@ def handle_train(message: Message, context: Context):
         from atima_fl.engine.hyperfl import evaluate_local
 
         private = _load_private_state(context)
+        dataset = data_engine.open_dataset(config)
         result, metadata = evaluate_local(
             config,
             client,
             round_id,
             before,
-            data_engine.open_dataset(config),
+            dataset,
             config.compute_device,
             private,
             command["phase"],
         )
         values = before
-        metadata["original_samples"] = len(data_engine.open_dataset(config).shard(client).y)
+        metadata["original_samples"] = len(dataset.shard(client).y)
         metadata["training_method"] = config.training_method
     else:
         raise ValueError("Unknown protocol phase")
