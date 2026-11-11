@@ -4,17 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atima-runtime"
-version = "0.5.2"
+version = "0.5.3"
 description = "ATIMA training and scientific analysis runtime"
 requires-python = ">=3.11,<3.13"
-dependencies = ["atima-core==0.5.2"]
+dependencies = ["atima-core==0.5.3"]
 
 [project.optional-dependencies]
 training = ["torch==2.8.0", "pandas==2.3.3", "pyarrow==21.0.0", "h5py==3.16.0", "scikit-learn==1.8.0"]
 flower = ["flwr[simulation]==1.36.0"]
 analysis = ["matplotlib>=3.9,<4", "h5py==3.16.0"]
 cluster = ["keyring>=25,<27", "paramiko>=3.4,<5"]
-full = ["atima-runtime[training,flower,analysis]==0.5.2"]
+full = ["atima-runtime[training,flower,analysis]==0.5.3"]
 
 [project.scripts]
 atima-runtime = "atima_fl.runtime.cli:main"
@@ -30,6 +30,7 @@ only-include = []
 "../../src/atima_fl/engine/client.py" = "atima_fl/engine/client.py"
 "../../src/atima_fl/engine/data.py" = "atima_fl/engine/data.py"
 "../../src/atima_fl/engine/defense_analysis.py" = "atima_fl/engine/defense_analysis.py"
+"../../src/atima_fl/engine/hyperfl.py" = "atima_fl/engine/hyperfl.py"
 "../../src/atima_fl/engine/models.py" = "atima_fl/engine/models.py"
 "../../src/atima_fl/engine/statistics.py" = "atima_fl/engine/statistics.py"
 "../../src/atima_fl/engine/storage.py" = "atima_fl/engine/storage.py"
