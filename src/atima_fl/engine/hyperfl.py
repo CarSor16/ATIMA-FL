@@ -111,7 +111,7 @@ def _private_state(model, shapes, existing, client, seed):
         name for name in model.state_dict()
         if name not in parameter_names
     ]
-    if existing is not None:
+    if existing:
         if set(existing) != set(names) | {"__embedding__"}:
             raise ValueError("Stored HyperFL++ client state has an incompatible schema")
         values = existing
