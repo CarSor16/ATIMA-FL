@@ -29,7 +29,6 @@ class ExperimentConfig:
     partition: str = "iid"
     partition_params: dict = field(default_factory=dict)
     model: str = "mlp"
-    training_method: str = "standard"
     model_params: dict = field(default_factory=dict)
     optimizer: str = "adam"
     optimizer_params: dict = field(default_factory=dict)
@@ -57,6 +56,7 @@ class ExperimentConfig:
     paired_clean: str = ""
     paired_rounds: int = 0
     plugin_directory: str = ""
+    training_method: str = "standard"
 
     def registry(self):
         if not hasattr(self, "_component_snapshot"):
