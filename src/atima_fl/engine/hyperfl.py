@@ -238,10 +238,11 @@ def evaluate_local(config, client, round_id, shared, data, device, client_state,
         np.asarray(private["__embedding__"]).copy(), dtype=torch.float32, device=device
     )
     state = _live_state(model, shapes, device)
-    state.update(network(embedding))
+    network.eval()
     part = data.split(split)
     outputs = []
     with torch.inference_mode():
+        state.update(network(embedding))
         for start in range(0, len(part.y), 1024):
             xb = torch.from_numpy(np.ascontiguousarray(part.x[start : start + 1024])).to(device)
             outputs.append(torch.softmax(functional_call(model, state, (xb,)), dim=1).cpu().numpy())
