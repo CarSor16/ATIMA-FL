@@ -47,7 +47,7 @@ def _hypernetwork(config, seed):
             self.shape = shape
             fan_in = math.prod(shape[1:]) if len(shape) > 1 else size
             self.scale = math.sqrt(2 * shape[0] / hidden) if name.endswith(".weight") and len(shape) > 1 else math.sqrt(shape[0] / hidden)
-            if ".bn" in name and name.endswith(".weight"):
+            if name.rsplit(".", 1)[0].startswith("bn") and name.endswith(".weight"):
                 self.scale = 0.05
                 self.offset = 1.0
             else:
