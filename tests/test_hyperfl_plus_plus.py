@@ -116,6 +116,22 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
                     reply_to=message,
                 )
 
+    import pandas as pd
+
+    train = pd.read_parquet(dataset / "train_scaled.parquet").iloc[:20].copy()
+    train.to_parquet(dataset / "train_scaled.parquet", index=False)
+    partition = dataset / "iid"
+    clients = partition / "clients"
+    for file in clients.glob("client_*.parquet"):
+        file.unlink()
+    assignment = train[["source_row_id"]].copy()
+    assignment["client_id"] = np.repeat([0, 1], 10)
+    assignment.to_parquet(partition / "client_assignment.parquet", index=False)
+    for client in range(2):
+        train.iloc[client * 10 : (client + 1) * 10].to_parquet(
+            clients / f"client_{client:02d}.parquet", index=False
+        )
+
     torch.set_num_threads(1)
     config = ExperimentConfig(
         name="hyperfl_protocol",
