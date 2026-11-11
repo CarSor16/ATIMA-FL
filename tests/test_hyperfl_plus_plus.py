@@ -191,6 +191,7 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
         assert metadata["knowledge"] == "local_shard_only"
         assert metadata["target_support"] > 0
         assert metadata["added_perturbation_l2_budget"] > 0
+        assert metadata["local_target_loss_after"] > metadata["local_target_loss_before"]
         assert metadata["submitted_differs_from_local"] is True
         for key in client["local_update"]:
             assert not np.array_equal(
