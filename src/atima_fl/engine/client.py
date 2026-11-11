@@ -1,7 +1,6 @@
 """Client work, independent of Flower and of specific attack IDs."""
 
 import time
-import hashlib
 import numpy as np
 from atima_fl.core.contracts import AttackContext
 from atima_fl.engine.attacks import knowledge_ids, prepare_training, poison_update
@@ -66,15 +65,6 @@ def train_local(config, run, client, round_id, before, data, device, client_stat
         **batch.notes,
     }
     metadata["local_training_data_altered"] = _training_data_altered(original, batch)
-    if private_state is not None:
-        digest = hashlib.sha256()
-        for name in sorted(private_state):
-            value = np.asarray(private_state[name])
-            digest.update(name.encode())
-            digest.update(value.dtype.str.encode())
-            digest.update(value.tobytes())
-        metadata["private_state_sha256"] = digest.hexdigest()
-        metadata["private_state_stays_client_side"] = True
     # Base-sample trained labels are stored separately from appended trigger copies.
     write_raw(
         raw_path(run, round_id, client),
