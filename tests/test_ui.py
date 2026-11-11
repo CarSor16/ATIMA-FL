@@ -42,7 +42,7 @@ def test_gui_catalog_validate_export_no_overwrite_and_token(gui):
     assert checked["checks"]["cuda"] == "not_checked"
     result = json.load(urlopen(Request(url + "/api/plans", body, headers=headers)))
     with zipfile.ZipFile(io.BytesIO(urlopen(url + result["download"]).read())) as file:
-        assert set(file.namelist()) == {"experiment.toml", "run_cluster.sh", "plan.json"}
+        assert set(file.namelist()) == {"experiment.toml", "run_cluster.sh", "run_experiment.py", "plan.json"}
     with pytest.raises(HTTPError) as caught:
         urlopen(Request(url + "/api/plans", body, headers=headers))
     assert caught.value.code == 409
@@ -151,7 +151,7 @@ def test_gui_theme_toggle_brand_and_assets(gui):
     app = (urlopen(url + "/app.js").read().decode("utf-8") + "\n" + urlopen(url + "/results.js").read().decode("utf-8"))
     translation = urlopen(url + "/i18n.js").read().decode("utf-8")
 
-    assert "Adversarial Testing Infrastructure for Model Aggregation — Federated Learning" in index
+    assert "Adversarial Testing Infrastructure for Model Attacks" in index
     assert 'id="theme-toggle"' in index
     assert 'id="theme-label"' in index
     assert 'id="theme-symbol"' in index
@@ -425,8 +425,8 @@ def test_shared_dynamic_design_shell_logo_accessibility_and_assets(gui):
     assert 'viewBox="0 0 96 96"' in logo
     assert "federated clients" in logo
     assert '<span class="mark" aria-hidden="true">▲</span>' not in page
-    assert 'class="brand-mark" src="/brand-mark.svg"' in page
-    assert 'rel="icon" type="image/svg+xml" href="/brand-mark.svg"' in page
+    assert 'class="brand-mark" src="/atima-shield-hd.png"' in page
+    assert 'rel="icon" type="image/png" href="/atima-shield-hd.png"' in page
     assert 'href="#main-content"' in page
     assert 'id="page-glyph"' in page
     assert 'id="quick-new-experiment"' in page
@@ -469,11 +469,12 @@ def test_header_language_alignment_component_spacing_and_toml_explainer(gui):
     translations = urlopen(url + "/i18n.js").read().decode("utf-8")
     title = "Create a federated learning security experiment"
     assert f"<h2>{title}</h2>" in html
-    assert f'<h1 id="page-title">{title}</h1>' in html
+    assert '<h1 id="page-title">Dashboard</h1>' in html
+    assert '<section id="designer" class="page">' in html
     assert "Build an experiment with confidence" not in html
-    assert "single experiment.toml for atima run in Slurm" in html
-    assert "legacy ZIP export remains available" in html
-    assert "Exports experiment.toml" in html
+    assert "Python + TOML launch bundle for ATIMA Runtime" in html
+    assert "Export Python + TOML bundle" in html
+    assert "TOML · Python launcher · Slurm" in html
     assert f'heading:"{title}"' in script
     assert '"Exports experiment.toml": "Esporta experiment.toml"' in translations
     assert f'"{title}": "Crea un esperimento di sicurezza per il Federated Learning"' in translations
@@ -541,3 +542,108 @@ def test_result_identity_helpers_preserve_complete_audit_and_missing_values():
     )
     assert _result_runtime_identity({"source_identity": {}, "runtime": {"python": "3.11"}}) is None
     assert _result_dataset_identity({})["hashes"]["test"] is None
+
+
+def test_standalone_shield_logo_served_and_not_screenshot_cropped(gui):
+    _, url = gui
+    html = urlopen(url + "/").read().decode("utf-8")
+    css = urlopen(url + "/style.css").read().decode("utf-8")
+    assert '<link rel="icon" type="image/png" href="/atima-shield-hd.png">' in html
+    assert 'src="/atima-shield-hd.png"' in html
+    assert "brand-illustration.png" not in html
+    assert "object-fit:contain" in css
+    image = urlopen(url + "/atima-shield-hd.png").read()
+    assert image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10)))
+    assert b"tRNS" in image  # PNG indexed-color alpha: outside of the shield is transparent.
+    # Transparent palette PNG, square with no embedded lettering.
+    width = int.from_bytes(image[16:20], "big")
+    height = int.from_bytes(image[20:24], "big")
+    assert (width, height) == (256, 256)
+    with pytest.raises(HTTPError) as caught:
+        urlopen(url + "/brand-illustration.png")
+    assert caught.value.code == 404
+
+
+def test_dashboard_reference_layout_assets_and_real_data(gui):
+    _, url = gui
+    index = urlopen(url + "/").read().decode("utf-8")
+    assert '<section id="dashboard" class="page active"' in index
+    assert '<section id="designer" class="page">' in index
+    for item in ("dash-datasets", "dash-clients", "dash-attacks", "dash-aggregators",
+                 "dash-recent-body", "dash-health", "dash-settings-theme"):
+        assert f'id="{item}"' in index
+    assert 'data-page="dashboard"' in index
+    assert 'data-page-target="designer"' in index
+    assert 'data-catalog-focus="aggregator"' in index
+    assert "Federated Learning" in index and "under Attack" in index
+    for route, marker in (
+        ("/dashboard.css", b".dash-hero"),
+        ("/dashboard.js", b'json("/api/catalog")'),
+        ("/federated-world.svg", b"<svg"),
+    ):
+        with urlopen(url + route) as response:
+            assert marker in response.read()
+            assert response.status == 200
+    catalog = json.load(urlopen(url + "/api/catalog"))["catalog"]
+    defaults = json.load(urlopen(url + "/api/defaults"))
+    assert len(catalog["attack"]) >= 21
+    assert defaults["clients"] > 0
+    assert json.load(urlopen(url + "/api/results")) == []
+    assert "exp_001" not in index
+    assert "CIC-IDS2017" not in index
+
+
+def test_dashboard_cc0_map_and_original_svg_icons_are_served(gui):
+    from xml.etree import ElementTree as ET
+
+    _, url = gui
+    index = urlopen(url + "/").read().decode("utf-8")
+    styles = urlopen(url + "/dashboard.css").read().decode("utf-8")
+    sprite = urlopen(url + "/dashboard-icons.svg").read()
+    map_svg = urlopen(url + "/federated-world.svg").read()
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    icons = ET.fromstring(sprite)
+    names = {
+        element.attrib["id"]
+        for element in icons.findall(".//svg:symbol", ns)
+    }
+    assert {"dashboard", "experiments", "datasets", "attacks",
+            "aggregators", "clients", "results", "visualization",
+            "settings", "documentation", "shield", "play",
+            "clock", "bolt", "analytics", "network"} <= names
+    for name in ("dashboard", "experiments", "datasets", "attacks",
+                 "aggregators", "clients", "results", "visualization",
+                 "settings", "documentation"):
+        assert f'href="/dashboard-icons.svg#{name}"' in index
+    assert index.count('class="dash-action-svg"') == 4
+    assert index.count('class="dash-stat-svg"') == 4
+    assert 'class="dash-heading-icon"' in index
+    assert "dash-action-svg" in styles and "dash-bullet-icon" in styles
+    image = ET.fromstring(map_svg)
+    assert image.attrib["width"] == "960"
+    assert image.attrib["height"] == "540"
+    assert image.attrib["viewBox"] == "0 10 960 540"
+    assert image.find(".//svg:clipPath", ns) is not None
+    assert len(image.findall(".//svg:circle", ns)) >= 100
+    assert b"prefers-reduced-motion" in map_svg
+    assert "federated-world.svg" in styles
+
+
+def test_exported_python_launcher_uses_runtime_without_copying_training_engine(gui):
+    _, url = gui
+    catalog = json.load(urlopen(url + "/api/catalog"))
+    headers = {"Content-Type": "application/json", "X-ATIMA-Token": catalog["token"]}
+    c = json.load(urlopen(url + "/api/defaults"))
+    c["name"] = "PythonRunner_fixture"
+    response = json.load(urlopen(Request(
+        url + "/api/plans", json.dumps(c).encode(), headers=headers
+    )))
+    with zipfile.ZipFile(io.BytesIO(urlopen(url + response["download"]).read())) as archive:
+        files = set(archive.namelist())
+        assert {"experiment.toml", "run_experiment.py", "run_cluster.sh", "plan.json"} == files
+        script = archive.read("run_experiment.py").decode()
+        assert "from atima_fl.runtime.api import run_profile" in script
+        assert 'choices=("preflight", "train")' in script
+        assert "args.local" in script
+        assert 'Path(__file__).resolve().parent / "experiment.toml"' in script
+        compile(script, "run_experiment.py", "exec")

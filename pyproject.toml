@@ -19,6 +19,8 @@ cluster = ["keyring>=25,<27", "paramiko>=3.4,<5"]
 
 [project.scripts]
 atima = "atima_fl.cli:main"
+atima-studio = "atima_fl.studio.cli:main"
+atima-runtime = "atima_fl.runtime.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/atima_fl"]

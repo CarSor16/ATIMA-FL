@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "atima-full"
+version = "0.5.2"
+description = "ATIMA Studio and Runtime metapackage; no duplicated application code"
+requires-python = ">=3.11,<3.13"
+dependencies = ["atima-studio==0.5.2", "atima-runtime==0.5.2"]
+
+[project.optional-dependencies]
+training = ["atima-runtime[training,flower,analysis]==0.5.2"]
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true

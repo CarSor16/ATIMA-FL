@@ -1,0 +1,78 @@
+name: Split-package build and isolation
+
+on:
+  push:
+    branches: [studio-runtime-split]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  wheels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build four disjoint wheels
+        run: |
+          python -m pip install 'hatchling>=1.27,<2' build
+          mkdir -p dist
+          for name in core studio runtime full; do
+            python -m build --wheel --no-isolation --outdir dist "packages/$name"
+          done
+      - name: Check that no wheel contains source owned by another
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          owned = {}
+          for wheel in glob.glob("dist/*.whl"):
+              with zipfile.ZipFile(wheel) as archive:
+                  for name in archive.namelist():
+                      if name.startswith("atima_fl/") and not name.endswith("/"):
+                          if name in owned:
+                              raise SystemExit(f"Overlapping ownership: {name}: {owned[name]} and {wheel}")
+                          owned[name] = wheel
+          assert any(name.startswith("atima_fl/ui/static/") for name in owned), "Studio UI assets missing"
+          assert "atima_fl/core/configuration.py" in owned
+          assert "atima_fl/engine/aggregation.py" in owned
+          print("Unique code ownership across wheels:", len(owned))
+          PY
+      - name: Install Studio alone, without torch and Flower
+        run: |
+          python -m venv /tmp/atima-studio-isolated
+          /tmp/atima-studio-isolated/bin/python -m pip install --no-index --find-links dist atima-studio || {
+            /tmp/atima-studio-isolated/bin/python -m pip install numpy==2.2.6 'tomli-w>=1.2,<2'
+            /tmp/atima-studio-isolated/bin/python -m pip install --no-index --find-links dist atima-studio
+          }
+          /tmp/atima-studio-isolated/bin/python - <<'PY'
+          import importlib.util
+          from atima_fl.studio.api import validate_profile, export_plan
+          from atima_fl.core.configuration import ExperimentConfig
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          assert importlib.util.find_spec("torch") is None
+          assert importlib.util.find_spec("flwr") is None
+          with TemporaryDirectory() as directory:
+              root = Path(directory)
+              path = root / "experiment.toml"
+              ExperimentConfig(name="StudioOnly").validate().save(path)
+              assert validate_profile(path)["configuration"] == "valid"
+              assert (export_plan(path, root / "workspace") / "plan.zip").is_file()
+          print("Studio without training packages OK")
+          PY
+      - name: Install complete stack from wheelhouse with no duplicate files
+        run: |
+          python -m venv /tmp/atima-full-isolated
+          /tmp/atima-full-isolated/bin/python -m pip install numpy==2.2.6 'tomli-w>=1.2,<2'
+          /tmp/atima-full-isolated/bin/python -m pip install --no-index --find-links dist atima-full
+          /tmp/atima-full-isolated/bin/python - <<'PY'
+          from importlib.metadata import distribution, requires
+          for name in ("atima-core", "atima-studio", "atima-runtime", "atima-full"):
+              assert distribution(name)
+          assert not any(path.startswith("atima_fl/") for path in (str(p) for p in distribution("atima-full").files))
+          from atima_fl.studio.api import validate_profile
+          from atima_fl.runtime.api import run_profile
+          assert callable(validate_profile) and callable(run_profile)
+          print("Full environment has one copy of each code file")
+          PY

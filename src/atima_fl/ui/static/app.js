@@ -32,6 +32,8 @@ function setTheme(next, persist = false) {
 
 // Common shell shared by every page. Navigation preserves existing form state.
 const PAGE_META={
+  dashboard:{heading:"Dashboard",subtitle:"Adversarial Testing in Federated Machine Learning",crumb:"DASHBOARD"},
+  settings:{heading:"Settings",subtitle:"Customize the local Studio and review workspace options.",crumb:"SETTINGS"},
   designer:{heading:"Create a federated learning security experiment",subtitle:"Configure an FL security experiment and export a reproducible TOML plan.",crumb:"DESIGNER"},
   "dataset-manager":{heading:"Dataset Manager",subtitle:"Inspect and prepare a local dataset, or inspect remote metadata over optional SSH.",crumb:"DATASETS"},
   components:{heading:"Components",subtitle:"Registered plugins and their capabilities.",crumb:"LIBRARY"},
@@ -41,6 +43,7 @@ const PAGE_META={
 function navigateTo(page,focusHeading=false){
   const meta=PAGE_META[page];
   if(!meta)return;
+  document.body.classList.toggle("dashboard-open",page==="dashboard");
   for(const button of document.querySelectorAll(".nav")){
     const active=button.dataset.page===page;
     button.classList.toggle("active",active);
@@ -54,8 +57,9 @@ function navigateTo(page,focusHeading=false){
   $("page-breadcrumb").textContent="ATIMA-FL / "+meta.crumb;
   const icon=document.querySelector('.nav[data-page="'+page+'"] .nav-icon');
   if(icon)$("page-glyph").replaceChildren(icon.cloneNode(true));
-  $("quick-new-experiment").classList.toggle("hidden",page==="designer");
+  $("quick-new-experiment").classList.toggle("hidden",page==="designer" || page==="dashboard");
   if(page==="results")refreshResults();
+  document.dispatchEvent(new CustomEvent("atima:navigate",{detail:{page}}));
   if(focusHeading){
     window.scrollTo({top:0,behavior:"auto"});
     $("page-title").tabIndex=-1;
@@ -211,18 +215,20 @@ async function discoverClusterDatasets(){
 
 function renderComponentCatalog(){
   const query=String($("component-search")?.value||"").trim().toLocaleLowerCase();
+  const selectedKind=$("component-search")?.dataset.kind||"";
   let visible=0;
   const root=$("component-list");
   root.replaceChildren();
   for(const [index,group] of CATALOG_GROUPS.entries()){
     const section=node("details",undefined,"catalog-group");
-    section.open=Boolean(query)||index===0;
+    section.open=Boolean(query||selectedKind)||index===0;
     const heading=node("summary",undefined,"catalog-group-heading");
     const total=group.kinds.reduce((n,[kind])=>n+(catalog[kind]?.length||0),0);
     heading.append(node("strong",group.title),node("span",total+" "+uiText("components"),"catalog-count"));
     section.append(heading);
     const subgroups=node("div",undefined,"catalog-subgroups");
     for(const [kind,title] of group.kinds){
+      if(selectedKind && selectedKind!==kind)continue;
       const items=(catalog[kind]||[]).filter(component=>{
         if(!query)return true;
         const haystack=[component.id,component.title,component.description,
@@ -233,7 +239,7 @@ function renderComponentCatalog(){
       if(!items.length)continue;
       visible+=items.length;
       const subgroup=node("details",undefined,"catalog-subgroup");
-      subgroup.open=Boolean(query);
+      subgroup.open=Boolean(query||selectedKind);
       const summary=node("summary",undefined,"catalog-subheading");
       summary.append(node("strong",title),node("span",String(items.length),"catalog-count"));
       subgroup.append(summary);
@@ -332,6 +338,7 @@ function updateTaskUi() {
 }
 function parameterFields(component, target, values={}) {
   target.replaceChildren();
+  if(Object.keys(component.parameters).length) target.append(node("div","Component parameters · "+component.id,"param-subheading"));
   for(const [key,schema] of Object.entries(component.parameters)) {
     const label=node("label",schema.description || key);
     let input;
@@ -347,7 +354,7 @@ function selection(kind, field, target) {
   const block=node("div",undefined,"component-block"+(["optimizer","loss","metrics"].includes(kind)?" advanced-only":"")),label=node("label",titles[kind]),select=node("select"); select.id=field;
   for(const component of catalog[kind]) { const option=node("option",componentLabel(component,"title")); option.value=component.id;select.append(option); }
   select.value=defaults[field]; label.append(select);block.append(label);
-  const description=node("p",undefined,"component-description"),params=node("div",undefined,kind==="dataset"?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
+  const description=node("p",undefined,"component-description"),params=node("div",undefined,["dataset","partition"].includes(kind)?"fields":"fields advanced-only");params.id=field+"_params";block.append(description,params);target.append(block);
   function refresh(){const component=catalog[kind].find(c=>c.id===select.value);description.textContent=componentLabel(component,"description");parameterFields(component,params,select.value===defaults[field]?defaults[field+"_params"]:{});}
   select.addEventListener("change",()=>{
     refresh();
@@ -605,13 +612,32 @@ async function refreshClusterStatus(){
       : `Cluster not configured. ATIMA is looking for: ${status.config_path}`;
   }catch(error){$("cluster-status").textContent=error.message;}
 }
+async function previewSeedCampaign(){
+  const button=$("campaign-preview"),panel=$("campaign-preview-panel"),output=$("campaign-preview-output");
+  button.disabled=true;
+  panel.classList.remove("hidden");panel.open=true;
+  output.textContent="Validating 11 paired seed configurations…";
+  try{
+    const result=await request("/api/campaign-preview",config());
+    output.textContent=JSON.stringify(result,null,2);
+  }catch(error){output.textContent="Campaign preview failed: "+error.message;}
+  finally{button.disabled=false;}
+}
+let clusterImportOffset=0;
 async function syncClusterResults(){
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
   button.disabled=true;
-  output.textContent="Connecting securely over SSH and reading result summaries…";
+  output.textContent="Connecting securely over SSH and reading up to 100 result summaries…";
   try{
-    const response=await request("/api/sync-cluster-results",{});
-    output.textContent=`Imported ${response.imported} experiment summaries and available validation histories. Dataset files and model weights remain on the cluster.`;
+    const start=clusterImportOffset;
+    const response=await request("/api/sync-cluster-results",start?{offset:start}:{});
+    const next=response.next_offset;
+    clusterImportOffset=Number.isInteger(next)&&next>start?next:0;
+    button.textContent=clusterImportOffset?"Import next 100 results":"Import results and validation histories";
+    output.textContent=`Imported ${response.imported} summaries (page starting at ${start}). `+
+      (response.pagination_limit_reached?"Import limit reached; use a narrower remote campaign directory. ":
+       clusterImportOffset?"More results available: use the button again. ":"All available pages reached. ")+
+      "Dataset files and model weights remain on the cluster.";
     await refreshResults();
   }catch(error){output.textContent="Cluster import failed: "+error.message;}
   finally{button.disabled=false;}
@@ -727,9 +753,9 @@ async function initialize(){
     $("compare-experiment-b").value=chosenComparison.second||"";
     refreshManualFromChoices();
   });
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
-  $("component-search").addEventListener("input",renderComponentCatalog);
-  for(const button of document.querySelectorAll(".nav"))
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
+  $("component-search").addEventListener("input",()=>{delete $("component-search").dataset.kind;renderComponentCatalog();});
+  for(const button of document.querySelectorAll(".nav[data-page]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
   for(const button of document.querySelectorAll("[data-page-target]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.pageTarget,true));
