@@ -16,7 +16,7 @@ from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
 from atima_fl.core.numerics import PlateauPolicy, check_arrays, sha256_file
 from atima_fl.engine.data import open_dataset
-from atima_fl.engine.models import arrays, build, probabilities, metrics, initial_arrays
+from atima_fl.engine.models import probabilities, metrics, initial_arrays
 from atima_fl.engine.aggregation import aggregate_topology
 from atima_fl.engine.storage import RoundStorage, atomic_json, raw_path, read_raw
 
