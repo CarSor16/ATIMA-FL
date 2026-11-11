@@ -21,7 +21,7 @@ def transform(context):
     from atima_fl.engine.storage import raw_path, read_raw
 
     p = context.config.parameters("attack")
-    if context.config.training_method == "hyperfl_plus_plus":
+    if getattr(context.config, "training_method", "standard") == "hyperfl_plus_plus":
         from atima_fl.engine.hyperfl import local_class_gradient
 
         if context.client_state is None:
