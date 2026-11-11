@@ -65,7 +65,7 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
 
     from atima_fl.adapters.flower.server import _run_protocol
     from atima_fl.engine import data as data_engine
-    from atima_fl.engine.client import submit_local
+    from atima_fl.engine.client import submit_local, train_local as train_client_local
     from atima_fl.engine.hyperfl import evaluate_local
 
     class Grid:
@@ -85,7 +85,7 @@ def test_hyperfl_one_round_uses_persistent_client_state(dataset, tmp_path):
                 phase = command["phase"]
                 if phase == "train":
                     state = self.private.setdefault(client, {})
-                    values, metadata = train_local(
+                    values, metadata = train_client_local(
                         config, Path(command["run_dir"]), client, round_id, before,
                         data_engine.open_dataset(config), "cpu", client_state=state,
                     )
