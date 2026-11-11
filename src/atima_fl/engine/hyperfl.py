@@ -304,3 +304,95 @@ def aggregate_personalized(results, classes):
         "client_macro_f1_mean": float(np.mean([v["evaluation"]["macro_f1"] for v in results])),
         "client_macro_f1_min": float(np.min([v["evaluation"]["macro_f1"] for v in results])),
     }
+
+
+def local_class_gradient(config, client, global_arrays, local_arrays, client_state,
+                         x, y, device, target_class, relative_budget, max_examples,
+                         round_id):
+    """Craft an LCG update in shared hypernetwork space from one client's shard."""
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from torch.func import functional_call
+    from atima_fl.core.numerics import round_seed
+
+    eligible = np.flatnonzero(np.asarray(y) == target_class)
+    if not len(eligible):
+        return [value.copy() for value in local_arrays], {
+            "attack_applied": False,
+            "target_support": 0,
+            "reason": "target_class_absent_from_compromised_shard",
+            "knowledge": "local_shard_only",
+        }
+    if not client_state:
+        raise ValueError("HyperFL++ private client state is required for LCG")
+    if len(local_arrays) != len(global_arrays):
+        raise ValueError("HyperFL++ LCG update schema mismatch")
+
+    rng = np.random.default_rng(round_seed(config.seed, client, round_id))
+    selected = np.sort(rng.choice(eligible, min(len(eligible), max_examples), replace=False))
+    network, shapes = _hypernetwork(config, config.seed)
+    network.to(device)
+    _load_arrays(network, local_arrays)
+    network.eval()
+
+    model = _model(config, config.seed + client).to(device).eval()
+    private = _private_state(
+        model, shapes, client_state, client, round_seed(config.seed, client, 0)
+    )
+    embedding = torch.as_tensor(
+        np.asarray(private["__embedding__"]).copy(), dtype=torch.float32, device=device
+    )
+    state = _live_state(model, shapes, device)
+    state.update(network(embedding))
+    xb = torch.from_numpy(np.ascontiguousarray(x[selected])).to(device)
+    yb = torch.from_numpy(np.ascontiguousarray(y[selected])).long().to(device)
+    loss = F.cross_entropy(functional_call(model, state, (xb,)), yb)
+    if not torch.isfinite(loss).item():
+        raise ValueError("Nonfinite HyperFL++ local target-class loss")
+
+    named = dict(network.named_parameters())
+    gradients = torch.autograd.grad(loss, tuple(named.values()))
+    gradient_by_name = {
+        name: gradient.detach().cpu().numpy().copy()
+        for name, gradient in zip(named, gradients)
+    }
+    keys = list(network.state_dict())
+    if len(keys) != len(local_arrays) or set(keys) != set(gradient_by_name):
+        raise ValueError("HyperFL++ LCG requires parameter-only shared state")
+    gradient_arrays = [gradient_by_name[key] for key in keys]
+    if any(g.shape != a.shape or not np.isfinite(g).all()
+           for g, a in zip(gradient_arrays, local_arrays)):
+        raise ValueError("Invalid HyperFL++ local target-class gradient")
+
+    grad_norm = float(np.sqrt(sum(
+        np.square(g.astype(np.float64)).sum() for g in gradient_arrays
+    )))
+    delta_norm = float(np.sqrt(sum(
+        np.square((a - b).astype(np.float64)).sum()
+        for a, b in zip(local_arrays, global_arrays)
+    )))
+    if grad_norm <= 1e-12 or delta_norm <= 1e-12:
+        return [value.copy() for value in local_arrays], {
+            "attack_applied": False,
+            "reason": "zero_target_gradient_or_local_update",
+            "target_support": int(len(eligible)),
+            "knowledge": "local_shard_only",
+        }
+
+    scale = relative_budget * delta_norm / grad_norm
+    values = [
+        np.asarray(a + scale * gradient, dtype=a.dtype)
+        for a, gradient in zip(local_arrays, gradient_arrays)
+    ]
+    return values, {
+        "attack_applied": True,
+        "target_class": target_class,
+        "target_support": int(len(eligible)),
+        "used_target_examples": int(len(selected)),
+        "gradient_l2": grad_norm,
+        "local_delta_l2": delta_norm,
+        "added_perturbation_l2_budget": relative_budget * delta_norm,
+        "objective": "ascend_local_target_class_cross_entropy_through_hypernetwork",
+        "knowledge": "local_shard_only",
+    }
