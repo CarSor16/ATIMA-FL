@@ -16,7 +16,7 @@ from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
 from atima_fl.core.numerics import PlateauPolicy, check_arrays, sha256_file
 from atima_fl.engine.data import open_dataset
-from atima_fl.engine.models import arrays, build, probabilities, metrics
+from atima_fl.engine.models import arrays, build, probabilities, metrics, initial_arrays
 from atima_fl.engine.aggregation import aggregate_topology
 from atima_fl.engine.storage import RoundStorage, atomic_json, raw_path, read_raw
 
@@ -79,7 +79,7 @@ def _validated_reply(reply, config, round_id, before, phase, counts, device):
     return cid, {"values": values, "metadata": metadata, "count": count}
 
 
-def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device):
+def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device, split_name=None):
     commands = ConfigRecord(
         {
             "config_json": json.dumps(config.resolved()),
@@ -87,6 +87,7 @@ def exchange(grid, node_ids, config, run, round_id, before, phase, counts, devic
             "server-round": round_id,
             "phase": phase,
             "counts_json": json.dumps(counts),
+            "split": split_name or "",
         }
     )
     messages = [
@@ -175,7 +176,7 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
         },
     }
     manifest["scheduler_allocation"] = json.loads(os.environ.get("ATIMA_ALLOCATION_JSON", "null"))
-    before = arrays(build(config))
+    before = initial_arrays(config)
     reference = None
     limit = config.rounds
     if config.attack != "none":
@@ -251,12 +252,24 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
                 )
                 after = [a + b for a, b in zip(before, delta)]
                 check_arrays(after, before)
-                evaluation = metrics(
-                    validation_y,
-                    probabilities(after, validation_x, config, device),
-                    data.classes,
-                    config,
-                )
+                if config.training_method == "hyperfl_plus_plus":
+                    from atima_fl.engine.hyperfl import aggregate_personalized
+
+                    evaluated = exchange(
+                        grid, node_ids, config, run, round_id, after, "validate",
+                        counts, device, "validation"
+                    )
+                    evaluation = aggregate_personalized(
+                        [evaluated[cid]["metadata"] for cid in sorted(evaluated)],
+                        data.classes,
+                    )
+                else:
+                    evaluation = metrics(
+                        validation_y,
+                        probabilities(after, validation_x, config, device),
+                        data.classes,
+                        config,
+                    )
                 if reference is not None and round_id < config.attack_start:
                     expected = read_weights(reference, f"rounds/round_{round_id:04d}/global_after")
                     if any(not np.array_equal(a, b) for a, b in zip(expected, after)):
@@ -320,9 +333,22 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
                 break
         test = data.split("test")
         test_x, test_y = test.x, test.y
-        test_p = probabilities(before, test_x, config, device)
+        if config.training_method == "hyperfl_plus_plus":
+            from atima_fl.engine.hyperfl import aggregate_personalized
+
+            evaluated = exchange(
+                grid, node_ids, config, run, limit, before, "test",
+                counts, device, "test"
+            )
+            test_metrics = aggregate_personalized(
+                [evaluated[cid]["metadata"] for cid in sorted(evaluated)],
+                data.classes,
+            )
+        else:
+            test_p = probabilities(before, test_x, config, device)
+            test_metrics = metrics(test_y, test_p, data.classes, config)
         final = {
-            "test": metrics(test_y, test_p, data.classes, config),
+            "test": test_metrics,
             "federated": {
                 "scope": "simulated_logical_clients_server_audit",
                 "rounds": federated_rounds,
@@ -330,7 +356,12 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
         }
         plugin = config.registry().get("attack", config.attack)
         evaluate_attack = plugin.hooks.get("evaluate")
-        if evaluate_attack:
+        if evaluate_attack and config.training_method == "hyperfl_plus_plus":
+            final["attack_metrics"] = {
+                "status": "not_evaluated",
+                "reason": "The attack hook expects one global LopezCNN; HyperFL++ produces personalized client models.",
+            }
+        elif evaluate_attack:
             final["attack_metrics"] = evaluate_attack(before, test_x, test_y, config, device)
         atomic_json(run / "final_metrics.json", final)
         atomic_json(run / "validation_history.json", history)
