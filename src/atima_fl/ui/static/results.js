@@ -557,13 +557,106 @@ function renderPairedTable(values,byId){
   }
   metric.select.addEventListener("change",redraw);cls.select.addEventListener("change",redraw);redraw();
 }
+// Research-focus scope comes from the supplied 3-task comparison graphs.
+// It is an *optional view* and does not change the runtime attack catalog.
+// ClientDropout appears in the figure notes as an availability outcome,
+// not an ordinary final-classification attack; it remains visible with focus off.
+const RESEARCH_GRAPH_ATTACKS=[
+  ["class_withholding","ClassWithholding"],
+  ["local_class_gradient","LocalClassGradient"],
+  ["model_replacement","ModelReplacement"],
+  ["sample_weight_hijack","SampleWeightHijack"],
+  ["stale_replay","StaleReplay"],
+  ["update_scaling","UpdateScaling x5"],
+  ["poisoned_fl","PoisonedFL (historical adaptation)"],
+  ["free_rider","FreeRider"],
+  ["label_flip","LabelFlip to benign"]
+];
+let researchFocusInitialized=false;
+const researchFocusSelected=new Set(RESEARCH_GRAPH_ATTACKS.map(([id])=>id));
+function setupResearchFocus(){
+  if(researchFocusInitialized)return;
+  researchFocusInitialized=true;
+  const list=$("research-focus-choices");
+  for(const [id,label] of RESEARCH_GRAPH_ATTACKS){
+    const line=node("label",undefined,"research-focus-choice");
+    const checkbox=node("input");checkbox.type="checkbox";checkbox.checked=true;
+    checkbox.setAttribute("aria-label","Include "+label+" in research focus");
+    checkbox.addEventListener("change",()=>{
+      if(checkbox.checked)researchFocusSelected.add(id);
+      else researchFocusSelected.delete(id);
+      renderResults(availableResults);
+    });
+    line.append(checkbox,node("span",label));list.append(line);
+  }
+  $("research-focus-enabled").addEventListener("change",()=>renderResults(availableResults));
+  $("group-results-enabled").addEventListener("change",()=>renderResults(availableResults));
+}
+function researchFocusedRun(run){
+  if(!$("research-focus-enabled").checked)return true;
+  const id=String(run.group?.attack||run.config?.attack||"").toLowerCase();
+  // Clean remains visible to inspect the original baseline. Verified pairing
+  // and manual A/B comparisons do not inherit this presentation-only filter.
+  return id==="none"||researchFocusSelected.has(id);
+}
 function renderResults(values){
+  setupResearchFocus();
   const target=$("results-list");target.replaceChildren();
   availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
-  for(const value of values){
+  const focused=values.filter(researchFocusedRun);
+  $("research-focus-status").textContent=$("research-focus-enabled").checked
+    ?"Showing "+focused.length+" of "+values.length+" runs (clean baselines included). Selected graph attacks: "+researchFocusSelected.size+"."
+    :"Disabled — all experiments remain visible.";
+  if(values.length&&!focused.length)target.append(node("p","No experiments match this optional research selection."));
+  // Organize imports for browsing, not for scientific comparison. Only the
+  // separately verified pairing logic may authorize clean/attack deltas.
+  const familyGroups=new Map(),campaignGroups=new Map();
+  const ordered=[...focused].sort((a,b)=>{
+    const label=r=>[r.group?.family,r.group?.attack,r.group?.campaign_date,
+      r.group?.distribution,r.group?.partition_detail,r.group?.model,
+      r.group?.dataset,r.group?.task,r.id].join("|");
+    return label(a).localeCompare(label(b));
+  });
+  for(const value of ordered){
+    const info=value.group||{},family=info.family||"Other / unclassified";
+    let reportParent=target;
+    if($("group-results-enabled").checked){
+      let familyGroup=familyGroups.get(family);
+      if(!familyGroup){
+        const wrapper=node("details",undefined,"result-report");
+        const summary=node("summary",undefined,"result-report-heading");
+        const familyBody=node("div",undefined,"result-report-content");
+        summary.append(node("strong",family));
+        wrapper.append(summary,familyBody);target.append(wrapper);
+        familyGroup={body:familyBody,summary,count:0};
+        familyGroups.set(family,familyGroup);
+      }
+      familyGroup.count++;
+      // Different Dirichlet alphas must never silently appear as one scenario.
+      const description=[info.attack||value.config?.attack||"unknown",
+        info.campaign_date||"Date unknown",info.distribution||"Unknown",
+        info.partition_detail||"Unknown",info.model||"Unknown",
+        info.dataset||"Unknown",info.task||"Unknown"];
+      const key=family+"|"+JSON.stringify(description);
+      let campaign=campaignGroups.get(key);
+      if(!campaign){
+        const wrapper=node("details",undefined,"result-report");
+        const summary=node("summary",undefined,"result-report-heading");
+        summary.append(node("strong",description.slice(0,3).join(" · ")),
+          node("span",description.slice(3).join(" · ")));
+        const campaignBody=node("div",undefined,"result-report-content");
+        wrapper.append(summary,campaignBody);
+        familyGroup.body.append(wrapper);
+        campaign={body:campaignBody,summary,count:0};
+        campaignGroups.set(key,campaign);
+      }
+      campaign.count++;
+  
+      reportParent=campaign.body;
+    }
     const report=node("details",undefined,"result-report"),heading=node("summary",undefined,"result-report-heading");
-    heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
+    heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,Number.isInteger(value.group?.seed)?"Seed "+value.group.seed:null,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
     let rendered=false;
     report.addEventListener("toggle",()=>{
       if(!report.open||rendered)return;rendered=true;
@@ -571,9 +664,14 @@ function renderResults(values){
       if(metric)content.append(node("h4","Final test metrics"),metricCards(metric));
       else content.append(node("p","Final test metrics are not available for this run."));
       content.append(perClassAnalysis(value,null,false),matrixAnalysis(value,null,false),roundChart(value,null));
+      const configuration=node("details",undefined,"result-raw");
+      configuration.append(node("summary","Recorded configuration (including attack parameters)"),
+        node("pre",JSON.stringify(value.config||{},null,2)));content.append(configuration);
       const raw=node("details",undefined,"result-raw");raw.append(node("summary","Raw final metrics"),node("pre",JSON.stringify(value.metrics,null,2)));content.append(raw);report.append(content);
-    });target.append(report);
+    });reportParent.append(report);
   }
+  for(const group of familyGroups.values())group.summary.append(node("span",group.count+" runs"));
+  for(const group of campaignGroups.values())group.summary.append(node("span",group.count+" runs"));
 }
 function initializeAnalysisControls(){
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.addEventListener("click",()=>{analysisMode=button.dataset.analysisMode;refreshManualFromChoices();});

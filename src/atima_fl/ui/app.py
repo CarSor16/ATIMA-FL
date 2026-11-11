@@ -13,6 +13,8 @@ from atima_fl.ui.cluster_results import (
     connection_settings, read_local_history, sync_cluster_results,
 )
 from atima_fl.ui.cluster_datasets import discover_cluster_datasets
+from atima_fl.ui.result_groups import result_group
+from atima_fl.ui.campaign_preview import paired_seed_preview
 
 STATIC = Path(__file__).parent / "static"
 
@@ -88,6 +90,7 @@ def results(workspace):
             "status": manifest.get("status", "unknown"),
             "round": manifest.get("last_valid_round"),
             "config": config,
+            "group": result_group(manifest, path.parent.name),
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
@@ -279,12 +282,18 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Cluster dataset discovery takes no client-side parameters")
                 return self.respond(200, discover_cluster_datasets(self.server.workspace))
             if self.path == "/api/sync-cluster-results":
-                if body != {}:
-                    raise ValueError("Cluster sync takes no client-side parameters")
-                return self.respond(200, sync_cluster_results(self.server.workspace))
+                if not isinstance(body, dict) or set(body) - {"offset"}:
+                    raise ValueError("Cluster sync accepts only an optional page offset")
+                if not body:
+                    return self.respond(200, sync_cluster_results(self.server.workspace))
+                return self.respond(
+                    200, sync_cluster_results(self.server.workspace, offset=body["offset"])
+                )
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
+            if self.path == "/api/campaign-preview":
+                return self.respond(200, paired_seed_preview(config))
             if self.path == "/api/inspect-dataset":
                 registry = config.registry()
                 plugin = registry.get("dataset", config.dataset)

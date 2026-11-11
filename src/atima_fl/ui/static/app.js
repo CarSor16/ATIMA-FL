@@ -612,13 +612,32 @@ async function refreshClusterStatus(){
       : `Cluster not configured. ATIMA is looking for: ${status.config_path}`;
   }catch(error){$("cluster-status").textContent=error.message;}
 }
+async function previewSeedCampaign(){
+  const button=$("campaign-preview"),panel=$("campaign-preview-panel"),output=$("campaign-preview-output");
+  button.disabled=true;
+  panel.classList.remove("hidden");panel.open=true;
+  output.textContent="Validating 11 paired seed configurations…";
+  try{
+    const result=await request("/api/campaign-preview",config());
+    output.textContent=JSON.stringify(result,null,2);
+  }catch(error){output.textContent="Campaign preview failed: "+error.message;}
+  finally{button.disabled=false;}
+}
+let clusterImportOffset=0;
 async function syncClusterResults(){
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
   button.disabled=true;
-  output.textContent="Connecting securely over SSH and reading result summaries…";
+  output.textContent="Connecting securely over SSH and reading up to 100 result summaries…";
   try{
-    const response=await request("/api/sync-cluster-results",{});
-    output.textContent=`Imported ${response.imported} experiment summaries and available validation histories. Dataset files and model weights remain on the cluster.`;
+    const start=clusterImportOffset;
+    const response=await request("/api/sync-cluster-results",start?{offset:start}:{});
+    const next=response.next_offset;
+    clusterImportOffset=Number.isInteger(next)&&next>start?next:0;
+    button.textContent=clusterImportOffset?"Import next 100 results":"Import results and validation histories";
+    output.textContent=`Imported ${response.imported} summaries (page starting at ${start}). `+
+      (response.pagination_limit_reached?"Import limit reached; use a narrower remote campaign directory. ":
+       clusterImportOffset?"More results available: use the button again. ":"All available pages reached. ")+
+      "Dataset files and model weights remain on the cluster.";
     await refreshResults();
   }catch(error){output.textContent="Cluster import failed: "+error.message;}
   finally{button.disabled=false;}
@@ -734,7 +753,7 @@ async function initialize(){
     $("compare-experiment-b").value=chosenComparison.second||"";
     refreshManualFromChoices();
   });
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   $("component-search").addEventListener("input",()=>{delete $("component-search").dataset.kind;renderComponentCatalog();});
   for(const button of document.querySelectorAll(".nav[data-page]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
