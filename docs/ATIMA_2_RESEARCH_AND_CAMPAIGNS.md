@@ -138,3 +138,60 @@ sharply between IID and non-IID. In the original 16-class non-IID
 ModelReplacement run, the clean-with-trigger control is explicitly unverified;
 none of the graphical observations alone establishes real-world attack
 feasibility or multi-seed reliability.
+
+## Working research path: isolated-client LCG across global and personalized FL
+
+**Question under investigation:** when one isolated NIDS client applies local-only,
+target-class gradient ascent, does its effect on target-class recognition differ
+between standard LopezCNN FedAvg and the optional HyperFL++ personalized
+hypernetwork protocol? This is a testable working question, not a novelty claim.
+HyperFL++ addresses gradient-inversion privacy; it is not presented as a
+poisoning defense.
+
+### Bounded protocol
+
+- Use one prepared Edge-IIoT task and its audited label mapping. Begin with the
+  existing five-class task and non-IID Dirichlet alpha 0.5. Do not assume a
+  target class index: resolve it from the dataset manifest and record the
+  compromised client's target-class support first.
+- Compare four conditions per seed: Standard/No Attack, Standard/LCG,
+  HyperFL++/No Attack, HyperFL++/LCG. Keep 10 clients, one aggregation server,
+  and exactly one malicious client. Within each training method, the attacked
+  run must pair to its own same-seed, same-partition clean run.
+- Fix the compute budget at 50 server rounds × 4 local epochs = 200
+  client-epochs per client. HyperFL++ uses one of these four epochs for its
+  private head and three for its generated features; report that distinction.
+  Activate LCG in rounds 10–50. Check that paired trajectories are identical
+  through round 9.
+- First run one seed as a technical and feasibility pilot. Only after its
+  manifests, target support, attack trace, HDF5 updates, and metrics pass should
+  the paired design expand to seeds 0–10 (44 runs total before any extra IID
+  stratum). The single-seed pilot is not statistical evidence.
+- The local adversary may use only its own shard, private client state, and
+  current global hypernetwork/model parameters. It must not read other clients'
+  updates or server validation/test labels. Log the local objective, gradient
+  norm, perturbation budget, submitted-update difference, and exact application
+  rounds.
+
+### Outcomes and interpretation
+
+Primary outcome: paired change in recall for the target intrusion class.
+Also report intrusion-to-benign errors, benign false-positive rate, macro-F1,
+per-class confusion, and update norm/direction. For HyperFL++, report client
+personalized outcomes as well as pooled confusion counts; its validation/test
+path evaluates personalized client models on the prepared shared evaluation
+split. Compare attack-minus-clean deltas within each method, not raw scores
+alone across different model protocols.
+
+A technically applied attack is not necessarily an effective attack. Preserve
+null or beneficial outcomes. If target support is absent, classify the run as
+infeasible for that client/partition rather than a successful attack. The
+current CPU Flower fixture is only a software regression test; it does not
+validate cluster GPU execution, full-data convergence, capture independence,
+or a real deployment threat model.
+
+The current implementation adapts LCG to HyperFL++ by ascending the target
+class loss through the client-specific embedding into the shared hypernetwork
+parameters. This changes the parameter space and must be described as an ATIMA
+adaptation of LCG. It is not equivalent to the original direct LopezCNN-weight
+perturbation; report the two methods separately.

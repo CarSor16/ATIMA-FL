@@ -21,6 +21,26 @@ def transform(context):
     from atima_fl.engine.storage import raw_path, read_raw
 
     p = context.config.parameters("attack")
+    if getattr(context.config, "training_method", "standard") == "hyperfl_plus_plus":
+        from atima_fl.engine.hyperfl import local_class_gradient
+
+        if context.client_state is None:
+            raise ValueError("HyperFL++ private client state is required for LCG")
+        shard = open_dataset(context.config).shard(context.client)
+        return local_class_gradient(
+            context.config,
+            context.client,
+            context.global_arrays,
+            context.local_arrays,
+            context.client_state,
+            shard.x,
+            shard.y,
+            context.config.compute_device,
+            p["target_class"],
+            p["relative_budget"],
+            p["max_examples"],
+            context.round_id,
+        )
     shard = open_dataset(context.config).shard(context.client)
     eligible = np.flatnonzero(shard.y == p["target_class"])
     if len(eligible) == 0:
