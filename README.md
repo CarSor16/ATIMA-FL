@@ -410,6 +410,14 @@ Page transitions preserve unsaved designer state. Light/dark and English/Italian
 preferences are retained, and mobile navigation remains keyboard-accessible.
 No fabricated metrics, training runs, cluster calls or credentials are added.
 
+### Pattern analysis and agent access
+
+`atima pattern`, `atima thresholds` and `atima detect` read `validation_history.json` and report the
+per-class signals, the shape of the damage (spared classes, episodic versus sustained collapses) and
+the latency of each signal against a measured noise floor. `atima mcp` serves the same read-only
+tools over MCP, so an agent can list runs, compare a pair and measure thresholds without writing
+code. See [docs/PATTERN_ANALYSIS.md](docs/PATTERN_ANALYSIS.md).
+
 ## Results workbench
 
 Search imported experiments, inspect single runs, compare compatible A/B results and open verified clean/attack pairs. Final test metrics remain separate from recorded validation curves. Missing dataset audits block deltas; individual reports remain available. The shared light/dark English/Italian GUI uses native HTML/CSS/JavaScript. See [Results workbench](docs/results-workbench.md) for controls, scientific gates and Windows update/start commands.
