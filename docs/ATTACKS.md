@@ -91,7 +91,16 @@ attack efficacy; do not interpret plugin availability as a success claim.
 
 New runs now retain compact server-audited `final_metrics.json.federated.rounds`
 containing claimed/actual malicious sample mass, active poisoned clients,
-count discrepancies, client-update L2 norms and global-step L2. Results offers
+count discrepancies, client-update L2 norms and global-step L2.
+`client_telemetry.json` (`schema: atima_fl.client_telemetry/1`) keeps the same
+information **per client and per round** — participation, submitted-update L2,
+local loss/accuracy on the client's own shard, malicious and attack-applied
+flags, plus the attack's own reported budget (`gradient_l2`, `local_delta_l2`,
+`added_perturbation_l2_budget`, target class) when it applies. It is additive:
+the aggregates above are produced by the unchanged path, and the mean/max of
+the per-client norms reproduce `mean_client_update_l2` / `max_client_update_l2`
+exactly. This is what makes attack strength, and therefore strength-matched
+comparisons between arms, measurable instead of estimated. Results offers
 a round chart with zoom and CSV export. Existing historical runs lack this
 extension and remain viewable as historical classifier metrics — they are
 **not** retroactively reconstructed. Only successful completed runs include

@@ -3,11 +3,15 @@
 from atima_fl.core.configuration import ExperimentConfig
 
 
-def run_profile(profile, *, preflight_only=False, local=False):
+def run_profile(profile, *, preflight_only=False, local=False, evaluation_scope=None):
     """Run a validated TOML using the existing Flower execution adapter."""
     from atima_fl.adapters.flower.launch import allocated_config, launch
 
     config = ExperimentConfig.load(profile)
+    if evaluation_scope:
+        from dataclasses import replace
+
+        config = replace(config, evaluation_scope=evaluation_scope).validate()
     if local:
         from dataclasses import replace
         import os

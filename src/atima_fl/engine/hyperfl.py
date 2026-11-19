@@ -219,7 +219,14 @@ def train_local(config, client, round_id, before, x, y, device, client_state=Non
     return shared, private
 
 
-def evaluate_local(config, client, round_id, shared, data, device, client_state, split):
+def local_train_metrics(config, client, round_id, shared, client_state, x, y, device, classes):
+    """Loss/accuracy of the client's personalized model on its own trained shard.
+
+    Inference only: the shared state, the private state and the global RNG are
+    left as they are, so this cannot move the trajectory. Same construction as
+    `evaluate_local`, but the target is the local training batch instead of a
+    held-out split.
+    """
     import numpy as np
     import torch
     from torch.func import functional_call
@@ -237,7 +244,53 @@ def evaluate_local(config, client, round_id, shared, data, device, client_state,
     )
     state = _live_state(model, shapes, device)
     network.eval()
-    part = data.split(split)
+    outputs = []
+    with torch.inference_mode():
+        state.update(network(embedding))
+        for start in range(0, len(y), 1024):
+            xb = torch.from_numpy(np.ascontiguousarray(x[start : start + 1024])).to(device)
+            outputs.append(
+                torch.softmax(functional_call(model, state, (xb,)), dim=1).cpu().numpy()
+            )
+        p = np.concatenate(outputs) if outputs else np.empty((0, config.num_classes))
+    result = metrics(y, p, classes, config)
+    return {key: float(result[key]) for key in ("loss", "accuracy", "macro_f1")}
+
+
+def evaluate_local(config, client, round_id, shared, data, device, client_state, split,
+                   scope="shared"):
+    """Score this client's personalized model on the requested split.
+
+    ``scope="shared"`` (default, unchanged behaviour) evaluates on the whole
+    split, so every personalized model sees the same rows and the pooled matrix
+    sums ten evaluations of the same rows. ``scope="slice"`` evaluates on this
+    client's own disjoint, class-stratified slice, so the pooled matrix covers
+    the split exactly once and per-client matrices are comparable.
+    """
+    import numpy as np
+    import torch
+    from torch.func import functional_call
+    from atima_fl.engine.models import metrics
+
+    if scope not in {"shared", "slice"}:
+        raise ValueError(f"Unknown evaluation scope: {scope}")
+    if not client_state:
+        raise ValueError("HyperFL++ client-private state is missing")
+    model = _model(config, config.seed + client).to(device).eval()
+    network, shapes = _hypernetwork(config, config.seed)
+    network.to(device)
+    _load_arrays(network, shared)
+    private = _private_state(model, shapes, client_state, client, config.seed)
+    embedding = torch.as_tensor(
+        np.asarray(private["__embedding__"]).copy(), dtype=torch.float32, device=device
+    )
+    state = _live_state(model, shapes, device)
+    network.eval()
+    part = (
+        data.split(split)
+        if scope == "shared"
+        else data.client_slice(split, client, config.clients, config.seed)
+    )
     outputs = []
     with torch.inference_mode():
         state.update(network(embedding))
@@ -246,13 +299,54 @@ def evaluate_local(config, client, round_id, shared, data, device, client_state,
             outputs.append(torch.softmax(functional_call(model, state, (xb,)), dim=1).cpu().numpy())
     probabilities = np.concatenate(outputs) if outputs else np.empty((0, config.num_classes))
     result = metrics(part.y, probabilities, data.classes, config)
+    result["evaluation_scope"] = scope
     return result, {
         "client": client,
         "round": round_id,
         "aggregation_server": config.server_assignment()[client],
         "device": str(device),
+        "evaluation_scope": scope,
+        "evaluation_rows": int(len(part.y)),
         "evaluation": result,
     }
+
+
+def multiclass_mcc(matrix):
+    """Matthews correlation coefficient for k > 2 classes.
+
+    This is the multiclass formula, identical to
+    ``sklearn.metrics.matthews_corrcoef`` on the same predictions::
+
+        (c*s - sum_k p_k t_k) / sqrt((c^2 - sum_k p_k^2)(c^2 - sum_k t_k^2))
+
+    with ``c`` the number of samples, ``s`` the trace of the confusion matrix,
+    ``p_k`` the predicted counts and ``t_k`` the true counts. It is *not* the
+    binary formula ``(tp*tn - fp*fn)/sqrt(...)``: using that one on a k>2
+    matrix reports a different number, so the name is explicit and
+    ``tests/test_hyperfl_client_metrics.py`` pins both the equality with
+    sklearn and the difference from the binary reduction.
+
+    Floats are accepted on purpose (a mean matrix stays meaningful); casting
+    to int would silently truncate them. An empty matrix returns 0.0 as the
+    degenerate value, the same convention as sklearn. Counts up to 2**53 are
+    exact in float64, far above any test split used here.
+    """
+    import numpy as np
+
+    array = np.asarray(matrix, dtype=np.float64)
+    total = float(array.sum())
+    if total == 0:
+        return 0.0
+    true_positive = float(np.trace(array))
+    predicted = array.sum(axis=0)
+    support = array.sum(axis=1)
+    denominator = math.sqrt(
+        max(total * total - float(predicted @ predicted), 0.0)
+        * max(total * total - float(support @ support), 0.0)
+    )
+    if denominator == 0:
+        return 0.0
+    return float((total * true_positive - float(predicted @ support)) / denominator)
 
 
 def aggregate_personalized(results, classes):
@@ -271,11 +365,7 @@ def aggregate_personalized(results, classes):
     f1 = np.divide(2 * precision * recall, precision + recall,
                    out=np.zeros(len(classes), dtype=float), where=(precision + recall) > 0)
     weighted_f1 = float(np.average(f1, weights=support)) if total else 0.0
-    denominator = math.sqrt(
-        max(total * total - float(predicted @ predicted), 0.0)
-        * max(total * total - float(support @ support), 0.0)
-    )
-    mcc = float((total * float(tp.sum()) - float(predicted @ support)) / denominator) if denominator else 0.0
+    mcc = multiclass_mcc(matrix)
     loss = sum(
         item["evaluation"]["loss"] * item["evaluation"]["samples"] for item in results
     ) / max(total, 1)
@@ -301,8 +391,36 @@ def aggregate_personalized(results, classes):
         "samples": total,
         "loss_definition": "sample-weighted mean of client-local cross-entropy",
         "personalized_models": len(results),
+        "evaluation_scope": str(results[0]["evaluation"].get("evaluation_scope", "shared"))
+        if results else "shared",
         "client_macro_f1_mean": float(np.mean([v["evaluation"]["macro_f1"] for v in results])),
         "client_macro_f1_min": float(np.min([v["evaluation"]["macro_f1"] for v in results])),
+        # Client-level evidence, persisted from now on: without it the pooled
+        # matrix is a mixture of models and no per-client harm can be read
+        # back from the artifacts (see Test_Cluster/Results/2026-11-15/REPORT.md).
+        # Sorted by client id: the reply order of a simulation round is not
+        # stable, and artifacts should compare byte for byte between runs.
+        "per_client": sorted(
+            (
+                {
+                    "client": int(item["client"]),
+                    "round": item.get("round"),
+                    "evaluation_scope": str(
+                        item["evaluation"].get("evaluation_scope", "shared")
+                    ),
+                    "samples": int(item["evaluation"]["samples"]),
+                    "accuracy": float(item["evaluation"]["accuracy"]),
+                    "macro_f1": float(item["evaluation"]["macro_f1"]),
+                    "recall": [float(value) for value in item["evaluation"]["recall"]],
+                    "confusion_matrix": [
+                        [int(value) for value in row]
+                        for row in item["evaluation"]["confusion_matrix"]
+                    ],
+                }
+                for item in results
+            ),
+            key=lambda entry: entry["client"],
+        ),
     }
 
 

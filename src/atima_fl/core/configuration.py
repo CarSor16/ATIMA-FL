@@ -57,6 +57,10 @@ class ExperimentConfig:
     paired_rounds: int = 0
     plugin_directory: str = ""
     training_method: str = "standard"
+    # "shared": every personalized client is evaluated on the whole evaluation
+    # split (existing artifacts, matrices summed). "slice": each client is
+    # evaluated on its own disjoint, class-stratified slice of that split.
+    evaluation_scope: str = "shared"
 
     def registry(self):
         if not hasattr(self, "_component_snapshot"):
@@ -112,6 +116,10 @@ class ExperimentConfig:
             raise ValueError("Server execution must be processes or slurm_nodes")
         if self.training_method not in {"standard", "hyperfl_plus_plus"}:
             raise ValueError("Unknown federated training method")
+        if self.evaluation_scope not in {"shared", "slice"}:
+            raise ValueError("Evaluation scope must be shared or slice")
+        if self.evaluation_scope == "slice" and self.training_method != "hyperfl_plus_plus":
+            raise ValueError("Evaluation slices require the HyperFL++ personalized evaluation")
         if self.training_method == "hyperfl_plus_plus":
             if self.model != "lopez_cnn":
                 raise ValueError("HyperFL++ currently supports only LopezCNN")

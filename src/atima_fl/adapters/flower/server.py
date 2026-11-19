@@ -19,6 +19,7 @@ from atima_fl.engine.data import open_dataset
 from atima_fl.engine.models import probabilities, metrics, initial_arrays
 from atima_fl.engine.aggregation import aggregate_topology
 from atima_fl.engine.storage import RoundStorage, atomic_json, raw_path, read_raw
+from atima_fl.engine import telemetry
 
 app = ServerApp()
 
@@ -79,7 +80,8 @@ def _validated_reply(reply, config, round_id, before, phase, counts, device):
     return cid, {"values": values, "metadata": metadata, "count": count}
 
 
-def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device, split_name=None):
+def exchange(grid, node_ids, config, run, round_id, before, phase, counts, device,
+             split_name=None, scope_name=None):
     commands = ConfigRecord(
         {
             "config_json": json.dumps(config.resolved()),
@@ -88,6 +90,7 @@ def exchange(grid, node_ids, config, run, round_id, before, phase, counts, devic
             "phase": phase,
             "counts_json": json.dumps(counts),
             "split": split_name or "",
+            "scope": scope_name or "",
         }
     )
     messages = [
@@ -208,6 +211,7 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
     policy = PlateauPolicy(config)
     history = []
     federated_rounds = []
+    telemetry_rounds = []
     last_valid = 0
     try:
         if len(node_ids) != config.clients:
@@ -257,7 +261,7 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
 
                     evaluated = exchange(
                         grid, node_ids, config, run, round_id, after, "validate",
-                        counts, device, "validation"
+                        counts, device, "validation", config.evaluation_scope
                     )
                     evaluation = aggregate_personalized(
                         [evaluated[cid]["metadata"] for cid in sorted(evaluated)],
@@ -310,6 +314,22 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
                 "max_client_update_l2": float(np.max(norms)),
                 "global_step_l2": step_norm,
             })
+            telemetry_rounds.append(
+                telemetry.round_entry(
+                    round_id,
+                    [
+                        telemetry.client_row(
+                            client["id"],
+                            client["metadata"],
+                            counts[client["id"]],
+                            norms[index],
+                            client["id"] in submitted,
+                        )
+                        for index, client in enumerate(clients)
+                    ],
+                )
+            )
+            telemetry.write(run, telemetry_rounds, len(node_ids))
             last_valid = round_id
             history.append(
                 {"round": round_id, "seconds": time.perf_counter() - started, **evaluation}
@@ -338,7 +358,7 @@ def _run_protocol(grid, config, device, aggregation_pool=None):
 
             evaluated = exchange(
                 grid, node_ids, config, run, limit, before, "test",
-                counts, device, "test"
+                counts, device, "test", config.evaluation_scope
             )
             test_metrics = aggregate_personalized(
                 [evaluated[cid]["metadata"] for cid in sorted(evaluated)],

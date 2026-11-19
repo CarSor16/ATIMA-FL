@@ -534,6 +534,10 @@ function controls() {
   if(explicit){try{$("malicious-count").value=integerList($("malicious_clients").value,"ID malevoli").length;}catch{}}
   $("malicious-count").max=$("clients").value;
   $("servers").max=$("clients").value;
+  // Slice evaluation is a HyperFL++ personalization feature: keep the option visible but
+  // unavailable for standard FedAvg, and never leave a stale value that the core rejects.
+  const perClient=$("evaluation_scope");
+  if(perClient){const hyper=$("training_method").value==="hyperfl_plus_plus";const slice=perClient.querySelector('option[value="slice"]');if(slice)slice.disabled=!hyper;if(!hyper&&perClient.value==="slice")perClient.value="shared";perClient.title=hyper?"":uiText("Slice evaluation requires HyperFL++ with LopezCNN; standard FedAvg exports the shared split.");}
   const untilEnd=$("attack-until-end").checked;
   $("attack_end").disabled=untilEnd;
   if(untilEnd)$("attack_end").value=$("rounds").value;

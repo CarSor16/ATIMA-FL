@@ -117,6 +117,35 @@ class _PreparedEdgeData:
     def split(self, name):
         return self.read(self.root / f"{name}_scaled.parquet")
 
+    def slices(self, name, clients, seed):
+        """Disjoint, class-stratified, deterministic partition of an evaluation split.
+
+        Returns ``(frame, x, y, indices)`` where ``indices[c]`` selects the rows
+        of client ``c``. Every row of the split belongs to exactly one client,
+        so the slices cover the split exactly; within each class the rows are
+        permuted by a seeded generator and dealt round robin, so the class
+        proportions are preserved to within one row per class. ``train`` is
+        refused on purpose: a client must never be scored on rows it trained on.
+        """
+        if name == "train":
+            raise ValueError(
+                "Evaluation slices must not reuse the training split: those rows "
+                "were seen during local training"
+            )
+        if type(clients) is not int or clients < 1:
+            raise ValueError("A positive client count is required for evaluation slices")
+        frame, x, y = self.split(name)
+        order = np.empty(len(y), dtype=np.int64)
+        position = 0
+        generator = np.random.default_rng(seed)
+        for cls in range(len(self.classes)):
+            rows = np.flatnonzero(y == cls)
+            order[position : position + len(rows)] = rows[generator.permutation(len(rows))]
+            position += len(rows)
+        if position != len(y):
+            raise ValueError("Evaluation split contains targets outside the declared classes")
+        return frame, x, y, [order[client::clients] for client in range(clients)]
+
     def audit(self):
         import pandas as pd
 
@@ -220,6 +249,17 @@ class EdgeDataset:
 
     def split(self, name):
         return self.batch(self.reader.split(name))
+
+    def client_slice(self, name, client, clients, seed):
+        """Rows of ``name`` assigned to one client by a stratified slice."""
+        frame, x, y, slices = self.reader.slices(name, clients, seed)
+        index = slices[client]
+        return DataBatch(
+            x[index],
+            y[index],
+            frame.source_row_id.to_numpy(dtype=np.int64)[index],
+            {"scope": "slice", "split": name, "client": client},
+        )
 
     def audit(self):
         return self.reader.audit()

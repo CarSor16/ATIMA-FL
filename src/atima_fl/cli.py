@@ -58,6 +58,11 @@ def main(argv=None):
     easy.add_argument("profile", help="Path to experiment.toml")
     easy.add_argument("--preflight-only", action="store_true")
     easy.add_argument("--local", action="store_true", help="Train on the local CPU without Slurm")
+    easy.add_argument(
+        "--evaluation-scope", choices=["shared", "slice"],
+        help="Override the profile: shared evaluates every personalized model on the whole "
+             "split, slice gives each client a disjoint stratified slice of it",
+    )
     launch = commands.add_parser(
         "launch", help="Preflight or run inside an allocated Slurm GPU job"
     )
@@ -121,7 +126,12 @@ def main(argv=None):
     elif args.command == "run":
         from .runtime.api import run_profile
 
-        run_profile(args.profile, preflight_only=args.preflight_only, local=args.local)
+        run_profile(
+            args.profile,
+            preflight_only=args.preflight_only,
+            local=args.local,
+            evaluation_scope=args.evaluation_scope,
+        )
     elif args.command == "launch":
         from .runtime.api import launch_profile
 

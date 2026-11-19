@@ -69,10 +69,20 @@ def test_validated_configuration_crosses_process_boundary(serializer):
     import subprocess
     import sys
 
+    from pathlib import Path
+
     c = ExperimentConfig(model_params={"hidden": [8, 4]}).validate()
     payload = importlib.import_module(serializer).dumps(c)
     assert b"atima_component_" not in payload
-    program = "import sys,pickle; c=pickle.loads(sys.stdin.buffer.read()); assert not hasattr(c,'_component_snapshot'); c.validate(); print(c.model_params['hidden'])"
+    # The child must unpickle with the source under test: this environment also
+    # has another checkout installed editable, and -I would import that one, so
+    # the field-set check in __setstate__ would compare two different versions.
+    source = str(Path(__file__).resolve().parents[1] / "src")
+    program = (
+        f"import sys,pickle; sys.path.insert(0, {source!r}); "
+        "c=pickle.loads(sys.stdin.buffer.read()); assert not hasattr(c,'_component_snapshot');"
+        " c.validate(); print(c.model_params['hidden'])"
+    )
     result = subprocess.run(
         [sys.executable, "-I", "-c", program], input=payload, capture_output=True, check=True
     )

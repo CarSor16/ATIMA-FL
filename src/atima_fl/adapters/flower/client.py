@@ -25,6 +25,49 @@ def _load_private_state(context):
     return dict(zip(keys, values))
 
 
+def _private_state_for_training(context):
+    """Client-private HyperFL++ state, seeded empty on the first round.
+
+    ``_load_private_state`` returns None until a first round has stored
+    something. Passing that None down meant the freshly trained private state
+    was dropped by ``train_local`` (which only updates a dict it was given) and
+    ``_save_private_state`` then failed on ``sorted(None)``: over the real
+    Flower transport every HyperFL++ run died at round 1 with
+    ``TypeError: 'NoneType' object is not iterable``. An empty dict keeps both
+    behaviours correct: ``train_local`` still treats it as "no previous state"
+    and fills it in place, and the save has something to persist.
+    """
+    return _load_private_state(context) or {}
+
+
+def evaluation_split(command) -> str:
+    """Dataset split the server asked this client to evaluate on.
+
+    The protocol carries the split name separately from the phase label:
+    the validation phase is labelled "validate" but the dataset split is
+    "validation" (``validation_scaled.parquet``). Using the phase label as a
+    split name made every HyperFL++ validation fail with FileNotFoundError.
+    """
+    split = str(command.get("split") or "").strip()
+    if not split:
+        raise ValueError("Evaluation phase without a dataset split name")
+    return split
+
+
+def evaluation_scope(command) -> str:
+    """How the server asked this client to evaluate.
+
+    Empty means a peer that predates the field: the historical ``shared``
+    behaviour, where every personalized model scores the whole split. An
+    unknown value is refused instead of silently falling back, so a mislabelled
+    run cannot be mistaken for a slice-scored one.
+    """
+    scope = str(command.get("scope") or "shared").strip()
+    if scope not in {"shared", "slice"}:
+        raise ValueError(f"Unknown evaluation scope: {scope}")
+    return scope
+
+
 def _save_private_state(context, values):
     keys = sorted(values)
     context.state[_PRIVATE_ARRAYS] = ArrayRecord(
@@ -45,7 +88,11 @@ def handle_train(message: Message, context: Context):
         if config.compute_device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("ClientApp has no CUDA device; CPU fallback is forbidden")
         torch.set_num_threads(config.client_cpus)
-        private = _load_private_state(context) if config.training_method == "hyperfl_plus_plus" else None
+        private = (
+            _private_state_for_training(context)
+            if config.training_method == "hyperfl_plus_plus"
+            else None
+        )
         values, metadata = train_local(
             config,
             run,
@@ -79,7 +126,8 @@ def handle_train(message: Message, context: Context):
             dataset,
             config.compute_device,
             private,
-            command["phase"],
+            evaluation_split(command),
+            evaluation_scope(command),
         )
         values = before
         metadata["original_samples"] = len(dataset.shard(client).y)

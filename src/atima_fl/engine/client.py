@@ -4,7 +4,7 @@ import time
 import numpy as np
 from atima_fl.core.contracts import AttackContext
 from atima_fl.engine.attacks import knowledge_ids, prepare_training, poison_update
-from atima_fl.engine.models import attackable_indices, train
+from atima_fl.engine.models import attackable_indices, metrics, probabilities, train
 from atima_fl.engine.storage import raw_path, write_raw, read_raw
 
 
@@ -26,6 +26,25 @@ def _merge_attack_metadata(metadata, attack_notes):
 
 
 
+def _local_train_metrics(config, client, round_id, local, batch, data, device, client_state):
+    """Loss/accuracy of this client's own model on the shard it just trained on.
+
+    One inference pass, no gradients and no randomness: the local model and the
+    global trajectory are untouched, so the aggregated metrics of the run cannot
+    change. Kept out of `metrics()`'s server-side use because here the target is
+    the client's own training data, not a held-out split.
+    """
+    if config.training_method == "hyperfl_plus_plus":
+        from atima_fl.engine.hyperfl import local_train_metrics
+
+        return local_train_metrics(
+            config, client, round_id, local, client_state, batch.x, batch.y, device, data.classes
+        )
+    p = probabilities(local, batch.x, config, device)
+    result = metrics(batch.y, p, data.classes, config)
+    return {key: float(result[key]) for key in ("loss", "accuracy", "macro_f1")}
+
+
 def train_local(config, run, client, round_id, before, data, device, client_state=None):
     original = data.shard(client)
     context = AttackContext(config, client, round_id)
@@ -43,9 +62,16 @@ def train_local(config, run, client, round_id, before, data, device, client_stat
             client_state.update(private_state)
     else:
         local = train(before, batch.x, batch.y, config, client, round_id, device)
+    local_metrics = _local_train_metrics(
+        config, client, round_id, local, batch, data, device, private_state
+    )
     registry = config.registry()
     params = registry.parameters("attack", config.attack, config.attack_params)
     metadata = {
+        "local_loss": local_metrics["loss"],
+        "local_accuracy": local_metrics["accuracy"],
+        "local_macro_f1": local_metrics["macro_f1"],
+        "local_metrics_split": "client's own training shard, inference only",
         "client": client,
         "aggregation_server": config.server_assignment()[client],
         "round": round_id,
