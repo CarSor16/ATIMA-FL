@@ -127,3 +127,76 @@ malicious extension or altered future site build. Metadata matching is not
 independent verification of the underlying model or dataset. Only compare
 conditions supported by recorded identities, and use Runtime trajectory
 verification for stronger paired inference.
+
+
+## Protocol cohorts and compact Results workspace
+
+Multi-seed analysis defaults to descriptive protocol groups. Identical global
+train/validation/test, feature schema, label mapping and preprocessor hashes,
+class order, test supports, completed round and recorded scientific
+configuration are still required. Different shard/assignment hashes,
+software/runtime identity and CPU/GPU allocation settings no longer split a
+protocol group automatically. Exact evidence identity is retained, and mixed
+provenance is explicitly flagged. Enable Strict provenance to recover the
+original exact grouping. Do not interpret mixed-provenance statistics as
+fixed-shard, independently verified causal estimates. Duplicate seed IDs
+remain ambiguous and are excluded. Clean/attack pairing, strict sensitivity
+families and Study Exchange evidence fingerprints are not relaxed.
+
+The static workspace places selection and performance metrics before
+advanced tools, provides a compact selected-experiment label and a collapsed
+multi-seed drawer with a summary. Filters, configuration details and the
+complete cohort browser can be expanded when needed. The system font stack
+and amber accents require no external asset requests. The local Studio
+retains its original presentation.
+
+## Focused web navigation
+
+Results, Multi-seed, Sensitivity, Designer, Studies and Local data are separate
+views within one browser tab. Switching views preserves imported evidence.
+Local data provides folder selection, refresh, optional remembered directory
+access, logits and reset. Results opens with an empty-state action until data is
+loaded. From a compatible selected experiment, **Analyze selected condition
+across seeds** opens the corresponding cohort rather than an unrelated default.
+Provenance settings and the full cohort browser remain available on demand.
+No changes are made to the Runtime or local Studio layout.
+
+The descriptive protocol key also ignores the explicit CPU/CUDA device field.
+Exact provenance still retains it, and metadata-matched clean/attack pairs
+still require matching runtime identities. Small nonzero displayed deltas
+use extra decimals when ordinary rounding would turn them into zero.
+
+### Research refinements
+
+Web filters include partition, alpha, seed, training method, malicious count and
+aggregation, plus parent-folder grouping as a browsing aid (not proof of a common campaign). Sensitivity defaults to descriptive protocol families, with an
+independent strict-provenance switch. Numeric levels use their numeric spacing;
+observed means remain visible without matched clean evidence. Comparisons across
+levels require the intersection of individually metadata-matched clean/attack
+seeds. Mixed provenance is not a controlled causal effect. The local viewer
+retains strict sensitivity by default. Built-in classification summaries are
+checked against their confusion matrices when present; inconsistent records
+remain visible individually but cannot enter compatible comparisons.
+
+The web Designer now generates typed component controls from the registry schema,
+with parameter details collapsed by default and optional ordered defense stages.
+Campaign fields appear only for the applicable mode. Validation remains
+authoritative in local Studio. Validation, federated and sensitivity SVG
+charts support standalone SVG and 3x PNG export, preserving current chart
+styles and theme. The files are generated in the browser.
+
+The detailed Results tabs include recorded attack-specific evaluation metrics.
+Sensitivity additionally supports contrasts between complete attack profiles
+and protection settings, with each condition retaining its own clean reference.
+These contrasts are descriptive, not independently verified defense quartets.
+A collapsed research panel can export condition metadata and summary statistics
+as JSON. For at least three metadata-matched seeds with identical attack
+provenance, it offers a deterministic exploratory 95% percentile bootstrap
+of macro-F1 deltas. The Runtime is still authoritative for trajectory-verified
+analysis. No raw training data or experiment directory paths are included
+by the report generator, but users should inspect arbitrary parameter values.
+
+Inconsistent imported classifications are explicitly flagged in individual
+results and in portable study status, without granting a condition fingerprint.
+The campaign-folder filter is based only on the imported relative directory
+structure; it does not establish scientific equivalence.

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src/atima_fl/ui/static"
 ASSETS = (
     "style.css", "i18n.js", "analysis-core.js", "local-results.js",
-    "results.js", "fl-diagnostics.js", "web-folder.js", "web-designer.js", "web-study.js", "web-bootstrap.js", "atima-shield-hd.png",
+    "results.js", "fl-diagnostics.js", "web-exports.js", "web-folder.js", "web-designer.js", "web-study.js", "web-bootstrap.js", "atima-shield-hd.png",
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -57,6 +57,26 @@ def build(output):
               '<label class="chart-check"><input type="checkbox" id="web-folder-remember"> Remember folder reference on this device</label>'
               '<p id="web-folder-status" role="status" aria-live="polite"></p></div>')
     results = replace_once(results, '<section id="manual-comparison"', folder + '<section id="manual-comparison"')
+    # Keep shared control IDs and analysis logic; only change the web presentation.
+    results = replace_once(results, '<div class="page-intro"><div><span class="section-eyebrow">03 / ANALYTICS</span><h2>Experiment analysis</h2><p>Inspect imported evidence. Final test scores and per-round validation remain separate.</p></div></div>', '')
+    results = replace_once(results, '<details class="result-import" open><summary>Local folder · browser-only analysis</summary>', '<details class="result-import web-import" open><summary>Local results folder</summary>')
+    results = replace_once(results, '<div class="experiment-filters">', '<details class="web-filter-drawer"><summary>Search and filter experiments</summary><div class="experiment-filters">')
+    results = replace_once(results, '<div id="experiment-choices"', '</details><div id="experiment-choices"')
+    for slot in ("a", "b"):
+        metadata = f'<div id="experiment-{slot}-metadata" class="selected-run"></div>'
+        results = replace_once(results, metadata, '<details class="web-run-meta"><summary>Recorded configuration</summary>' + metadata + '</details>')
+    results = replace_once(results, '<div id="results-workspace-panels">', '<div id="results-workspace-panels">')
+    results = replace_once(results, '<section id="performance-region"', '<section id="performance-region"')
+    results = replace_once(results, '<div id="performance-overview"></div>', '<p class="web-selected-label"><span>Selected experiment</span><strong id="web-selected-experiment" aria-live="polite">No experiment selected</strong></p><div class="web-quick-actions"><button type="button" class="secondary" id="web-open-cohort">Analyze selected condition across seeds</button></div><div id="performance-overview"></div>')
+    start_seed = results.index('<section id="seed-results-panel"')
+    end_seed = results.index('</section>', start_seed) + len('</section>')
+    seed = results[start_seed:end_seed]
+    opening = seed.index('>')
+    seed = seed[:opening + 1] + '<details id="web-seed-menu"><summary><span>Multi-seed analysis</span><small id="web-seed-summary">No compatible conditions</small></summary>' + seed[opening + 1:-len('</section>')] + '</details></section>'
+    seed = replace_once(seed, '<div id="seed-cohort-overview" class="seed-cohort-overview"></div>', '<details class="web-cohort-drawer"><summary>Browse all compatible conditions</summary><div id="seed-cohort-overview" class="seed-cohort-overview"></div></details>')
+    results = results[:start_seed] + seed + results[end_seed:]
+    results = results.replace('<div id="web-folder-access" class="hidden card"><h3>Optional folder access</h3>', '<details id="web-folder-access" class="hidden web-folder-drawer"><summary>Remember a folder (optional)</summary>')
+    results = replace_once(results, '<p id="web-folder-status" role="status" aria-live="polite"></p></div>', '<p id="web-folder-status" role="status" aria-live="polite"></p></details>')
     # Avoid claiming that imported metadata has been independently verified.
     results = results.replace('Paired attack vs baseline', 'Metadata-matched attack vs baseline')
     from atima_fl.core.configuration import ExperimentConfig
@@ -69,7 +89,7 @@ def build(output):
 <p>Design a single run, multi-seed batch or parameter sweep. No data or credentials are required. Browser checks cover schema and common bounds; plugin hooks and deployment preflight require Local Studio.</p>
 <div class="fields" id="web-design-fields"></div>
 <div class="component-grid" id="web-design-components"></div>
-<label>Ordered defense stages (JSON array of id and params)<textarea id="web-design-defenses" rows="3">[]</textarea></label>
+<details class="web-advanced"><summary>Defense pipeline (optional)</summary><p>Stages run in the displayed order.</p><div id="web-defense-stages"></div><button type="button" class="secondary" id="web-add-defense">Add defense</button></details>
 <div class="fields">
 <label>Mode<select id="web-design-mode"><option value="single">Single experiment</option><option value="batch">Multi-seed batch</option><option value="sweep">Parameter sweep</option></select></label>
 <label>Campaign seeds<input id="web-design-seeds" value="0,1,2,3,4,5,6,7,8,9,10"></label>
@@ -103,17 +123,33 @@ def build(output):
 </head><body class="web-viewer"><a class="skip-link" href="#main-content">Skip to analysis</a>
 <main id="main-content"><header class="web-header"><div class="web-brand">
 <img src="./atima-shield-hd.png" width="64" height="64" alt="">
-<div><span class="section-eyebrow">ATIMA-FL / WEB STUDIO</span><h1>Results Explorer</h1>
-<p>Compare federated intrusion-detection experiments on your device.</p></div></div>
+<div><span class="section-eyebrow">ATIMA-FL / WEB STUDIO</span><h1>ATIMA Web Studio</h1>
+<p>Federated learning security · local research workspace</p></div></div>
 <div class="header-tools"><label>Language<select id="web-language"><option value="en">English</option><option value="it">Italiano</option></select></label>
 <button type="button" class="theme-toggle" id="web-theme">Light mode</button></div></header>
-<section class="card web-privacy"><h2>Local evidence, no upload</h2>
-<p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
-<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></section>
+
 <noscript><p>JavaScript is required to read and analyze local files.</p></noscript>
-{designer}
+<nav class="web-nav" aria-label="Workspace sections">
+<button type="button" data-web-view="results" aria-current="page">Results</button>
+<button type="button" data-web-view="seeds">Multi-seed</button>
+<button type="button" data-web-view="sensitivity">Sensitivity</button>
+<button type="button" data-web-view="designer">Designer</button>
+<button type="button" data-web-view="studies">Studies</button>
+<button type="button" data-web-view="data" class="web-data-nav">Local data <span id="web-run-count">0</span></button>
+</nav>
+<div class="web-context"><div><h2 id="web-view-title">Results Explorer</h2><p id="web-view-description">Inspect a run or compare compatible experiments.</p></div><span class="web-local-label">On-device analysis · no upload</span></div>
+<section id="web-view-data" class="web-view" hidden><div class="web-data-intro"><h3>Choose your results</h3><p>Select a folder containing experiment summaries. You can return here to refresh or replace the data.</p></div></section>
+<div id="web-view-results" class="web-view">
+<div id="web-empty-results" class="web-empty card"><h3>Start with your experiment results</h3><p>Open a local folder to explore metrics, validation curves and clean/attack comparisons.</p><button type="button" id="web-open-data">Choose local results</button></div>
 {results}
-{study}
+</div>
+<section id="web-view-seeds" class="web-view" hidden></section>
+<section id="web-view-sensitivity" class="web-view" hidden></section>
+<section id="web-view-designer" class="web-view" hidden>{designer}</section>
+<section id="web-view-studies" class="web-view" hidden>{study}</section>
+<details class="card web-privacy"><summary>Privacy and research limitations</summary>
+<p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
+<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></details>
 <footer class="web-footer">ATIMA-FL · Research software · Static local-first viewer</footer>
 </main></body></html>"""
     output.mkdir(parents=True, exist_ok=False)

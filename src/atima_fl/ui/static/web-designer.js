@@ -74,6 +74,31 @@ function setupWebDesigner(){
   const root=$("web-designer");if(!root)return;
   const fields=$("web-design-fields"),components=$("web-design-components"),controls=new Map(),paramsByField=new Map();
   const base=ATIMAWebDesigner.defaults;
+  function parameterEditor(entry,root){
+    root.replaceChildren();
+    const readers=new Map();
+    for(const [key,spec] of Object.entries(entry.parameters)){
+      const label=node("label",key.replaceAll("_"," ")),value=spec.default;
+      let input,read;
+      if(spec.choices?.length){
+        input=node("select");spec.choices.forEach((choice,i)=>{const option=node("option",String(choice));option.value=String(i);input.append(option);});
+        input.value=String(spec.choices.findIndex(v=>JSON.stringify(v)===JSON.stringify(value)));read=()=>spec.choices[Number(input.value)];
+      }else if(spec.type==="boolean"){
+        input=node("input");input.type="checkbox";input.checked=value;read=()=>input.checked;
+      }else if(["number","integer"].includes(spec.type)){
+        input=node("input");input.type="number";input.step=spec.type==="integer"?"1":"any";input.value=String(value);
+        if(spec.minimum!==undefined)input.min=String(spec.minimum);if(spec.maximum!==undefined)input.max=String(spec.maximum);
+        read=()=>input.value.trim()?Number(input.value):NaN;
+      }else if(spec.type==="string"){
+        input=node("input");input.value=value;read=()=>input.value;
+      }else{
+        input=node("textarea");input.rows=2;input.value=JSON.stringify(value);read=()=>JSON.parse(input.value);
+      }
+      input.setAttribute("aria-label",entry.id+" "+key);label.append(input);root.append(label);readers.set(key,read);
+    }
+    if(!readers.size)root.append(node("p","No configurable parameters.","helper"));
+    return ()=>Object.fromEntries([...readers].map(([k,read])=>[k,read()]));
+  }
   const field=(key,label,type,options)=>{
     const wrapper=node("label",label),input=node(options?"select":"input");
     input.id="web-design-"+key;
@@ -86,23 +111,34 @@ function setupWebDesigner(){
   field("evaluation_scope","Evaluation scope","text",[["shared","Shared"],["slice","Slice"]]);
   const ids=node("input");ids.value="0";ids.id="web-design-malicious";const idLabel=node("label","Malicious client IDs (comma separated)");idLabel.append(ids);fields.append(idLabel);
   for(const [kind,key] of ATIMAWebDesigner.kinds){
-    const section=node("section",undefined,"card"),label=node("label",kind),select=node("select"),description=node("p"),textarea=node("textarea");
-    textarea.rows=4;textarea.setAttribute("aria-label",kind+" parameters (JSON)");
+    const section=node("section",undefined,"card"),label=node("label",kind),select=node("select"),description=node("p"),editor=node("div",undefined,"web-parameter-fields"),advanced=node("details",undefined,"web-advanced");
+    advanced.append(node("summary","Parameters and details"),description,editor);
     for(const entry of ATIMAWebDesigner.catalog[kind]){const option=node("option",entry.title+" · "+entry.id);option.value=entry.id;select.append(option);}
-    select.value=base[key];label.append(select);section.append(label,description,textarea);components.append(section);controls.set(key,select);paramsByField.set(key,textarea);
+    select.value=base[key];label.append(select);section.append(label,advanced);components.append(section);controls.set(key,select);
     function refresh(){
       const entry=ATIMAWebDesigner.component(kind,select.value),help=entry.help?.[currentLanguage]||entry.help?.en;
       description.textContent=(entry.translations?.[currentLanguage]?.description||entry.description)+(help?" "+(help.mechanism||"")+" "+(help.intensity||""):"");
-      textarea.value=JSON.stringify(ATIMAWebDesigner.params(entry),null,2);
+      paramsByField.set(key,parameterEditor(entry,editor));
     }
     select.addEventListener("change",refresh);refresh();
   }
+  const defenseRows=[];
+  const defenseRoot=$("web-defense-stages");
+  function addDefense(){
+    const row=node("section",undefined,"web-defense-row"),label=node("label","Defense"),select=node("select"),editor=node("div",undefined,"web-parameter-fields"),remove=node("button","Remove","secondary");remove.type="button";
+    for(const entry of ATIMAWebDesigner.catalog.defense){const option=node("option",entry.title);option.value=entry.id;select.append(option);}
+    label.append(select);row.append(label,editor,remove);defenseRoot.append(row);
+    const stage={row,select,read:null};defenseRows.push(stage);
+    const refresh=()=>{stage.read=parameterEditor(ATIMAWebDesigner.component("defense",select.value),editor);};
+    select.addEventListener("change",refresh);remove.addEventListener("click",()=>{defenseRows.splice(defenseRows.indexOf(stage),1);row.remove();});refresh();
+  }
+  $("web-add-defense").addEventListener("click",addDefense);
   function configuration(){
     const c=JSON.parse(JSON.stringify(base));
-    for(const [key,input] of controls)c[key]=typeof base[key]==="number"?Number(input.value):input.value;
-    for(const [key,input] of paramsByField)c[key+"_params"]=JSON.parse(input.value);
+    for(const [key,input] of controls)c[key]=typeof base[key]==="number"?(input.value.trim()?Number(input.value):NaN):input.value;
+    for(const [key,read] of paramsByField)c[key+"_params"]=read();
     c.malicious_clients=c.attack==="none"?[]:ids.value.split(",").map(s=>s.trim()).map(s=>s?Number(s):NaN);
-    c.defenses=JSON.parse($("web-design-defenses").value);
+    c.defenses=defenseRows.map(stage=>({id:stage.select.value,params:stage.read()}));
     return c;
   }
   function refreshAxes(){
@@ -119,5 +155,15 @@ function setupWebDesigner(){
       status.textContent=result.count+" planned profiles. Draft downloaded; run the local web-plan command for authoritative validation. No jobs submitted.";
     }catch(error){status.textContent=error.message;}
   });
-  refreshAxes();
+  const mode=$("web-design-mode");
+  function modeChanged(){
+    $("web-design-seeds").closest("label").hidden=mode.value==="single";
+    for(const id of ["web-design-axis","web-design-levels"])$(id).closest("label").hidden=mode.value!=="sweep";
+    $("web-design-axes").hidden=mode.value!=="sweep";
+    if(mode.value==="sweep")try{refreshAxes();}catch(e){$("web-design-status").textContent=e.message;}
+  }
+  mode.addEventListener("change",modeChanged);
+  controls.get("attack").addEventListener("change",()=>{idLabel.hidden=controls.get("attack").value==="none";if(mode.value==="sweep")modeChanged();});
+  idLabel.hidden=controls.get("attack").value==="none";
+  refreshAxes();modeChanged();
 }

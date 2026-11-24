@@ -70,29 +70,57 @@ def check_browser(origin, root, engine="chromium"):
         # Block every request after the static assets have loaded.
         page.route("**/*", lambda route: route.abort())
         count = len(requests)
-        page.locator("#web-designer summary").click()
+        expect(page.locator("#web-empty-results")).to_be_visible()
+        page.locator('[data-web-view="designer"]').click()
+        expect(page.locator("#web-view-results")).not_to_be_visible()
+        expect(page.locator("#web-design-download")).to_be_visible()
         with page.expect_download() as draft_event:
             page.locator("#web-design-download").click()
         draft = json.loads(Path(draft_event.value.path()).read_text(encoding="utf-8"))
         assert draft["schema_version"] == 1 and draft["mode"] == "single"
         assert not {"dataset_root", "output_root", "plugin_directory"} & set(draft["config"])
+        expect(page.locator("#web-design-seeds")).not_to_be_visible()
         page.locator("#web-design-mode").select_option("batch")
+        expect(page.locator("#web-design-seeds")).to_be_visible()
         with page.expect_download() as batch_event:
             page.locator("#web-design-download").click()
         batch = json.loads(Path(batch_event.value.path()).read_text(encoding="utf-8"))
         assert batch["seeds"] == list(range(11))
-        page.locator("#web-designer summary").click()
+        page.locator('[data-web-view="data"]').click()
+        expect(page.locator("#web-view-designer")).not_to_be_visible()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally", timeout=60000)
+        page.locator('[data-web-view="results"]').click()
+        expect(page.locator("#web-selected-experiment")).not_to_have_text("No experiment selected")
+        expect(page.locator("#web-empty-results")).not_to_be_visible()
+        # The selected clean run opens its own cohort, not an unrelated attack.
+        page.locator("#web-open-cohort").click()
+        expect(page.locator("#web-seed-summary")).to_contain_text("Clean")
+        page.locator('[data-web-view="results"]').click()
+        expect(page.locator("#filter-campaign_folder")).to_have_count(1)
+        attack_id = page.evaluate("availableResults.find(r=>r.config.attack!=='none').id")
+        page.locator("#compare-experiment-a").select_option(attack_id)
+        page.locator("#web-open-cohort").click()
+        expect(page.locator("#web-view-results")).not_to_be_visible()
+        expect(page.locator("#seed-analysis-content")).to_be_visible()
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
+        for extension in ("SVG", "PNG"):
+            with page.expect_download() as figure:
+                page.get_by_role("button", name=f"Export Mean validation trajectory for rounds with all selected seeds as {extension}").first.click()
+            assert figure.value.suggested_filename.endswith("." + extension.lower())
+            payload = Path(figure.value.path()).read_bytes()
+            assert payload.startswith(b"\x89PNG") if extension == "PNG" else b"<svg" in payload
         with page.expect_download() as event:
             page.get_by_role("button", name="Export aggregate metrics CSV").click()
         download = event.value
         assert download.suggested_filename == "atima_cohort_metrics.csv"
         report = Path(download.path()).read_text(encoding="utf-8")
         assert "Matched clean mean" in report and str(root) not in report
+        page.locator('[data-web-view="sensitivity"]').click()
+        expect(page.locator("#seed-analysis-content")).not_to_be_visible()
+        expect(page.locator("#sensitivity-explorer")).to_be_visible()
         # Exercise a real IndexedDB structured-cloned directory handle on this
         # secure loopback origin, without requiring an OS permission dialog.
         if page.evaluate("typeof navigator.storage?.getDirectory === 'function' && typeof window.showDirectoryPicker === 'function'"):
@@ -105,7 +133,8 @@ def check_browser(origin, root, engine="chromium"):
           await ATIMAFolderAccess.forget();
           return same && !(await ATIMAFolderAccess.recall());
         }""")
-        page.locator("#web-study > summary").click()
+        page.locator('[data-web-view="studies"]').click()
+        expect(page.locator("#web-view-sensitivity")).not_to_be_visible()
         page.locator("#web-study-prepare").click()
         with page.expect_download() as study_event:
             page.locator("#web-study-download").click()
@@ -128,7 +157,7 @@ def check_browser(origin, root, engine="chromium"):
         expect(page.locator("#web-study-output")).to_contain_text("Declared full-condition fingerprint match")
         expect(page.locator("#web-study-output")).to_contain_text("SD of paired delta")
         page.locator("#web-study-clear").click()
-        page.locator("#web-study > summary").click()
+        page.locator('[data-web-view="data"]').click()
         page.locator("#local-logits-panel summary").click()
         page.locator("#local-logits-analyze").click()
         expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
@@ -159,6 +188,7 @@ def check_archive(origin, root, engine="chromium", expected=None):
         expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
         page.route("**/*", lambda route: route.abort())
         count = len(requests)
+        page.locator('[data-web-view="data"]').click()
         start = perf_counter()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("experiments read locally", timeout=90000)

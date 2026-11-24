@@ -78,7 +78,22 @@ def seed_condition(manifest):
         raw = json.dumps(condition, sort_keys=True, allow_nan=False, separators=(",", ":"))
     except (TypeError, ValueError):
         return {"key": None, "reason": "Invalid protocol metadata"}
-    return {"key": hashlib.sha256(raw.encode()).hexdigest(), "reason": None}
+    # Preserve exact provenance for strict cohorts and portable study evidence.
+    # A descriptive protocol cohort may span prepared shard and runtime versions.
+    protocol = {
+        "config": {k: v for k, v in condition["config"].items()
+                   if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction", "compute_device"}},
+        "dataset_hashes": {k: hashes[k] for k in _GLOBAL_HASHES if k != "assignment"},
+        "task": condition["task"],
+        "classes": classes,
+        "round": rounds,
+    }
+    protocol_raw = json.dumps(protocol, sort_keys=True, allow_nan=False, separators=(",", ":"))
+    return {
+        "key": hashlib.sha256(raw.encode()).hexdigest(),
+        "protocol_key": hashlib.sha256(protocol_raw.encode()).hexdigest(),
+        "reason": None,
+    }
 
 
 def sensitivity_conditions(manifest, eligibility):
@@ -112,6 +127,10 @@ def sensitivity_conditions(manifest, eligibility):
                 axes.append((f"{field}.{key}", value))
     for field in ("model", "partition", "attack_start", "attack_end"):
         axes.append((field, config[field]))
+    axes.extend([
+        ("attack_profile", json.dumps({"attack": config["attack"], "params": config["attack_params"]}, sort_keys=True)),
+        ("protection", json.dumps({"aggregation": config["aggregation"], "params": config["aggregation_params"], "defenses": config["defenses"]}, sort_keys=True)),
+    ])
     ids = config["malicious_clients"]
     if sorted(ids) == list(range(len(ids))):
         axes.append(("malicious_count", len(ids)))
@@ -124,6 +143,16 @@ def sensitivity_conditions(manifest, eligibility):
             cfg[group].pop(key)
         elif axis == "malicious_count":
             cfg.pop("malicious_clients")
+        elif axis == "attack_profile":
+            cfg.pop("attack")
+            cfg.pop("attack_params")
+            condition.pop("attack_source")
+        elif axis == "protection":
+            for key in ("aggregation", "aggregation_params", "defenses"):
+                cfg.pop(key)
+            for key in list(condition["source"]):
+                if key.startswith(("component/aggregator/", "component/defense/")):
+                    condition["source"].pop(key)
         else:
             cfg.pop(axis)
             if axis in {"model", "partition"}:
@@ -131,7 +160,7 @@ def sensitivity_conditions(manifest, eligibility):
                 # The selected component is the deliberately varied variable.
                 # Keep every other shared source fingerprint unchanged.
                 condition["source"].pop(f"component/{axis}/{value}", None)
-        descriptive = axis == "model" or axis == "partition" or axis.startswith("partition_params.")
+        descriptive = axis in {"model", "partition", "attack_profile", "protection"} or axis.startswith("partition_params.")
         if axis == "partition" or axis.startswith("partition_params."):
             # Global train/validation/test, schema and labels remain identical.
             # Shard/assignment identity is deliberately allowed to change.
@@ -140,7 +169,15 @@ def sensitivity_conditions(manifest, eligibility):
                 if k in _GLOBAL_HASHES and k != "assignment"
             }
         raw = json.dumps([axis, condition], sort_keys=True, allow_nan=False, separators=(",", ":"))
+        protocol = {
+            "config": {k: v for k, v in cfg.items()
+                       if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction", "compute_device"}},
+            "dataset_hashes": {k: base["dataset_hashes"][k] for k in _GLOBAL_HASHES if k != "assignment"},
+            "task": base["task"], "classes": base["classes"], "round": base["round"],
+        }
+        protocol_raw = json.dumps([axis, protocol], sort_keys=True, allow_nan=False, separators=(",", ":"))
         result.append({"axis": axis, "value": value,
                        "key": hashlib.sha256(raw.encode()).hexdigest(),
+                       "protocol_key": hashlib.sha256(protocol_raw.encode()).hexdigest(),
                        "descriptive": descriptive})
     return result

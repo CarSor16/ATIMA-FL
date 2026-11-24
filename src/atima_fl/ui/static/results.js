@@ -11,7 +11,11 @@ function score(v, percent=true){return numeric(v) ? (percent?(100*v).toFixed(2)+
 function deltaScore(value, reference, percent=true){
   if(!numeric(value)||!numeric(reference))return "—";
   const difference=(value-reference)*(percent?100:1);
-  return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
+  const base=percent?2:4;
+  // Preserve small nonzero effects without making every table unnecessarily dense.
+  let digits=base;
+  while(difference!==0&&Number(difference.toFixed(digits))===0&&digits<8)digits++;
+  return (difference>0?"+":"")+difference.toFixed(digits)+(percent?" pp":"");
 }
 function supportedClassEntries(test){
   return Object.entries(test.per_class||{}).filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
@@ -185,6 +189,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
       }
     }
     drawing.append(svg);
+    if(typeof attachWebChartExports==="function")attachWebChartExports(svg,drawing);
   }
   function redraw(){
     classChoice.label.classList.toggle("hidden",metricSelect.value!=="class_recall");drawing.replaceChildren();
@@ -225,6 +230,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
 }
 function manualWarnings(first,second){
   const warnings=[],blockers=[];
+  for(const run of new Set([first,second]))if(run.integrity_errors?.length)blockers.push("Recorded test evidence is inconsistent: "+run.integrity_errors.join("; "));
   const ca=first.config||{},cb=second.config||{};
   const da=first.dataset_identity||{},db=second.dataset_identity||{};
   const taskA=da.task,taskB=db.task;
@@ -287,8 +293,12 @@ function manualWarnings(first,second){
 }
 let availableResults=[];
 let analysisMode="single",analysisTab="overview";
-const FILTER_KEYS=["dataset","task","model","attack","status"];
-function runField(run,key){return key==="task"?run.dataset_identity?.task:key==="status"?run.status:run.config?.[key];}
+const FILTER_KEYS=["dataset","task","model","attack","status",...(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?["partition","alpha","seed","training_method","malicious_count","aggregation","campaign_folder"]:[])];
+function runField(run,key){
+  const c=run.config||{};
+  const value=key==="task"?run.dataset_identity?.task:key==="status"?run.status:key==="alpha"?c.partition_params?.alpha:key==="campaign_folder"?(run.id.includes("/")?run.id.slice(0,run.id.lastIndexOf("/")):"Selected folder"):key==="malicious_count"?(c.attack==="none"?0:c.malicious_clients?.length):key==="training_method"?(c.training_method||"standard"):c[key];
+  return value===null||value===undefined?"":String(value);
+}
 function resultMatches(run,query,filters){
   const haystack=[run.id,...FILTER_KEYS.map(key=>runField(run,key))].join(" ").toLocaleLowerCase();
   return haystack.includes(query.trim().toLocaleLowerCase()) && FILTER_KEYS.every(key=>!filters[key]||runField(run,key)===filters[key]);
@@ -447,6 +457,15 @@ function analysisContext(){
   const first=byId.get(chosenComparison.first),second=analysisMode==="single"?null:byId.get(chosenComparison.second);
   return {first,second,compatible:Boolean(first&&second&&first.id!==second.id&&manualWarnings(first,second).compatible)};
 }
+function webAttackEvidence(run){
+  const section=node("section",undefined,"result-section"),metrics=run.metrics?.attack_metrics;
+  section.append(node("h4","Recorded attack metrics"));
+  const rows=metrics&&typeof metrics==="object"?Object.entries(metrics).filter(([,v])=>v===null||numeric(v)||typeof v==="string"||typeof v==="boolean"):[];
+  if(!rows.length)section.append(node("p","No attack-specific evaluation was recorded."));
+  else section.append(dataTable(["Metric / scope","Recorded value"],rows.map(([k,v])=>[k,v===null?"—":numeric(v)&&/asr|target_rate/.test(k)&&v>=0&&v<=1?score(v):String(v)])));
+  section.append(node("p","ASR from a numerical trigger is not evidence of physical packet feasibility. An untriggered target rate is not a clean model evaluated on the same trigger.","helper"));
+  return section;
+}
 function renderAnalysis(){
   const root=$("analysis-panel");root.replaceChildren();
   for(const button of document.querySelectorAll("[data-analysis-tab]")){
@@ -463,7 +482,8 @@ function renderAnalysis(){
     if(analysisTab==="overview"||analysisTab==="rounds"){
       if(analysisTab==="overview")root.append(node("p","Validation curves are measured per round; test metrics are final-only. This single-run comparison is descriptive, not a statistical significance test."));
       root.append(b?roundChart(b,a,true,true):roundChart(a,null));
-    }else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
+    }else if(analysisTab==="attack"){root.append(webAttackEvidence(a));if(b)root.append(webAttackEvidence(b));}
+    else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
     else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
     else if(analysisTab==="matrices")root.append(matrixAnalysis(a,b,compatible));
     else root.append(perClassAnalysis(a,b,compatible,true));
@@ -472,7 +492,7 @@ function renderAnalysis(){
 function manualComparison(first,second){
   const root=$("manual-comparison-output");root.replaceChildren();
   if(!first){performanceOverview(null,null,false);renderAnalysis();return;}
-  if(!second){root.append(node("p",analysisMode==="single"?"Single experiment · recorded evidence only.":"Select experiment B to compare. Only individual A evidence is shown."));performanceOverview(first,null,false);renderAnalysis();return;}
+  if(!second){if(first.integrity_errors?.length)root.append(node("p","Data integrity warning: "+first.integrity_errors.join("; "),"warning"));root.append(node("p",analysisMode==="single"?"Single experiment · recorded evidence only.":"Select experiment B to compare. Only individual A evidence is shown."));performanceOverview(first,null,false);renderAnalysis();return;}
   if(first.id===second.id){root.append(node("p","Select two different experiments.","warning"));performanceOverview(first,null,false);renderAnalysis();return;}
   const validation=manualWarnings(first,second);
   const byId=new Map(availableResults.map(run=>[run.id,run]));
@@ -528,7 +548,10 @@ function updateManualComparison(values){
   $("result-comparisons").classList.toggle("hidden",!paired);
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.setAttribute("aria-pressed",String(button.dataset.analysisMode===analysisMode));
   $("experiment-filter-status").textContent=visible.length+" / "+values.length+" "+uiText("experiments")+(compatibleOnly&&!single&&!paired?" · "+optionsB.length+" "+uiText("compatible with A"):"");
-  const b=byId.get(chosenComparison.second);selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
+  const b=byId.get(chosenComparison.second);
+  if($("web-selected-experiment"))$("web-selected-experiment").textContent=paired?"Choose a matched clean/attack pair":a?(single?a.id:a.id+" / "+(b?.id||"—")):"No experiment selected";
+  if($("web-open-cohort"))$("web-open-cohort").disabled=paired||!a||!a.seed_condition?.key||!manualWarnings(a,a).compatible;
+  selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
   if(paired){$("manual-comparison-output").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));performanceOverview(null,null,false);$("analysis-panel").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));}
   else manualComparison(a,single?null:b);
   renderPairedTable(visible,byId);
@@ -605,18 +628,18 @@ function researchFocusedRun(run){
 }
 // Multi-seed evidence is descriptive and never substitutes for trajectory-verified CLI statistics.
 function seedStats(values){return ATIMAAnalysis.stats(values);}
-function seedCohorts(values){
+function seedCohorts(values,strict=$("seed-strict-provenance")?.checked===true){
   const groups=new Map(),excluded=[];
   for(const run of values){
     const condition=run.seed_condition;
     if(run.status!=="complete"||!condition?.key||!Number.isInteger(run.config?.seed)
       ||!manualWarnings(run,run).compatible){
-      excluded.push({id:run.id,reason:condition?.reason||"Missing or invalid final test evidence"});
+      excluded.push({id:run.id,reason:run.integrity_errors?.length?run.integrity_errors.join("; "):condition?.reason||"Missing or invalid final test evidence"});
       continue;
     }
     const test=testMetrics(run);
     const population=JSON.stringify([test.samples,classNames(run).map(name=>test.per_class[name].support)]);
-    const key=condition.key+"|"+population;
+    const key=(strict?condition.key:condition.protocol_key||condition.key)+"|"+population;
     if(!groups.has(key))groups.set(key,[]);
     groups.get(key).push(run);
   }
@@ -708,7 +731,7 @@ function seedCurve(runs,cleans=[]){
       svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"#64748b","stroke-width":2.5,"stroke-dasharray":"6 4"}));
       for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"#64748b"}));
     }
-    if(full.length)body.append(svg);
+    if(full.length){body.append(svg);if(typeof attachWebChartExports==="function")attachWebChartExports(svg,body);}
     if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
     body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated. "+(bands.input.checked?"Shading: mean ± one sample SD (not a confidence interval); proportion bands are clipped to 0–100%.":"")));
     const details=node("details"),table=cleans.length
@@ -752,13 +775,15 @@ function seedComparisonRows(pairs,descriptors){
   });
 }
 // Sensitivity: keep exact conditions separate and match the same seeds at every level.
-function sensitivityFamilies(values){
-  const {groups}=seedCohorts(values),families=new Map();
+function sensitivityFamilies(values,strict=true){
+  const {groups}=seedCohorts(values,strict),families=new Map();
   for(const [cohort,runs] of groups){
     for(const axis of runs[0].sensitivity_conditions||[]){
       if(!axis.key||!axis.axis)continue;
-      const key=axis.key+"|"+cohort.slice(cohort.indexOf("|")+1);
-      if(!families.has(key))families.set(key,{axis:axis.axis,descriptive:axis.descriptive,levels:new Map(),ambiguous:false});
+      // Do not infer a protocol family from a legacy exact-only axis.
+      if(!strict&&!axis.protocol_key)continue;
+      const key=(strict?axis.key:axis.protocol_key)+"|"+cohort.slice(cohort.indexOf("|")+1);
+      if(!families.has(key))families.set(key,{axis:axis.axis,descriptive:!strict||axis.descriptive,levels:new Map(),ambiguous:false});
       const family=families.get(key),level=JSON.stringify(axis.value);
       if(family.levels.has(level)){family.ambiguous=true;continue;}
       family.levels.set(level,{value:axis.value,cohort,runs});
@@ -779,12 +804,15 @@ function sensitivitySummary(family,allRuns,get){
     return {...level,stats:ATIMAAnalysis.pairedStats(pairs.map(({run,clean})=>[get(clean),get(run)])),observed:seedStats(level.chosen.map(get))};
   })};
 }
-let sensitivityChoice="";
+let sensitivityChoice="",sensitivityStrict=false;
 function renderSensitivityExplorer(root,values){
   root.replaceChildren();
   const details=node("details",undefined,"seed-block");details.append(node("summary","Parameter Sensitivity Explorer"));
+  if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY)details.open=true;
   root.append(details);
-  const families=sensitivityFamilies(values);
+  const web=typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY;
+  if(web){const mode=checkControl("Strict provenance (fixed audited shards and implementation)",sensitivityStrict);details.append(mode.label);mode.input.addEventListener("change",()=>{sensitivityStrict=mode.input.checked;renderSensitivityExplorer(root,values);});}
+  const families=sensitivityFamilies(values,!web||sensitivityStrict);
   details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
   if(!families.length){details.append(node("p","No audited sensitivity family with at least two distinct levels is available."));return;}
   const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+shortConditionLabel(key)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
@@ -799,8 +827,10 @@ function renderSensitivityExplorer(root,values){
       :key.startsWith("recall:")?r=>{const row=testMetrics(r)?.per_class?.[key.slice(7)];return row?.support>0?row.recall:null;}
       :key.startsWith("evasion:")?r=>seedEvasion(r,key.slice(8)):r=>testMetrics(r)?.[key];
     const {common,rows}=sensitivitySummary(family,values,get);
-    output.append(node("p",family.descriptive?"Descriptive condition contrast: architecture or shard assignments can differ.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
+    output.append(node("p",family.descriptive?"Descriptive condition contrast: shard assignments, software or runtime may differ; not an isolated causal effect.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
     output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
+    if(family.axis==="protection")output.append(node("p","Compare protection levels by their own clean and attacked scores and damage. Common seed IDs do not establish verified cross-protection quartets; use Runtime defense statistics for that inference.","helper"));
+    if(family.axis==="attack_profile")output.append(node("p","Attack profiles are compared at the recorded parameters, not at a universal equal attack strength.","helper"));
     output.append(dataTable(["Level","Observed mean","Selected seeds","Available pairs","Common clean mean","Common attack mean","Attack − clean","SD of delta"],rows.map(r=>[String(r.value),score(r.observed.mean,percent),r.observed.n+"/"+r.chosen.length,r.pairs.length,score(r.stats.clean.mean,percent),score(r.stats.attack.mean,percent),deltaScore(r.stats.attack.mean,r.stats.clean.mean,percent),numeric(r.stats.delta.sd)?(percent?(100*r.stats.delta.sd).toFixed(2)+" pp":score(r.stats.delta.sd,false)):"—"])));
     const exportButton=node("button","Export sensitivity CSV","secondary");exportButton.type="button";
     exportButton.addEventListener("click",()=>downloadResearchCSV(
@@ -808,17 +838,21 @@ function renderSensitivityExplorer(root,values){
        ...rows.map(r=>[family.axis,r.value,key,percent?"proportion":"native score",r.observed.n,r.observed.mean,r.pairs.length,r.stats.delta.n,r.stats.clean.mean,r.stats.attack.mean,r.stats.delta.mean,r.stats.delta.sd])],
       "atima_sensitivity.csv"));
     output.append(exportButton);
-    if(!common.length)return;
-    const all=rows.flatMap(r=>[r.stats.clean.mean,r.stats.attack.mean]),lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
-    const x=i=>65+i*660/Math.max(1,rows.length-1),y=v=>210-(v-lo)/(hi-lo)*175;
+    const all=rows.flatMap(r=>common.length?[r.stats.clean.mean,r.stats.attack.mean]:[r.observed.mean]).filter(numeric);if(!all.length)return;
+    const lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
+    const continuous=rows.every(r=>numeric(r.value)),first=rows[0].value,last=rows.at(-1).value;
+    const x=i=>65+(continuous?(rows[i].value-first)/(last-first):i/Math.max(1,rows.length-1))*660,y=v=>210-(v-lo)/(hi-lo)*175;
     const svg=svgElement("svg",{viewBox:"0 0 800 250",role:"img","aria-label":"Matched means by parameter level",class:"seed-curve"});
     svg.append(svgElement("line",{x1:65,y1:210,x2:725,y2:210,stroke:"currentColor"}),svgElement("line",{x1:65,y1:35,x2:65,y2:210,stroke:"currentColor"}),svgElement("text",{x:5,y:39,fill:"currentColor","font-size":11},score(hi,percent)),svgElement("text",{x:5,y:210,fill:"currentColor","font-size":11},score(lo,percent)));
-    for(const [field,color,dash] of [["attack","currentColor","none"],["clean","#64748b","6 4"]]){
-      svg.append(svgElement("polyline",{points:rows.map((r,i)=>x(i)+","+y(r.stats[field].mean)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-dasharray":dash}));
-      rows.forEach((r,i)=>svg.append(svgElement("circle",{cx:x(i),cy:y(r.stats[field].mean),r:3,fill:color})));
+    for(const [field,color,dash] of (common.length?[["attack","currentColor","none"],["clean","#64748b","6 4"]]:[["observed","currentColor","none"]])){
+      const get=r=>field==="observed"?r.observed.mean:r.stats[field].mean;
+      const points=rows.map((r,i)=>({round:i+1,value:get(r)})).filter(p=>numeric(p.value));
+      if(continuous)for(const segment of roundSegments(points))svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round-1)+","+y(p.value)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-dasharray":dash}));
+      for(const p of points){const i=p.round-1,label=String(rows[i].value)+" · "+field+": "+score(p.value,percent),dot=svgElement("circle",{cx:x(i),cy:y(p.value),r:4,fill:color,tabindex:0,"aria-label":label});dot.append(svgElement("title",{},label));svg.append(dot);}
     }
-    rows.forEach((r,i)=>svg.append(svgElement("text",{x:x(i),y:230,"text-anchor":"middle","font-size":10,fill:"currentColor"},String(i+1))));
-    output.append(svg,node("p","Solid: attacked · dashed: clean. Equally spaced level indices refer to the table, not a continuous numerical scale.","helper"));
+    rows.forEach((r,i)=>svg.append(svgElement("text",{x:x(i),y:230,"text-anchor":"middle","font-size":10,fill:"currentColor"},continuous?String(r.value):String(i+1))));
+    output.append(svg,node("p",(common.length?"Solid: attacked · dashed: clean. ":"Observed descriptive means only. ")+(continuous?"Numeric parameter scale.":"Categorical level indices refer to the table."),"helper"));
+    if(typeof attachWebChartExports==="function")attachWebChartExports(svg,output);
   }
   selector.select.addEventListener("change",redraw);metric.select.addEventListener("change",redraw);redraw();
 }
@@ -884,7 +918,7 @@ function cohortReportRows(runs,allRuns){
     ["Intrusions predicted benign",r=>seedEvasion(r),true],
     ...labels.flatMap(name=>[[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true],
       ...(!/^(benign|normal)$/i.test(name)?[[name+" · Predicted benign",r=>seedEvasion(r,name),true]]:[])])];
-  const condition=seedLabel(runs[0]);
+  const condition=seedLabel(runs[0])+(new Set(runs.map(r=>r.seed_condition?.key)).size>1?" · mixed provenance (descriptive protocol mean)":"");
   return [["Condition","Metric","Unit","Available seeds","Observed mean","Sample SD","Min","Max","Matched seeds","Matched clean mean","Matched attack mean","Attack minus clean","Paired delta sample SD"],
     ...descriptors.map(([label,get,percent])=>{
       const observed=seedStats(runs.map(get));
@@ -928,6 +962,25 @@ function seedSummary(root,runs,allRuns){
       seedCurve(pairs.map(p=>p.run),pairs.map(p=>p.clean)));
   }else paired.append(node("p",runs[0]?.config?.attack==="none"?"Clean cohort: no attacked reference is needed.":"No verified matching clean baseline. The attack averages above remain descriptive."));
   root.append(paired,seedMatrixSummary(runs,pairs));
+  if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY)root.append(webSeedResearchTools(runs,pairs));
+}
+function webSeedResearchTools(runs,pairs){
+  const panel=node("details",undefined,"seed-block");panel.append(node("summary","Research report and uncertainty"));
+  const notes="Exploratory percentile bootstrap of seed-level metadata-matched macro-F1 deltas (10,000 resamples, RNG seed 2026). Not trajectory-verified or corrected for multiple tests. Mixed provenance is descriptive.";
+  const output=node("div"),calculate=node("button","Calculate exploratory 95% interval","secondary");calculate.type="button";
+  const deltas=pairs.map(({run,clean})=>[testMetrics(run)?.macro_f1,testMetrics(clean)?.macro_f1]).filter(([a,b])=>numeric(a)&&numeric(b)).map(([a,b])=>a-b);
+  calculate.disabled=deltas.length<3||new Set(runs.map(r=>r.seed_condition?.key)).size!==1;
+  if(calculate.disabled)panel.append(node("p","At least three metadata-matched seeds with identical recorded attack provenance are required for this interval."));
+  let interval=null;
+  calculate.addEventListener("click",()=>{interval=ATIMAAnalysis.bootstrapMean(deltas);output.replaceChildren();if(interval)output.append(dataTable(["Matched seeds","Mean delta","95% lower","95% upper"],[[interval.n,deltaScore(interval.mean,0),deltaScore(interval.lower,0),deltaScore(interval.upper,0)]]));});
+  const report=node("button","Export research report (JSON)","secondary");report.type="button";
+  report.addEventListener("click",()=>{
+    const config=runs[0].config;
+    const keys=["dataset","dataset_params","partition","partition_params","model","model_params","attack","attack_params","clients","malicious_clients","rounds","local_epochs","batch_size","learning_rate","aggregation","aggregation_params","defenses","training_method","evaluation_scope"];
+    const documentData={schema_version:1,condition:seedLabel(runs[0]),recorded_settings:Object.fromEntries(keys.filter(k=>Object.hasOwn(config,k)).map(k=>[k,config[k]])),seed_ids:runs.map(r=>r.config.seed),matched_seed_ids:pairs.map(p=>p.run.config.seed),exact_provenance_count:new Set(runs.map(r=>r.seed_condition?.key)).size,metrics:cohortReportRows(runs,[...runs,...pairs.map(p=>p.clean)]),exploratory_interval:interval,limitations:notes+" Review parameter values before sharing. This is not a full reproducibility bundle."};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(documentData,null,2)],{type:"application/json"})),link=node("a");link.href=url;link.download="atima-research-report.json";document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  panel.append(node("p",notes,"helper"),calculate,output,report);return panel;
 }
 let seedWorkspaceReady=false;
 function refreshSeedWorkspace(){
@@ -958,18 +1011,26 @@ function refreshSeedWorkspace(){
     card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
     overview.append(card);
   }
-  $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
+  $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. "+($("seed-strict-provenance")?.checked?"Exact audited shards and source/runtime identities required.":"Grouped by recorded protocol and global dataset identity; provenance may differ.")+"";
   const selection=$("seed-analysis-selection"),output=$("seed-analysis-output");
   selection.replaceChildren();output.replaceChildren();
   if(excluded.length){
     const details=node("details");details.append(node("summary","Excluded runs and reasons"),dataTable(["Experiment","Reason"],excluded.map(r=>[r.id,r.reason])));selection.append(details);
   }
   const runs=groups.get(select.value);
-  if(!runs)return;
+  if(!runs){if($("web-seed-summary"))$("web-seed-summary").textContent="No compatible conditions";return;}
   const configDetail=node("details");
   const cfg={...runs[0].config};delete cfg.seed;delete cfg.name;delete cfg.paired_clean;
   configDetail.append(node("summary","Recorded condition and parameters"),node("pre",JSON.stringify(cfg,null,2)));selection.append(configDetail);
   const buckets=seedBuckets(runs),chosen=seedChosen(select.value,runs);
+  const versions=new Set(runs.map(r=>r.seed_condition.key)).size;
+  if(versions>1){
+    selection.append(node("p","Mixed provenance: "+versions+" exact identities. Shards, software, runtime or resource settings differ. Descriptive protocol mean only; enable strict provenance to separate them.","warning"));
+    if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY){
+      const inspector=node("details");inspector.append(node("summary","Inspect provenance groups"),dataTable(["Seed","Exact identity (display ID)","Device","Experiment"],runs.map(r=>[r.config.seed,shortConditionLabel(r.seed_condition.key),r.config.compute_device||"—",r.id])));selection.append(inspector);
+    }
+  }
+  if($("web-seed-summary"))$("web-seed-summary").textContent=seedLabel(runs[0])+" · "+chosen.length+" distinct seeds · Macro-F1 "+score(seedStats(chosen.map(r=>testMetrics(r)?.macro_f1)).mean);
   const duplicates=buckets.filter(([,items])=>items.length>1);
   selection.append(node("p",chosen.length+" distinct compatible seeds included automatically. SD is sample standard deviation; missing metrics are not zero."));
   if(duplicates.length){
@@ -1020,6 +1081,7 @@ function setupResultsWorkspace(){
   if(seedWorkspaceReady)return;
   seedWorkspaceReady=true;
   $("seed-analysis-enabled")?.addEventListener("change",refreshSeedWorkspace);
+  $("seed-strict-provenance")?.addEventListener("change",refreshSeedWorkspace);
   $("seed-cohort-choice")?.addEventListener("change",refreshSeedWorkspace);
   $("local-results-folder")?.addEventListener("change",()=>{const files=Array.from($("local-results-folder").files||[]);if(files.length){localResultFiles=files;refreshResults();}});
   $("local-results-reset")?.addEventListener("click",()=>{localResultFiles=null;localResultEvidence=null;$("local-results-folder").value="";refreshResults();});
@@ -1132,6 +1194,12 @@ function updateLocalResultStatus(evidence){
   panel.classList.toggle("hidden",!evidence?.logits.size);
   status.textContent=evidence?evidence.runs.length+" experiments read locally · "+evidence.errors.length+" skipped · "+evidence.logits.size+" optional logit files. No files uploaded." :typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?"Choose a local folder to begin.":"Source: Studio workspace.";
   if(evidence?.errors.length)errors.append(dataTable(["Experiment","Read error"],evidence.errors.map(r=>[r.id,r.reason])));
+  if(evidence){
+    const bad=evidence.runs.filter(r=>r.integrity_errors?.length),audit=node("details",undefined,"web-advanced");
+    audit.append(node("summary","Data integrity · "+bad.length+" inconsistent runs"),node("p","Built-in classification metrics are checked against available confusion matrices. Inconsistent runs remain individually inspectable but are excluded from compatible comparisons. Missing matrices cannot be verified."));
+    if(bad.length)audit.append(dataTable(["Experiment","Inconsistency"],bad.map(r=>[r.id,r.integrity_errors.join("; ")])));
+    errors.append(audit);
+  }
   if(evidence)for(const id of evidence.logits.keys()){const option=node("option",id);option.value=id;select.append(option);}
   if(evidence?.logits.size)select.value=[...evidence.logits.keys()][0];
 }

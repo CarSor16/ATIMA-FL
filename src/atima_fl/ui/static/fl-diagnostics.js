@@ -96,6 +96,7 @@ function federatedAnalysis(first, second){
       }
     }
     drawing.append(svg);
+    if(typeof attachWebChartExports==="function")attachWebChartExports(svg,drawing);
     const legend=node("div",undefined,"chart-legend");
     for(const trace of traces)legend.append(node("span",trace.tag+" · "+runs.find(([tag])=>tag===trace.tag)[1].id,
       trace.tag==="A"?"legend-baseline":"legend-experiment"));

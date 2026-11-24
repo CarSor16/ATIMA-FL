@@ -51,7 +51,7 @@ check("missing audit, task/order/support/sample mismatches fail closed",()=>{
   }
 });
 check("matching wrong support totals are blocked",()=>{context.aa=structuredClone(context.a);context.bb=structuredClone(context.b);context.aa.metrics.test.samples=context.bb.metrics.test.samples=10;assert.equal(evaluate("manualWarnings(aa,bb).compatible"),false);});
-check("percentage points, numeric MCC/loss, improvement directions and absent values",()=>{assert.equal(evaluate("deltaScore(.7,.8)"),"-10.00 pp");assert.equal(evaluate("deltaScore(.9,.8,false)"),"+0.1000");assert.equal(evaluate("metricDirection('loss',.9,.7)"),"improved");assert.equal(evaluate("metricDirection('macro_f1',.9,.7)"),"degraded");assert.equal(evaluate("metricDirection('mcc',null,.2)"),"unavailable");assert.equal(evaluate("deltaScore(null,.8)"),"—");});
+check("percentage points, numeric MCC/loss, improvement directions and absent values",()=>{assert.equal(evaluate("deltaScore(.7,.8)"),"-10.00 pp");assert.equal(evaluate("deltaScore(.800001,.8)"),"+0.0001 pp");assert.equal(evaluate("deltaScore(.9,.8,false)"),"+0.1000");assert.equal(evaluate("metricDirection('loss',.9,.7)"),"improved");assert.equal(evaluate("metricDirection('macro_f1',.9,.7)"),"degraded");assert.equal(evaluate("metricDirection('mcc',null,.2)"),"unavailable");assert.equal(evaluate("deltaScore(null,.8)"),"—");});
 check("search/filter matches recorded metadata only",()=>{assert.equal(evaluate("resultMatches(b,'LABELFLIP',{model:'mlp'})"),true);assert.equal(evaluate("resultMatches(b,'',{model:'lopez_cnn'})"),false);assert.equal(evaluate("resultMatches(b,'',{task:'binary'})"),false);});
 check("missing validation observations create gaps and delta uses common rounds",()=>{assert.deepEqual(plain(evaluate("roundSegments(roundSeries(a,'macro_f1',0)).map(segment=>segment.map(p=>p.round))")),[[1],[3],[5]]);assert.deepEqual(plain(evaluate("roundDelta([{round:1,value:.8},{round:3,value:.7}],[{round:2,value:.9},{round:3,value:.5}])")),[{round:3,value:-.19999999999999996}]);});
 check("validation chart has separate delta scale, range checks, keyboard points and real controls",()=>{
@@ -307,5 +307,33 @@ check("cohort CSV protects text cells and requires audited confusion axes",()=>{
   const rows=plain(evaluate("cohortReportRows([lcg0],[lcg0,clean0])"));
   assert.equal(rows[0][9],"Matched clean mean");
   assert.ok(!JSON.stringify(rows).includes("CleanSeed0"));
+});
+check("protocol grouping includes different provenance while strict grouping separates",()=>{
+  context.protA=structuredClone(context.lcg0);context.protB=structuredClone(context.lcg0);
+  context.protA.id="protocol-a";context.protB.id="protocol-b";context.protB.config.seed=1;
+  context.protA.seed_condition={key:"exact-a",protocol_key:"shared-protocol"};
+  context.protB.seed_condition={key:"exact-b",protocol_key:"shared-protocol"};
+  assert.equal(evaluate("seedCohorts([protA,protB],false).groups.size"),1);
+  assert.equal(evaluate("seedCohorts([protA,protB],true).groups.size"),2);
+  assert.equal(evaluate("seedChosen('shared',[protA,protB]).length"),2);
+  context.protB.seed_condition.protocol_key="different-protocol";
+  assert.equal(evaluate("seedCohorts([protA,protB],false).groups.size"),2);
+});
+check("protocol sensitivity combines levels without pooling ambiguous seeds",()=>{
+  context.sa=structuredClone(context.protA);context.sb=structuredClone(context.protA);context.sc=structuredClone(context.protA);
+  context.sa.config.seed=0;context.sb.config.seed=1;context.sc.config.seed=0;
+  context.sa.seed_condition={key:"exact-0",protocol_key:"level-a"};context.sb.seed_condition={key:"exact-1",protocol_key:"level-a"};context.sc.seed_condition={key:"exact-2",protocol_key:"level-b"};
+  for(const [r,i] of [[context.sa,0],[context.sb,1],[context.sc,2]]){r.id="s"+i;r.sensitivity_conditions=[{axis:"attack_params.factor",value:i<2?1:2,key:"strict-"+i,protocol_key:"family"}];}
+  assert.equal(evaluate("sensitivityFamilies([sa,sb,sc],true).length"),0);
+  assert.equal(evaluate("sensitivityFamilies([sa,sb,sc],false)[0][1].levels.size"),2);
+  assert.equal(evaluate("sensitivityFamilies([sa,sb,sc],false)[0][1].levels.get('1').runs.length"),2);
+  context.sa.integrity_errors=["Accuracy differs from confusion matrix"];
+  assert.equal(evaluate("manualWarnings(sa,sa).compatible"),false);
+});
+check("exploratory bootstrap resamples seed-level observations deterministically",()=>{
+  assert.equal(evaluate("ATIMAAnalysis.bootstrapMean([1,2])"),null);
+  const result=plain(evaluate("ATIMAAnalysis.bootstrapMean([.1,.1,.1])"));
+  assert.ok(Math.abs(result.lower-.1)<1e-12&&Math.abs(result.upper-.1)<1e-12);
+  assert.deepEqual(plain(evaluate("ATIMAAnalysis.bootstrapMean([-.2,.1,.3])")),plain(evaluate("ATIMAAnalysis.bootstrapMean([-.2,.1,.3])")));
 });
 console.log(checks+" functional Results checks passed.");
