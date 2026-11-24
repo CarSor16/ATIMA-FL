@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src/atima_fl/ui/static"
 ASSETS = (
     "style.css", "i18n.js", "analysis-core.js", "local-results.js",
-    "results.js", "fl-diagnostics.js", "web-folder.js", "web-designer.js", "web-bootstrap.js", "atima-shield-hd.png",
+    "results.js", "fl-diagnostics.js", "web-folder.js", "web-designer.js", "web-study.js", "web-bootstrap.js", "atima-shield-hd.png",
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -81,6 +81,15 @@ def build(output):
 <p>Validate and export on your PC using the matching ATIMA Studio version:</p>
 <pre>atima-studio web-plan atima-web-draft.json --workspace workspace --dataset-root /path/to/prepared/data</pre>
 <p>Configure cluster resources locally. No training is started.</p></details>"""
+    study = """<details id="web-study" class="card"><summary>Study Exchange · descriptive summaries</summary>
+<p>Export selected-folder results as a deliberately reduced, reviewable summary. Import multiple summary files to compare reported observations side by side. The summaries omit full training provenance, raw files and original run names; they do not establish controlled paired effects or justify pooling seeds across studies.</p>
+<label>Study title<input id="web-study-title" maxlength="120" value="My study"></label>
+<div class="result-actions"><button type="button" id="web-study-prepare">Prepare export preview</button><button type="button" id="web-study-download" disabled>Download reviewed study</button></div>
+<details><summary>Exact export content · review before sharing</summary><pre id="web-study-preview"></pre></details>
+<label>Import study summary JSON files<input type="file" id="web-study-import" accept=".json,application/json" multiple></label>
+<div class="fields"><label>Metric<select id="web-study-metric"></select></label><label>Filter study and conditions<input id="web-study-filter" type="search"></label></div>
+<button type="button" class="secondary" id="web-study-clear">Clear imported studies and preview</button>
+<p id="web-study-status" role="status" aria-live="polite"></p><div id="web-study-output"></div></details>"""
     scripts = '<script defer src="./web-catalog.js"></script>' + "".join(f'<script defer src="./{name}"></script>' for name in ASSETS if name.endswith(".js"))
     html = f"""<!doctype html>
 <html lang="en" data-theme="dark"><head><meta charset="utf-8">
@@ -104,6 +113,7 @@ def build(output):
 <noscript><p>JavaScript is required to read and analyze local files.</p></noscript>
 {designer}
 {results}
+{study}
 <footer class="web-footer">ATIMA-FL · Research software · Static local-first viewer</footer>
 </main></body></html>"""
     output.mkdir(parents=True, exist_ok=False)
