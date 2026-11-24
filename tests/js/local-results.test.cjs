@@ -36,6 +36,9 @@ async function main(){
   assert.equal(reader.project("legacy",incomplete).seed_condition.key,null);
   assert.throws(()=>reader.project("bad",a,{test:{accuracy:2}}),/Invalid final metric/);
   assert.throws(()=>reader.project("bad",a,{},[{round:2},{round:1}]),/Invalid validation round/);
+  assert.throws(()=>reader.project("bad",a,{federated:{rounds:[null]}}),/Invalid federated telemetry/);
+  assert.throws(()=>reader.project("bad",a,{},[{round:1,recall:[2]}]),/Invalid validation class recall/);
+  assert.throws(()=>reader.project("bad",a,{test:{per_class:{dos:null}}}),/Invalid per-class metrics/);
   const logits={schema_version:1,split:"test",classes:["benign","dos"],labels:[0,1,1],logits:[[1000,-1000],[0,0],[-1000,1000]]};
   const summary=reader.summarizeLogits(logits,["benign","dos"]);
   assert.equal(summary.accuracy,2/3);assert.deepEqual(plain(summary.confusion_matrix),[[1,0],[1,1]]);
