@@ -1,0 +1,99 @@
+name: Web Studio
+on:
+  push:
+    branches: [main, feature/multiseed-results-workspace]
+    paths:
+      - 'src/atima_fl/ui/static/**'
+      - 'scripts/build_web_studio.py'
+      - 'src/atima_fl/core/**'
+      - 'src/atima_fl/components/**'
+      - 'src/atima_fl/studio/web_plan.py'
+      - 'tests/js/**'
+      - 'scripts/check_web_studio.py'
+      - '.github/workflows/web-studio.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested site to GitHub Pages
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: atima-web-studio
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build allowlisted static site
+        run: |
+          python -m pip install -e .
+          python scripts/build_web_studio.py _site
+      - name: Check JavaScript and local reader
+        run: |
+          for f in _site/*.js; do node --check "$f"; done
+          node tests/js/local-results.test.cjs
+          node tests/js/results.test.cjs
+          node tests/js/web-study.test.cjs
+      - name: Test in Chromium, Firefox and WebKit with network blocked
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium firefox webkit
+          for browser in chromium firefox webkit; do python scripts/check_web_studio.py _site --browser "$browser"; done
+          python scripts/check_web_studio.py _site --browser chromium --stress
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atima-web-studio
+          path: _site
+          include-hidden-files: true
+          retention-days: 7
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true && github.repository == 'CarSor16/ATIMA-FL' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure already enabled Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy tested static assets
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  audit-live:
+    needs: [build, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: atima-web-studio
+          path: _site
+      - name: Audit actual HTTPS page and local-only analysis
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          python scripts/check_web_studio.py _site --live

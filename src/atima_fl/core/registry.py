@@ -151,12 +151,14 @@ class Registry:
     def catalog(self):
         # Presentational metadata: execution hooks and saved profile IDs do not change.
         from .attack_taxonomy import classify_attack
+        from .attack_help import attack_help
 
         result = {
             kind: [value.public() for value in entries.values()]
             for kind, entries in self.components.items()
         }
         for item in result["attack"]:
+            item["help"] = attack_help(item["id"])
             if item["id"] == "none":
                 item.update(category="baseline", implementation_status="baseline", survey_references=[])
             else:

@@ -1,0 +1,19 @@
+/* Static viewer only; shared scientific rendering styles remain in style.css. */
+body.web-viewer main{margin:0 auto;width:100%;max-width:1440px;padding:26px clamp(12px,4vw,48px)}
+.web-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.web-brand{display:flex;align-items:center;gap:16px;min-width:0}
+.web-brand h1{margin:2px 0}
+.web-header .header-tools{align-items:flex-end}
+.web-header .header-tools select{width:auto}
+.web-privacy p{margin-top:8px}
+.web-footer{padding:24px 0;color:var(--muted);font-size:12px}
+.web-viewer #local-results-folder{max-width:100%}
+.web-viewer .result-actions{flex-wrap:wrap}
+@media(max-width:600px){.web-header{align-items:flex-start}.web-brand img{width:48px;height:48px}.web-brand h1{font-size:24px}}
+
+.web-viewer #web-designer .component-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
+.web-viewer #web-designer textarea{width:100%;font-family:monospace;resize:vertical}
+.web-viewer #web-designer{margin:16px 0}
+
+.web-viewer #web-study{margin-top:16px;min-width:0}
+.web-viewer #web-study pre,.web-viewer #web-designer pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:28rem;overflow:auto}

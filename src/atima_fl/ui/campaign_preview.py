@@ -3,56 +3,23 @@
 This module never creates profiles, accesses datasets, or submits jobs.
 The user must explicitly export and execute plans in a separate operation.
 """
-from dataclasses import replace
-from pathlib import PurePosixPath
-import re
-
-_RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\Z")
-
-SEEDS_0_TO_10 = tuple(range(11))
+from atima_fl.core.seed_campaign import SEEDS_0_TO_10, batch_profiles
 
 
 def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
-    """Describe one clean and one attacked profile per independent seed."""
-    config.validate()
+    """Describe one clean and one attacked profile per seed; legacy API."""
     if config.attack == "none":
         raise ValueError("Select an attack to preview a paired seed campaign")
-    if config.paired_clean:
-        raise ValueError("Remove the existing paired_clean path before planning a new campaign")
-    if type(seeds) not in (tuple, list) or not seeds or len(seeds) > 50:
-        raise ValueError("Campaign seeds must be a list of 1..50 integers")
-    if any(type(seed) is not int or not 0 <= seed <= 2**32 - 1 for seed in seeds):
-        raise ValueError("Campaign seeds must be non-negative 32-bit integers")
-    if len(set(seeds)) != len(seeds):
-        raise ValueError("Duplicate campaign seeds")
-    # A fixed horizon prevents post-hoc differences from clean early stopping.
     if config.minimum_rounds > config.rounds:
         raise ValueError("Minimum rounds exceed the campaign horizon")
-    output = PurePosixPath(config.output_root)
-    entries = []
-    for seed in seeds:
-        stem = f"{config.name}_Seed{seed}"
-        clean = replace(
-            config, name=stem + "_Clean", seed=seed, attack="none",
-            attack_params={}, malicious_clients=(), paired_clean="",
-            minimum_rounds=config.rounds, paired_rounds=config.rounds,
-        )
-        attack = replace(
-            config, name=stem + "_Attack", seed=seed,
-            minimum_rounds=config.rounds, paired_rounds=config.rounds,
-            paired_clean=str(output / clean.name),
-        )
-        if not _RUN_NAME.fullmatch(clean.name) or not _RUN_NAME.fullmatch(attack.name):
-            raise ValueError("Generated run names must be ASCII-safe and at most 120 characters")
-        clean.validate()
-        attack.validate()
-        entries.append({
-            "seed": seed,
-            "clean_name": clean.name,
-            "attack_name": attack.name,
-            "paired_clean": attack.paired_clean,
-            "execution_order": [clean.name, attack.name],
-        })
+    pairs = batch_profiles(config, seeds)
+    entries = [{
+        "seed": clean.seed,
+        "clean_name": clean.name,
+        "attack_name": attack.name,
+        "paired_clean": attack.paired_clean,
+        "execution_order": [clean.name, attack.name],
+    } for clean, attack in pairs]
     return {
         "mode": "preview_only",
         "attack": config.attack,

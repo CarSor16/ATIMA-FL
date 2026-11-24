@@ -178,7 +178,7 @@ is opt-in and does not connect on startup. Put a local-only
 {
   "ssh_host": "YOUR_REAL_CLUSTER_SSH_HOST",
   "ssh_user": "YOUR_CLUSTER_LOGIN",
-  "remote_results_root": "/nas/home/gruppo-8/repo-gruppo-8/ATIMA-FL/results"
+  "remote_results_root": "/path/to/ATIMA-FL/results"
 }
 ```
 
@@ -200,6 +200,8 @@ be committed to GitHub or contain passwords, tokens or private keys.
    `workspace/results/<experiment>/`. Local experiment files are not deleted.
 4. **Refresh local results** reads the downloaded summary copies.
 
+Keep connection settings, deployment defaults, dataset paths, result files and credentials in the external workspace. Never publish them with a static site or commit them to Git.
+
 This is not a remote file browser or a mounted filesystem; it does not pull
 `trajectory.h5`, client artifacts or prepared datasets. Full paired
 trajectory analysis still requires importing the appropriate HDF5 artifacts
@@ -213,9 +215,9 @@ For password-only university SSH access, install the optional cluster packages
 and let Windows Credential Manager protect the existing account password:
 
 ```powershell
-cd "N:\\Desktop\\tirocinio\\Test_Cluster\\ATIMA-FL"
+cd "C:\\path\\to\\ATIMA-FL"
 .\\.venv\\Scripts\\python.exe -m pip install -e '.[cluster]'
-$env:ATIMA_WORKSPACE = "N:\\Desktop\\tirocinio\\Test_Cluster\\Workspace_ATIMA"
+$env:ATIMA_WORKSPACE = "C:\\path\\to\\Workspace_ATIMA"
 .\\.venv\\Scripts\\python.exe -m atima_fl.ui.cluster_credentials set
 .\\.venv\\Scripts\\python.exe -m atima_fl.ui.cluster_credentials check
 ```

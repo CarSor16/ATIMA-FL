@@ -82,7 +82,14 @@ function updateResultsOverview(values){
 
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
 const titles = {dataset:"Dataset",partition:"Partizione",model:"Modello",optimizer:"Ottimizzatore",loss:"Loss",metrics:"Metriche",attack:"Attacco",aggregator:"Aggregazione"};
-function componentLabel(component,key){return component.translations?.[currentLanguage]?.[key] || component[key];}
+function componentLabel(component,key){
+  const help=component.help?.[currentLanguage]||component.help?.en;
+  if(key==="description"&&help){
+    const label=currentLanguage==="it"?"Parametri e intensità: ":"Parameters and intensity: ";
+    return help.mechanism+"\n"+label+help.intensity;
+  }
+  return component.translations?.[currentLanguage]?.[key] || component[key];
+}
 
 const CATALOG_GROUPS = [
   {title:"Data & partitions",kinds:[["dataset","Datasets"],["partition","Partitions"]]},
@@ -627,8 +634,67 @@ async function previewSeedCampaign(){
   }catch(error){output.textContent="Campaign preview failed: "+error.message;}
   finally{button.disabled=false;}
 }
+let sweepAxes=new Map();
+function refreshSweepAxes(){
+  const select=$("sweep-axis"),previous=select.value;
+  sweepAxes=new Map();select.replaceChildren();
+  try{
+    const c=config();
+    if(c.attack==="none")throw new Error("Enable an attack first.");
+    for(const kind of ["attack","partition"]){
+      const component=catalog[kind].find(item=>item.id===c[kind]);
+      for(const [key,schema] of Object.entries(component?.parameters||{})){
+        if(["integer","number"].includes(schema.type))sweepAxes.set(kind+"_params."+key,{...schema,label:kind+" · "+key});
+      }
+    }
+    for(const [axis,label] of [["attack_start","Attack start round"],["attack_end","Attack end round"],["malicious_count","Malicious count (IDs 0…n−1)"]])sweepAxes.set(axis,{type:"integer",label,minimum:1,maximum:axis==="malicious_count"?c.clients:c.rounds});
+    for(const kind of ["model","partition"])sweepAxes.set(kind,{type:"string",label:kind,choices:catalog[kind].map(item=>item.id)});
+    for(const [axis,schema] of sweepAxes){const option=node("option",schema.label);option.value=axis;select.append(option);}
+    select.value=sweepAxes.has(previous)?previous:[...sweepAxes.keys()][0];
+    $("sweep-status").textContent="Parameters read from current configuration.";
+  }catch(error){$("sweep-status").textContent=error.message;}
+  sweepHint();
+}
+function sweepHint(){
+  const schema=sweepAxes.get($("sweep-axis").value);
+  $("sweep-hint").textContent=schema?(schema.choices?"Available IDs: "+schema.choices.join(", "):"Type: "+schema.type+" · Min: "+(schema.minimum??"plugin-defined")+" · Max: "+(schema.maximum??"plugin-defined")):"Read the current parameters first.";
+}
+async function exportParameterSweep(){
+  const button=$("export-sweep"),status=$("sweep-status"),download=$("sweep-download");
+  button.disabled=true;download.classList.add("hidden");
+  try{
+    const axis=$("sweep-axis").value,schema=sweepAxes.get(axis);
+    if(!schema)throw new Error("Read the current parameters first.");
+    const raw=$("sweep-levels").value.split(",").map(v=>v.trim());
+    if(raw.some(v=>!v))throw new Error("Enter non-empty comma-separated levels.");
+    const values=raw.map(v=>schema.type==="string"?v:Number(v));
+    if(schema.type!=="string"&&values.some(v=>!Number.isFinite(v)||(schema.type==="integer"&&!Number.isInteger(v))))throw new Error("Invalid numeric levels.");
+    const seeds=integerList($("seed-batch-seeds").value,"Seeds"),c=config();
+    status.textContent="Validating sweep profiles…";
+    const result=await request("/api/parameter-sweep",{config:c,seeds,axis,values});
+    download.href=result.download;download.classList.remove("hidden");
+    status.textContent="Saved "+result.runs+" profiles. No jobs were submitted.";
+  }catch(error){status.textContent="Sweep export failed: "+error.message;}
+  finally{button.disabled=false;}
+}
+async function exportSeedBatch(){
+  const button=$("export-seed-batch"),status=$("seed-batch-status"),download=$("seed-batch-download");
+  button.disabled=true;download.classList.add("hidden");
+  try{
+    const seeds=integerList($("seed-batch-seeds").value,"Seeds");
+    if(!seeds.length||seeds.length>50||seeds.some(seed=>seed<0||seed>4294967295)||new Set(seeds).size!==seeds.length)
+      throw new Error("Choose 1–50 distinct non-negative integer seeds.");
+    const c=config(),count=seeds.length*(c.attack==="none"?1:2);
+    status.textContent="Validating "+count+" profiles…";
+    const result=await request("/api/seed-batch",{config:c,seeds});
+    download.href=result.download;download.classList.remove("hidden");
+    status.textContent="Saved "+count+" profiles. No jobs were submitted.";
+  }catch(error){status.textContent="Batch export failed: "+error.message;}
+  finally{button.disabled=false;}
+}
 let clusterImportOffset=0;
 async function syncClusterResults(){
+  if(localResultFiles)return;
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
   button.disabled=true;
   output.textContent="Connecting securely over SSH and reading up to 100 result summaries…";
@@ -757,7 +823,7 @@ async function initialize(){
     $("compare-experiment-b").value=chosenComparison.second||"";
     refreshManualFromChoices();
   });
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("export-seed-batch").addEventListener("click",exportSeedBatch);$("sweep-refresh").addEventListener("click",refreshSweepAxes);$("sweep-axis").addEventListener("change",sweepHint);$("export-sweep").addEventListener("click",exportParameterSweep);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   $("component-search").addEventListener("input",()=>{delete $("component-search").dataset.kind;renderComponentCatalog();});
   for(const button of document.querySelectorAll(".nav[data-page]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));

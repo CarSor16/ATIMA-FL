@@ -11,9 +11,13 @@ STUDIO_COMMANDS = frozenset({
 
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "web-plan":
+        from atima_fl.studio.web_plan import main as web_plan
+
+        return web_plan(args[1:])
     if not args or args[0] not in STUDIO_COMMANDS:
         raise SystemExit(
-            "ATIMA Studio commands: ui, catalog, datasets, validate, plan, defense-study"
+            "ATIMA Studio commands: ui, catalog, datasets, validate, plan, defense-study, web-plan"
         )
     return shared_main(args)
 

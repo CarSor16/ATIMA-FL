@@ -35,6 +35,7 @@ const document={body,documentElement:{dataset:{}},getElementById:id=>ids.get(id)
 const context=vm.createContext({document,localStorage:{getItem(){return null;}},console});
 vm.runInContext(fs.readFileSync(path.join(base,"i18n.js"),"utf8"),context);
 const source=fs.readFileSync(path.join(base,"app.js"),"utf8").split("\nsetTheme(theme);\n")[0];vm.runInContext(source,context);
+vm.runInContext(fs.readFileSync(path.join(base,"analysis-core.js"),"utf8"),context);
 vm.runInContext(fs.readFileSync(path.join(base,"results.js"),"utf8"),context);
 vm.runInContext(fs.readFileSync(path.join(base,"fl-diagnostics.js"),"utf8"),context);
 const evaluate=script=>vm.runInContext(script,context),plain=value=>JSON.parse(JSON.stringify(value));
@@ -162,5 +163,149 @@ check("new Results modes remain optional and do not alter paired A/B selection",
   ids.get("group-results-enabled").dispatch("change");
   assert.equal(root.children.length,3);
   assert.deepEqual([context.focusClean,context.focusAttack,context.focusOther].map(v=>JSON.stringify(v)),originals);
+});
+check("multi-seed aggregation handles missing metrics and uses sample SD",()=>{
+  const v=plain(evaluate("seedStats([0.2,0.4,null,NaN])"));
+  assert.equal(v.n,2);assert.ok(Math.abs(v.mean-0.3)<1e-12);
+  assert.ok(Math.abs(v.sd-Math.sqrt(.02))<1e-12);
+  assert.equal(evaluate("seedStats([null]).mean"),null);
+  assert.equal(evaluate("seedStats([.2]).sd"),null);
+  assert.equal(evaluate("seedMetricRows([{v:.1}],[['delta',r=>r.v,true]],true)[0][1]"),"10.00 pp");
+});
+check("cohorts use distinct condition keys and actual seeds, with duplicates explicit",()=>{
+  context.s0=run("LCG_seed0","local_class_gradient");
+  context.s1=run("LCG_seed1","local_class_gradient");
+  context.dup=structuredClone(context.s1);context.dup.id="LCG_seed1_duplicate";
+  context.other=structuredClone(context.s1);context.other.id="Other_partition";
+  context.invalid=structuredClone(context.s1);context.invalid.id="No_audit";
+  context.s0.config.seed=0;context.s1.config.seed=1;
+  context.s0.seed_condition=context.s1.seed_condition=context.dup.seed_condition={key:"condition-one",reason:null};
+  context.other.seed_condition={key:"different-partition",reason:null};
+  context.invalid.seed_condition={key:null,reason:"Missing assignment hash"};
+  context.dup.config.seed=1;
+  const facts=plain(evaluate("(()=>{const c=seedCohorts([s0,s1,dup,other,invalid]);return {groups:c.groups.size,excluded:c.excluded,buckets:seedBuckets([...c.groups.values()][0]).map(([s,r])=>[s,r.length])};})()"));
+  assert.equal(facts.groups,2);assert.equal(facts.excluded.length,1);
+  assert.deepEqual(facts.buckets,[[0,1],[1,2]]);
+  const differentSupport=structuredClone(context.s1);
+  differentSupport.id="different_support";differentSupport.metrics.test.samples=6;
+  differentSupport.metrics.test.per_class.dos.support=3;context.differentSupport=differentSupport;
+  assert.equal(evaluate("seedCohorts([s0,differentSupport]).groups.size"),2);
+});
+check("multi-seed curves count observed seed values per actual round and preserve gaps",()=>{
+  context.s0.history=[{round:1,macro_f1:.4},{round:3,macro_f1:.6}];
+  context.s1.history=[{round:1,macro_f1:.8},{round:2,macro_f1:.7}];
+  const rows=plain(evaluate("seedRoundStats([s0,s1],'macro_f1')"));
+  assert.deepEqual(rows.map(r=>[r.round,r.n]),[[1,2],[2,1],[3,1]]);
+  assert.ok(Math.abs(rows[0].mean-.6)<1e-12);
+  assert.equal(evaluate("seedEvasion(s0)"),.5);
+});
+check("automatic multi-seed panel uses all unambiguous seeds with no manual seed controls",()=>{
+  ids.get("seed-analysis-enabled").checked=false;
+  evaluate("renderResults([s0,s1,dup,other,invalid])");
+  assert.equal(ids.get("seed-analysis-content").classList.contains("hidden"),true);
+  ids.get("seed-analysis-enabled").checked=true;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  const cohort=ids.get("seed-cohort-choice");
+  cohort.value=cohort.options[1].value;cohort.dispatch("change");
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Only one seed available"));
+  assert.ok(ids.get("seed-analysis-selection").textContent.includes("Ambiguous duplicate seeds excluded"));
+  assert.equal(ids.get("seed-analysis-selection").querySelectorAll("select").length,0);
+  assert.deepEqual(plain(evaluate("seedChosen('fixture',[s0,s1,dup]).map(r=>r.config.seed)")),[0]);
+  assert.deepEqual(plain(evaluate("seedChosen('fixture',[s0,s1]).map(r=>r.config.seed)")),[0,1]);
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Final test metrics across seeds"));
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Metadata-matched attack minus clean"));
+  ids.get("seed-analysis-enabled").checked=false;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  assert.ok(ids.get("seed-analysis-content").classList.contains("hidden"));
+});
+check("custom panel permutations are valid and never drop or duplicate a section",()=>{
+  assert.equal(evaluate("validResultsOrder(RESULTS_LAYOUT_DEFAULT)"),true);
+  assert.equal(evaluate("validResultsOrder(['bad'])"),false);
+  assert.deepEqual(plain(evaluate("moveResultsPanel(RESULTS_LAYOUT_DEFAULT,'detail-region',-1)")),
+    ["seed-results-panel","detail-region","performance-region","individual-reports-region"]);
+  assert.deepEqual(plain(evaluate("moveResultsPanel(RESULTS_LAYOUT_DEFAULT,'seed-results-panel',-1)")),
+    plain(evaluate("RESULTS_LAYOUT_DEFAULT")));
+});
+check("automatic cohorts show the matched clean mean using exactly the same seeds",()=>{
+  context.lcg0=structuredClone(context.s0);context.lcg1=structuredClone(context.s1);
+  context.lcg0.config.partition=context.lcg1.config.partition="dirichlet";
+  context.lcg0.config.partition_params=context.lcg1.config.partition_params={alpha:.5};
+  context.lcg0.config.malicious_clients=context.lcg1.config.malicious_clients=[0];
+  context.lcg0.config.attack=context.lcg1.config.attack="local_class_gradient";
+  context.clean0=run("CleanSeed0");context.clean0.config.seed=0;context.clean0.config.partition="dirichlet";
+  context.clean0.metrics.test.macro_f1=.8;context.lcg0.baseline_id="CleanSeed0";
+  context.clean1=run("CleanSeed1");context.clean1.config.seed=1;context.clean1.config.partition="dirichlet";
+  context.clean1.metrics.test.macro_f1=.9;context.lcg1.baseline_id="CleanSeed1";
+  context.lcg0.metrics.test.macro_f1=.4;context.lcg1.metrics.test.macro_f1=.6;
+  const all=plain(evaluate("seedComparisonRows(seedMatched([lcg0,lcg1],[clean0,clean1]),[['Macro-F1',r=>testMetrics(r).macro_f1,true]])"));
+  assert.equal(all[0][1],"85.00%");assert.equal(all[0][2],"50.00%");assert.equal(all[0][3],"-35.00 pp");assert.equal(all[0][5],"2/2");
+  context.clean1.config.seed=2;
+  const partial=plain(evaluate("seedComparisonRows(seedMatched([lcg0,lcg1],[clean0,clean1]),[['Macro-F1',r=>testMetrics(r).macro_f1,true]])"));
+  assert.equal(partial[0][1],"80.00%");assert.equal(partial[0][2],"40.00%");assert.equal(partial[0][5],"1/1");
+  ids.get("seed-analysis-enabled").checked=true;
+  evaluate("renderResults([lcg0,lcg1,clean0,clean1])");
+  assert.ok(ids.get("seed-cohort-overview").textContent.includes("LCG · Non-IID · α=0.5"));
+  assert.ok(ids.get("seed-cohort-overview").textContent.includes("Matched 1 seeds"));
+  assert.ok(ids.get("seed-cohort-choice").value);
+  ids.get("seed-analysis-enabled").checked=false;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  assert.ok(ids.get("seed-analysis-content").classList.contains("hidden"));
+});
+check("portable matrix analysis weights seeds equally and preserves unsupported classes",()=>{
+  const result=plain(evaluate("ATIMAAnalysis.meanMatrices([[[1,1],[0,0]],[[9,1],[2,2]]])"));
+  assert.ok(Math.abs(result[0][0].mean-.7)<1e-12);
+  assert.equal(result[1][0].mean,.5);assert.equal(result[1][0].n,1);
+  const paired=plain(evaluate("ATIMAAnalysis.pairedMatrices([[[[1,1],[0,0]],[[0,2],[1,1]]],[[[9,1],[2,2]],[[5,5],[0,4]]]])"));
+  assert.equal(paired[1][0].delta.n,1);assert.equal(paired[1][0].delta.mean,-.5);
+  assert.ok(Math.abs(paired[0][0].delta.mean+.45)<1e-12);
+  const view=evaluate("seedMatrixSummary([a,b],[{run:b,clean:a}])");
+  assert.ok(view.textContent.includes("Mean normalized confusion matrices"));
+  assert.ok(view.textContent.includes("Matched seed counts per true class"));
+  assert.equal(view.querySelectorAll("table").length,5);
+});
+check("campaign completeness distinguishes missing seeds, duplicates, selection and baseline coverage",()=>{
+  const coverage=plain(evaluate("ATIMAAnalysis.campaignCoverage([0,1,2,3],[{seed:0,selected:true,matched:true},{seed:1,selected:false},{seed:1,selected:false},{seed:2,selected:true,matched:false},{seed:9,selected:true,matched:true}])"));
+  assert.deepEqual(coverage.rows,[{seed:0,observed:1,selected:true,matched:true},{seed:1,observed:2,selected:false,matched:false},{seed:2,observed:1,selected:true,matched:false},{seed:3,observed:0,selected:false,matched:false}]);
+  assert.deepEqual(coverage.unexpected,[9]);
+  assert.equal(evaluate("(()=>{try{ATIMAAnalysis.campaignCoverage([1,1],[]);return false}catch{return true}})()"),true);
+  const view=evaluate("campaignCoveragePanel('fixture', [b], [b], [a,b])");
+  assert.ok(view.textContent.includes("cannot prove completeness"));
+  const field=view.querySelector("input");field.value="0,1,2";
+  view.querySelector("button").dispatch("click");
+  assert.ok(view.textContent.includes("2 planned seeds not observed"));
+});
+check("variability bands are optional and do not bridge gaps in validation history",()=>{
+  context.bandA=structuredClone(context.a);context.bandB=structuredClone(context.b);
+  context.bandA.history=[{round:1,macro_f1:.3},{round:2,macro_f1:.4},{round:4,macro_f1:.5}];
+  context.bandB.history=[{round:1,macro_f1:.7},{round:2,macro_f1:.8},{round:4,macro_f1:.9}];
+  const curve=evaluate("seedCurve([bandA,bandB])");
+  assert.equal(curve.querySelectorAll("polygon").length,1);
+  assert.ok(curve.textContent.includes("not a confidence interval"));
+  const toggle=curve.querySelector("input");toggle.checked=false;toggle.dispatch("change");
+  assert.equal(curve.querySelectorAll("polygon").length,0);
+  assert.equal(curve.querySelectorAll("polyline").length,2);
+});
+check("sensitivity uses common matched seeds rather than unrelated cohort means",()=>{
+  context.sweepA=structuredClone(context.lcg0);
+  context.sweepB=structuredClone(context.lcg0);
+  context.sweepA.id="SweepA";context.sweepB.id="SweepB";
+  context.sweepA.seed_condition={key:"level-a"};
+  context.sweepB.seed_condition={key:"level-b"};
+  context.sweepA.sensitivity_conditions=[{axis:"attack_params.factor",key:"family",value:1}];
+  context.sweepB.sensitivity_conditions=[{axis:"attack_params.factor",key:"family",value:2}];
+  context.sweepB.metrics.test.macro_f1=.2;
+  const result=plain(evaluate("(()=>{const values=[sweepA,sweepB,clean0];const families=sensitivityFamilies(values);const summary=sensitivitySummary(families[0][1],values,r=>testMetrics(r).macro_f1);return {count:families.length,common:summary.common,means:summary.rows.map(r=>r.stats.attack.mean)}})()"));
+  assert.equal(result.count,1);assert.deepEqual(result.common,[0]);assert.deepEqual(result.means,[.4,.2]);
+  context.sweepB.baseline_id="missing";
+  assert.deepEqual(plain(evaluate("sensitivitySummary(sensitivityFamilies([sweepA,sweepB,clean0])[0][1],[sweepA,sweepB,clean0],r=>testMetrics(r).macro_f1).common")),[]);
+});
+check("cohort CSV protects text cells and requires audited confusion axes",()=>{
+  const csv=evaluate("ATIMAAnalysis.csv([['=2+2','a,b',-2,null]])");
+  assert.equal(csv, "\"'=2+2\",\"a,b\",\"-2\",\"\"\r\n");
+  context.noAudit=structuredClone(context.a);context.noAudit.classes=[];
+  assert.equal(evaluate("validMatrix(noAudit)"),false);
+  const rows=plain(evaluate("cohortReportRows([lcg0],[lcg0,clean0])"));
+  assert.equal(rows[0][9],"Matched clean mean");
+  assert.ok(!JSON.stringify(rows).includes("CleanSeed0"));
 });
 console.log(checks+" functional Results checks passed.");

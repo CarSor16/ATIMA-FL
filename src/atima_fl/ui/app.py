@@ -8,12 +8,13 @@ import secrets
 from urllib.parse import urlparse, unquote
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
-from atima_fl.engine.plans import save_plan, save_defense_study
+from atima_fl.engine.plans import save_plan, save_defense_study, save_seed_batch, save_parameter_sweep
 from atima_fl.ui.cluster_results import (
     connection_settings, read_local_history, sync_cluster_results,
 )
 from atima_fl.ui.cluster_datasets import discover_cluster_datasets
 from atima_fl.ui.result_groups import result_group
+from atima_fl.ui.seed_analysis import seed_condition, sensitivity_conditions
 from atima_fl.ui.campaign_preview import paired_seed_preview
 
 STATIC = Path(__file__).parent / "static"
@@ -82,6 +83,7 @@ def results(workspace):
         final_path = path.parent / "final_metrics.json"
         final = json.loads(final_path.read_text(encoding="utf-8")) if final_path.exists() else {}
         config = manifest.get("config", {})
+        eligibility = seed_condition(manifest)
         values.append({
             "id": path.parent.name,
             "updated_at": datetime.fromtimestamp(
@@ -91,11 +93,16 @@ def results(workspace):
             "round": manifest.get("last_valid_round"),
             "config": config,
             "group": result_group(manifest, path.parent.name),
+            "seed_condition": eligibility,
+            "sensitivity_conditions": sensitivity_conditions(manifest, eligibility),
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
             "dataset_identity": _result_dataset_identity(manifest),
-            "history": read_local_history(path.parent / "validation_history.json"),
+            "history": read_local_history(
+                path.parent / "validation_history.json",
+                classes=manifest.get("dataset_audit", {}).get("classes"),
+            ),
             "baseline_id": None,
             "_identity": _result_runtime_identity(manifest),
         })
@@ -201,6 +208,8 @@ class Handler(BaseHTTPRequestHandler):
             assets = {
                 "/": ("index.html", "text/html; charset=utf-8"),
                 "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                "/analysis-core.js": ("analysis-core.js", "text/javascript; charset=utf-8"),
+                "/local-results.js": ("local-results.js", "text/javascript; charset=utf-8"),
                 "/results.js": ("results.js", "text/javascript; charset=utf-8"),
                 "/fl-diagnostics.js": ("fl-diagnostics.js", "text/javascript; charset=utf-8"),
                 "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
@@ -289,6 +298,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(
                     200, sync_cluster_results(self.server.workspace, offset=body["offset"])
                 )
+            if self.path == "/api/parameter-sweep":
+                if not isinstance(body, dict) or set(body) != {"config", "seeds", "axis", "values"}:
+                    raise ValueError("Sweep export requires config, seeds, axis and values")
+                config = ExperimentConfig.from_dict(body["config"])
+                if str(config.plugin_directory or "") != str(self.server.plugins or ""):
+                    raise ValueError("Use the plugin directory chosen when starting the GUI")
+                directory = save_parameter_sweep(config, self.server.workspace, body["seeds"], body["axis"], body["values"])
+                campaign = json.loads((directory / "campaign.json").read_text(encoding="utf-8"))
+                return self.respond(201, {
+                    "name": directory.name, "runs": campaign["runs"],
+                    "download": f"/api/plans/{directory.name}/plan.zip",
+                })
+            if self.path == "/api/seed-batch":
+                if not isinstance(body, dict) or set(body) != {"config", "seeds"}:
+                    raise ValueError("Batch export requires config and seeds")
+                config = ExperimentConfig.from_dict(body["config"])
+                if str(config.plugin_directory or "") != str(self.server.plugins or ""):
+                    raise ValueError("Use the plugin directory chosen when starting the GUI")
+                directory = save_seed_batch(config, self.server.workspace, body["seeds"])
+                return self.respond(201, {
+                    "name": directory.name,
+                    "directory": str(directory),
+                    "download": f"/api/plans/{directory.name}/plan.zip",
+                })
             config = ExperimentConfig.from_dict(body)
             if str(config.plugin_directory or "") != str(self.server.plugins or ""):
                 raise ValueError("Use the plugin directory chosen when starting the GUI")
