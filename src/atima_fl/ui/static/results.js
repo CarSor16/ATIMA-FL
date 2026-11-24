@@ -724,11 +724,8 @@ function seedLabel(r){
   return [names[c.attack]||c.attack,distribution,classNames(r).length+" classes",c.attack==="none"?"0 malicious":(c.malicious_clients?.length??"?")+" malicious",c.model,c.training_method||"standard"].filter(Boolean).join(" · ");
 }
 function seedChosen(key,runs){
-  return seedBuckets(runs).flatMap(([seed,items])=>{
-    const saved=seedSelections.get(key+"|"+seed);
-    const run=items.find(r=>r.id===saved)||(saved!==""&&items.length===1?items[0]:null);
-    return run?[run]:[];
-  });
+  // Equal weight per distinct seed. Conflicting replicas must not silently bias the mean.
+  return seedBuckets(runs).flatMap(([,items])=>items.length===1?items:[]);
 }
 function seedMatched(runs,allRuns){
   const byId=new Map(allRuns.map(r=>[r.id,r]));
@@ -866,8 +863,8 @@ function campaignCoveragePanel(key,runs,chosen,allRuns){
 }
 function seedSummary(root,runs,allRuns){
   root.replaceChildren();
-  if(!runs.length){root.append(node("p","Select at least one seed to inspect this condition."));return;}
-  if(runs.length===1)root.append(node("p","Only one seed selected; this is a single observation, not a replicated estimate."));
+  if(!runs.length){root.append(node("p","No unambiguous compatible seed is available. Inspect individual runs below."));return;}
+  if(runs.length===1)root.append(node("p","Only one seed available; this is a single observation, not a replicated estimate."));
   const headings=["Metric","Mean","SD","Min","Max","Available seeds"];
   const final=node("section",undefined,"seed-block");
   final.append(node("h4","Final test metrics across seeds"),dataTable(headings,seedMetricRows(runs,[
@@ -894,7 +891,6 @@ function seedSummary(root,runs,allRuns){
   root.append(paired,seedMatrixSummary(runs,pairs));
 }
 let seedWorkspaceReady=false;
-const seedSelections=new Map();
 function refreshSeedWorkspace(){
   const enabled=$("seed-analysis-enabled"),body=$("seed-analysis-content");
   if(!enabled||!body)return;
@@ -920,7 +916,7 @@ function refreshSeedWorkspace(){
     const clean=seedStats(valid.map(p=>metric(p.clean))),attack=seedStats(valid.map(p=>metric(p.run)));
     const card=node("article",undefined,"seed-cohort-card"),button=node("button",seedLabel(runs[0]),"text-button");button.type="button";
     button.addEventListener("click",()=>{select.value=key;refreshSeedWorkspace();});
-    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds selected · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
+    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
     overview.append(card);
   }
   $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
@@ -934,19 +930,15 @@ function refreshSeedWorkspace(){
   const configDetail=node("details");
   const cfg={...runs[0].config};delete cfg.seed;delete cfg.name;delete cfg.paired_clean;
   configDetail.append(node("summary","Recorded condition and parameters"),node("pre",JSON.stringify(cfg,null,2)));selection.append(configDetail);
-  const buckets=seedBuckets(runs),chosen=[];
-  const controls=node("div",undefined,"seed-selection-grid");
-  for(const [seed,items] of buckets){
-    const key=select.value+"|"+seed;
-    const choice=choiceControl("Seed "+seed,[["","Exclude / choose replicate"],...items.map(r=>[r.id,r.id])],"");
-    const previous=seedSelections.get(key);
-    choice.select.value=items.some(r=>r.id===previous)?previous:previous===""?"":items.length===1?items[0].id:"";
-    const run=items.find(r=>r.id===choice.select.value);if(run)chosen.push(run);
-    if(items.length>1)choice.label.append(node("span"," Duplicate seed — choose at most one.","warning"));
-    choice.select.addEventListener("change",()=>{seedSelections.set(key,choice.select.value);refreshSeedWorkspace();});
-    controls.append(choice.label);
+  const buckets=seedBuckets(runs),chosen=seedChosen(select.value,runs);
+  const duplicates=buckets.filter(([,items])=>items.length>1);
+  selection.append(node("p",chosen.length+" distinct compatible seeds included automatically. SD is sample standard deviation; missing metrics are not zero."));
+  if(duplicates.length){
+    const details=node("details");
+    details.append(node("summary","Ambiguous duplicate seeds excluded"),node("p","Use the individual experiment view to inspect a specific replica. No replica is chosen arbitrarily."));
+    details.append(dataTable(["Seed","Run IDs"],duplicates.map(([seed,items])=>[seed,items.map(r=>r.id).join(", ")])));
+    selection.append(details);
   }
-  selection.append(node("p",chosen.length+" distinct seeds selected; duplicate seeds are never counted twice. SD is sample standard deviation; missing metrics are not zero."),controls);
   selection.append(campaignCoveragePanel(select.value,runs,chosen,availableResults));
   seedSummary(output,chosen,availableResults);
 }
