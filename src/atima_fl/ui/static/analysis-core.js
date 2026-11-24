@@ -62,5 +62,15 @@ const ATIMAAnalysis = (() => {
       unexpected:[...bySeed.keys()].filter(seed=>!expected.includes(seed)).sort((a,b)=>a-b)
     };
   }
-  return Object.freeze({stats,pairedStats,meanMatrices,pairedMatrices,campaignCoverage});
+  // Quote every cell. Untrusted text cannot become a spreadsheet formula.
+  function csv(rows){
+    const cell=value=>{
+      if(value===null||value===undefined)return '""';
+      let raw=finite(value)?String(value):String(value);
+      if(typeof value!=="number"&&/^[\s]*[=+\-@]/.test(raw))raw="'"+raw;
+      return '"'+raw.replace(/"/g,'""')+'"';
+    };
+    return rows.map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
+  }
+  return Object.freeze({stats,pairedStats,meanMatrices,pairedMatrices,campaignCoverage,csv});
 })();
