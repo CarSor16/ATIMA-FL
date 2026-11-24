@@ -284,4 +284,18 @@ check("variability bands are optional and do not bridge gaps in validation histo
   assert.equal(curve.querySelectorAll("polygon").length,0);
   assert.equal(curve.querySelectorAll("polyline").length,2);
 });
+check("sensitivity uses common matched seeds rather than unrelated cohort means",()=>{
+  context.sweepA=structuredClone(context.lcg0);
+  context.sweepB=structuredClone(context.lcg0);
+  context.sweepA.id="SweepA";context.sweepB.id="SweepB";
+  context.sweepA.seed_condition={key:"level-a"};
+  context.sweepB.seed_condition={key:"level-b"};
+  context.sweepA.sensitivity_conditions=[{axis:"attack_params.factor",key:"family",value:1}];
+  context.sweepB.sensitivity_conditions=[{axis:"attack_params.factor",key:"family",value:2}];
+  context.sweepB.metrics.test.macro_f1=.2;
+  const result=plain(evaluate("(()=>{const values=[sweepA,sweepB,clean0];const families=sensitivityFamilies(values);const summary=sensitivitySummary(families[0][1],values,r=>testMetrics(r).macro_f1);return {count:families.length,common:summary.common,means:summary.rows.map(r=>r.stats.attack.mean)}})()"));
+  assert.equal(result.count,1);assert.deepEqual(result.common,[0]);assert.deepEqual(result.means,[.4,.2]);
+  context.sweepB.baseline_id="missing";
+  assert.deepEqual(plain(evaluate("sensitivitySummary(sensitivityFamilies([sweepA,sweepB,clean0])[0][1],[sweepA,sweepB,clean0],r=>testMetrics(r).macro_f1).common")),[]);
+});
 console.log(checks+" functional Results checks passed.");
