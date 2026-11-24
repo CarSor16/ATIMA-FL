@@ -4,6 +4,8 @@ No workspace files, manifests, weights, environment variables or credentials
 are read or included. Only a new output directory is accepted.
 """
 import argparse
+import json
+from dataclasses import asdict
 from pathlib import Path
 import shutil
 
@@ -11,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src/atima_fl/ui/static"
 ASSETS = (
     "style.css", "i18n.js", "analysis-core.js", "local-results.js",
-    "results.js", "fl-diagnostics.js", "web-folder.js", "web-bootstrap.js", "atima-shield-hd.png",
+    "results.js", "fl-diagnostics.js", "web-folder.js", "web-designer.js", "web-bootstrap.js", "atima-shield-hd.png",
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -57,7 +59,29 @@ def build(output):
     results = replace_once(results, '<section id="manual-comparison"', folder + '<section id="manual-comparison"')
     # Avoid claiming that imported metadata has been independently verified.
     results = results.replace('Paired attack vs baseline', 'Metadata-matched attack vs baseline')
-    scripts = "".join(f'<script defer src="./{name}"></script>' for name in ASSETS if name.endswith(".js"))
+    from atima_fl.core.configuration import ExperimentConfig
+    from atima_fl.core.registry import Registry
+    from atima_fl.studio.web_plan import LOCAL_FIELDS
+
+    defaults = {k: v for k, v in asdict(ExperimentConfig()).items() if k not in LOCAL_FIELDS}
+    catalog = json.dumps({"defaults": defaults, "catalog": Registry().catalog()}, ensure_ascii=True, allow_nan=False)
+    designer = """<details class="card" id="web-designer"><summary>Experiment Designer · draft profiles</summary>
+<p>Design a single run, multi-seed batch or parameter sweep. No data or credentials are required. Browser checks cover schema and common bounds; plugin hooks and deployment preflight require Local Studio.</p>
+<div class="fields" id="web-design-fields"></div>
+<div class="component-grid" id="web-design-components"></div>
+<label>Ordered defense stages (JSON array of id and params)<textarea id="web-design-defenses" rows="3">[]</textarea></label>
+<div class="fields">
+<label>Mode<select id="web-design-mode"><option value="single">Single experiment</option><option value="batch">Multi-seed batch</option><option value="sweep">Parameter sweep</option></select></label>
+<label>Campaign seeds<input id="web-design-seeds" value="0,1,2,3,4,5,6,7,8,9,10"></label>
+<label>Sweep axis<select id="web-design-axis"></select></label>
+<label>Sweep levels<input id="web-design-levels" placeholder="Comma-separated values"></label>
+</div><div class="result-actions"><button type="button" class="secondary" id="web-design-axes">Read current sweep axes</button>
+<button type="button" id="web-design-download">Download draft JSON</button></div>
+<p id="web-design-status" role="status" aria-live="polite"></p>
+<p>Validate and export on your PC using the matching ATIMA Studio version:</p>
+<pre>atima-studio web-plan atima-web-draft.json --workspace workspace --dataset-root /path/to/prepared/data</pre>
+<p>Configure cluster resources locally. No training is started.</p></details>"""
+    scripts = '<script defer src="./web-catalog.js"></script>' + "".join(f'<script defer src="./{name}"></script>' for name in ASSETS if name.endswith(".js"))
     html = f"""<!doctype html>
 <html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="{CSP}">
@@ -76,8 +100,9 @@ def build(output):
 <button type="button" class="theme-toggle" id="web-theme">Light mode</button></div></header>
 <section class="card web-privacy"><h2>Local evidence, no upload</h2>
 <p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
-<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Runtime training and validated plan exports remain in Local Studio.</p></section>
+<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></section>
 <noscript><p>JavaScript is required to read and analyze local files.</p></noscript>
+{designer}
 {results}
 <footer class="web-footer">ATIMA-FL · Research software · Static local-first viewer</footer>
 </main></body></html>"""
@@ -86,6 +111,7 @@ def build(output):
         shutil.copyfile(STATIC / name, output / name)
     shutil.copyfile(STATIC / "web.css", output / "web.css")
     (output / "index.html").write_text(html, encoding="utf-8")
+    (output / "web-catalog.js").write_text("const ATIMA_WEB_CATALOG = " + catalog + ";\n", encoding="utf-8")
     (output / ".nojekyll").touch()
 
 
