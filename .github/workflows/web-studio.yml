@@ -48,6 +48,7 @@ jobs:
           python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium firefox webkit
           for browser in chromium firefox webkit; do python scripts/check_web_studio.py _site --browser "$browser"; done
+          python scripts/check_web_studio.py _site --browser chromium --stress
       - uses: actions/upload-artifact@v4
         with:
           name: atima-web-studio
