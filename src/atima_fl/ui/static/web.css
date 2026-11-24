@@ -17,3 +17,44 @@ body.web-viewer main{margin:0 auto;width:100%;max-width:1440px;padding:26px clam
 
 .web-viewer #web-study{margin-top:16px;min-width:0}
 .web-viewer #web-study pre,.web-viewer #web-designer pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:28rem;overflow:auto}
+
+/* Results-first visual hierarchy. System typography keeps the site self-contained. */
+:root{--web-amber:#94600b;--web-amber-soft:#fff3dd}
+:root[data-theme="dark"]{--web-amber:#e6b969;--web-amber-soft:#392f24}
+body.web-viewer{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",sans-serif;font-size:15px;line-height:1.58;-webkit-font-smoothing:antialiased}
+.web-viewer button,.web-viewer input,.web-viewer select,.web-viewer textarea{font-family:inherit;font-size:14px}
+.web-viewer h1,.web-viewer h2,.web-viewer h3{font-family:inherit;letter-spacing:-.025em;font-weight:650}
+.web-viewer .result-table{font-size:13px;line-height:1.55;font-variant-numeric:tabular-nums}
+.web-viewer .result-kpi strong,.web-viewer .overview-number{font-variant-numeric:tabular-nums;letter-spacing:-.025em}
+.web-viewer .web-header{padding-bottom:14px;margin-bottom:8px}
+.web-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}
+.web-nav a{padding:8px 14px;border-radius:7px;color:var(--ink);font-weight:600;text-decoration:none}
+.web-nav a:first-child{background:var(--accent-soft);color:var(--accent-strong)}
+.web-nav a:hover,.web-nav a:focus-visible{outline:2px solid var(--web-amber);outline-offset:2px}
+.web-nav span{margin-left:auto;font-size:12px;color:var(--muted)}
+.web-viewer .web-import{padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:12px 0}
+.web-viewer .web-import p{margin:8px 0;font-size:13px}
+.web-viewer .web-import .result-actions{margin:8px 0}
+.web-viewer .web-folder-drawer,.web-viewer .web-filter-drawer,.web-viewer .web-run-meta,.web-viewer .web-cohort-drawer{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0}
+.web-viewer .web-folder-drawer summary,.web-viewer .web-filter-drawer summary,.web-viewer .web-run-meta summary,.web-viewer .web-cohort-drawer summary{cursor:pointer;font-weight:600;font-size:13px}
+.web-viewer #manual-comparison{margin:16px 0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.web-viewer .analysis-heading{margin-bottom:10px}
+.web-viewer .analysis-selection .experiment-choices,.web-viewer .manual-compare-controls{margin-top:12px}
+.web-viewer .web-run-meta:not([open]){padding:6px 10px;margin:6px 0 0}
+.web-viewer .web-selected-label{display:flex;gap:8px 14px;align-items:baseline;flex-wrap:wrap;border-left:3px solid var(--web-amber);padding:9px 12px;background:var(--web-amber-soft);border-radius:0 6px 6px 0;font-size:13px}
+.web-viewer .web-selected-label span{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--web-amber);letter-spacing:.07em}
+.web-viewer .web-selected-label strong{overflow-wrap:anywhere;font-weight:600}
+.web-viewer #seed-results-panel{padding:0;border-color:var(--line)}
+.web-viewer #web-seed-menu>summary{padding:14px 16px;cursor:pointer;color:var(--web-amber);font-weight:650}
+.web-viewer #web-seed-menu>summary small{display:block;margin:4px 0 0 17px;font-size:12px;font-weight:450;color:var(--muted);overflow-wrap:anywhere}
+.web-viewer #web-seed-menu[open]>summary{background:var(--web-amber-soft);border-radius:10px 10px 0 0}
+.web-viewer #web-seed-menu>.analysis-heading,.web-viewer #web-seed-menu>#seed-analysis-content{padding:12px 16px}
+.web-viewer #web-seed-menu>.analysis-heading h3{display:none}
+.web-viewer .web-cohort-drawer[open] .seed-cohort-overview{max-height:420px;overflow:auto;margin-top:12px}
+.web-viewer #web-designer>summary,.web-viewer #web-study>summary,.web-viewer .web-privacy>summary{cursor:pointer;color:var(--web-amber);font-weight:650}
+.web-viewer .web-privacy{margin-top:16px;padding:14px 18px}
+.web-viewer .results-overview{margin-bottom:12px}
+.web-viewer .results-workspace-tools{font-size:12px}
+.web-viewer #results-workspace-panels{display:grid;gap:14px}
+.web-viewer #results-workspace-panels>*{min-width:0;margin:0}
+@media(max-width:600px){.web-nav span{margin-left:0;width:100%}.web-viewer #manual-comparison{padding:12px}.web-viewer .web-selected-label{display:grid}.web-viewer .web-header h1{font-size:25px}}
