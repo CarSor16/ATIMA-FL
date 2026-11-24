@@ -99,11 +99,14 @@ const ATIMAStudy=(()=>{
       }
       for(const r of study.observations){
         const c=r.config;
-        const missing=hashes.filter(k=>!r.dataset_hashes[k]);
-        if(r.status!=="complete"||!finite(r.metrics[metric])||missing.length||!r.task||!Number.isSafeInteger(r.metrics.samples)||r.metrics.samples<=0||!Number.isSafeInteger(r.round)||r.round<=0||
-          fields.some(k=>!token(c[k]))||nums.some(k=>!finite(c[k]))||!Number.isSafeInteger(c.seed)||c.seed<0||!Number.isSafeInteger(c.malicious_count)||c.malicious_count<0){
-          excluded.push({study:study.title,id:r.id});continue;
-        }
+        const missing=hashes.filter(k=>!r.dataset_hashes[k]),missingFields=[...fields.filter(k=>!token(c[k])),...nums.filter(k=>!finite(c[k]))],reasons=[];
+        if(r.status!=="complete")reasons.push("Run incomplete");
+        if(!finite(r.metrics[metric]))reasons.push("Selected metric missing");
+        if(missing.length)reasons.push("Missing dataset fingerprints: "+missing.join(", "));
+        if(missingFields.length)reasons.push("Missing recorded conditions: "+missingFields.join(", "));
+        if(!r.task||!Number.isSafeInteger(r.metrics.samples)||r.metrics.samples<=0||!Number.isSafeInteger(r.round)||r.round<=0)reasons.push("Missing task, sample count or completed round");
+        if(!Number.isSafeInteger(c.seed)||c.seed<0||!Number.isSafeInteger(c.malicious_count)||c.malicious_count<0)reasons.push("Invalid seed or malicious count");
+        if(reasons.length){excluded.push({study:study.title,id:r.id,reasons});continue;}
         const {seed,...condition}=c;
         const key=signature({condition,task:r.task,hashes:r.dataset_hashes,round:r.round,samples:r.metrics.samples,condition_sha256:r.condition_sha256??null});
         if(!groups.has(key))groups.set(key,{condition,task:r.task,round:r.round,samples:r.metrics.samples,identity:r.condition_sha256?"Declared full-condition fingerprint match":"Reduced-summary match only",studies:new Map()});
@@ -150,6 +153,15 @@ function setupStudyExchange(){
     const audit=node("details");audit.append(node("summary","Cross-study condition audit and separate seed statistics"));
     const comparison=ATIMAStudy.comparisonGroups([...studies.values()],key);
     audit.append(node("p",comparison.matches.length+" matching recorded conditions across studies; "+comparison.excluded.length+" observations lack complete comparison metadata."));
+    if(comparison.excluded.length){
+      const why=node("details"),counts=new Map();
+      for(const entry of comparison.excluded)for(const reason of entry.reasons){
+        const k=JSON.stringify([entry.study,reason]);
+        counts.set(k,(counts.get(k)||0)+1);
+      }
+      why.append(node("summary","Why observations are excluded from condition statistics"),dataTable(["Study","Reason","Observations"],[...counts].map(([k,n])=>[...JSON.parse(k),n])));
+      audit.append(why);
+    }
     audit.append(node("p","Matching summary fields do not verify full configuration, software, sample identity or study independence. Means and sample SD are computed separately within each study. Reported within-study pairs use only compatible declared clean references. No pooled estimates, causal effects or significance tests."));
     for(const group of comparison.matches.slice(0,50)){
       const detail=node("details"),condition=group.condition;
