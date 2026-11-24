@@ -18,8 +18,8 @@ copies an explicit allowlist of UI assets only, not the repository, workspace,
 examples, logs, environment files, SSH settings or experiment artifacts.
 
 The Web Studio workflow checks JavaScript, the local-file reader and the shared
-Results fixtures, then exercises the generated site in Chromium using synthetic
-results under an ATIMA-FL subpath. Network is blocked after initial loading.
+Results fixtures, then exercises the generated site in Chromium, Firefox and WebKit using synthetic
+results under an ATIMA-FL subpath. A 203-run Chromium stress case opens every individual report. WebKit is a browser-engine test, not a guarantee for every installed Safari version. Network is blocked after initial loading.
 The test also exercises local draft and study-summary downloads and multi-study import. Pushes build and test only. Publication requires an explicit workflow dispatch.
 
 ## Free GitHub Pages activation
@@ -90,10 +90,30 @@ before sharing; filtering is not a guarantee against arbitrary secrets.
 
 Import up to ten study summaries (at most 1,000 observations and 8 MiB per
 file). Duplicate summaries are ignored. Select a metric and filter the
-paginated observations to compare studies descriptively. The format omits
-full provenance and does not establish scientific equivalence; no cross-study
-seed pooling, statistical inference, automatic publication or network transfer
-is performed. The summaries remain in memory until cleared or the tab closes.
+paginated observations. Version 2 optionally exports SHA-256 digests of
+the exact browser-local audited condition and test population metadata, and
+anonymized clean-run references when the local metadata pairing gate passes.
+Version 1 remains readable. Full-condition fingerprints are claims in the
+imported file, not independent authentication or verification. Reduced-summary
+matches stay separate from full-condition matches. Comparisons use distinct
+unambiguous seeds, report each study separately, and show within-study paired
+clean and attacked means, differences and sample SD only where declared
+references are compatible and unambiguous. Different declared clean conditions
+are explicitly flagged. The format omits full provenance and cannot establish
+study independence. No cross-study seed pooling, causal inference, significance
+tests, automatic publication or network transfer is performed. The summaries
+remain in memory until cleared or the tab closes.
+
+To audit a private folder after installing Playwright and Chromium locally:
+
+```sh
+python scripts/check_web_studio.py _site --results-folder /path/to/results --expected-runs 203
+```
+
+The test serves only the static asset directory, selects the private results
+through the browser file input, blocks outbound requests and opens every report.
+Do not put private results under _site or in the repository. The numerical
+expected-run count is optional and should match the selected campaign.
 
 The site does not perform SSH or schedule jobs.
 
