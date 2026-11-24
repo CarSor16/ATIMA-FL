@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src/atima_fl/ui/static"
 ASSETS = (
     "style.css", "i18n.js", "analysis-core.js", "local-results.js",
-    "results.js", "fl-diagnostics.js", "web-bootstrap.js", "atima-shield-hd.png",
+    "results.js", "fl-diagnostics.js", "web-folder.js", "web-bootstrap.js", "atima-shield-hd.png",
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -46,6 +46,15 @@ def build(output):
                            '<div class="result-actions"><button type="button" class="secondary" id="refresh-results">Re-read selected files</button><label>Choose local results folder')
     results = replace_once(results, 'Choose attacks from All_Attacks_By_Task.pdf',
                            'Choose attacks for the optional research focus')
+    folder = ('<div id="web-folder-access" class="hidden card"><h3>Optional folder access</h3>'
+              '<p>On supported browsers, authorize read-only folder access and refresh from disk. '
+              'The saved reference is optional; file contents are never stored.</p>'
+              '<div class="result-actions"><button type="button" class="secondary" id="web-folder-open">Open folder</button>'
+              '<button type="button" class="secondary" id="web-folder-reconnect">Reconnect remembered folder</button>'
+              '<button type="button" class="secondary" id="web-folder-refresh">Refresh authorized folder</button></div>'
+              '<label class="chart-check"><input type="checkbox" id="web-folder-remember"> Remember folder reference on this device</label>'
+              '<p id="web-folder-status" role="status" aria-live="polite"></p></div>')
+    results = replace_once(results, '<section id="manual-comparison"', folder + '<section id="manual-comparison"')
     # Avoid claiming that imported metadata has been independently verified.
     results = results.replace('Paired attack vs baseline', 'Metadata-matched attack vs baseline')
     scripts = "".join(f'<script defer src="./{name}"></script>' for name in ASSETS if name.endswith(".js"))
