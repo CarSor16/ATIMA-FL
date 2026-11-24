@@ -57,6 +57,26 @@ def build(output):
               '<label class="chart-check"><input type="checkbox" id="web-folder-remember"> Remember folder reference on this device</label>'
               '<p id="web-folder-status" role="status" aria-live="polite"></p></div>')
     results = replace_once(results, '<section id="manual-comparison"', folder + '<section id="manual-comparison"')
+    # Keep shared control IDs and analysis logic; only change the web presentation.
+    results = replace_once(results, '<div class="page-intro"><div><span class="section-eyebrow">03 / ANALYTICS</span><h2>Experiment analysis</h2><p>Inspect imported evidence. Final test scores and per-round validation remain separate.</p></div></div>', '')
+    results = replace_once(results, '<details class="result-import" open><summary>Local folder · browser-only analysis</summary>', '<details class="result-import web-import" open><summary>Local results folder</summary>')
+    results = replace_once(results, '<div class="experiment-filters">', '<details class="web-filter-drawer"><summary>Search and filter experiments</summary><div class="experiment-filters">')
+    results = replace_once(results, '<div id="experiment-choices"', '</details><div id="experiment-choices"')
+    for slot in ("a", "b"):
+        metadata = f'<div id="experiment-{slot}-metadata" class="selected-run"></div>'
+        results = replace_once(results, metadata, '<details class="web-run-meta"><summary>Recorded configuration</summary>' + metadata + '</details>')
+    results = replace_once(results, '<div id="results-workspace-panels">', '<div id="results-workspace-panels">')
+    results = replace_once(results, '<section id="performance-region"', '<section id="performance-region"')
+    results = replace_once(results, '<div id="performance-overview"></div>', '<p class="web-selected-label"><span>Selected experiment</span><strong id="web-selected-experiment" aria-live="polite">No experiment selected</strong></p><div id="performance-overview"></div>')
+    start_seed = results.index('<section id="seed-results-panel"')
+    end_seed = results.index('</section>', start_seed) + len('</section>')
+    seed = results[start_seed:end_seed]
+    opening = seed.index('>')
+    seed = seed[:opening + 1] + '<details id="web-seed-menu"><summary><span>Multi-seed analysis</span><small id="web-seed-summary">No compatible conditions</small></summary>' + seed[opening + 1:-len('</section>')] + '</details></section>'
+    seed = replace_once(seed, '<div id="seed-cohort-overview" class="seed-cohort-overview"></div>', '<details class="web-cohort-drawer"><summary>Browse all compatible conditions</summary><div id="seed-cohort-overview" class="seed-cohort-overview"></div></details>')
+    results = results[:start_seed] + seed + results[end_seed:]
+    results = results.replace('<div id="web-folder-access" class="hidden card"><h3>Optional folder access</h3>', '<details id="web-folder-access" class="hidden web-folder-drawer"><summary>Remember a folder (optional)</summary>')
+    results = replace_once(results, '<p id="web-folder-status" role="status" aria-live="polite"></p></div>', '<p id="web-folder-status" role="status" aria-live="polite"></p></details>')
     # Avoid claiming that imported metadata has been independently verified.
     results = results.replace('Paired attack vs baseline', 'Metadata-matched attack vs baseline')
     from atima_fl.core.configuration import ExperimentConfig
@@ -107,13 +127,15 @@ def build(output):
 <p>Compare federated intrusion-detection experiments on your device.</p></div></div>
 <div class="header-tools"><label>Language<select id="web-language"><option value="en">English</option><option value="it">Italiano</option></select></label>
 <button type="button" class="theme-toggle" id="web-theme">Light mode</button></div></header>
-<section class="card web-privacy"><h2>Local evidence, no upload</h2>
-<p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
-<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></section>
+
 <noscript><p>JavaScript is required to read and analyze local files.</p></noscript>
-{designer}
+<nav class="web-nav" aria-label="Workspace sections"><a href="#results">Results</a><a href="#web-designer">Designer</a><a href="#web-study">Study Exchange</a><span>Local processing · no upload</span></nav>
 {results}
+{designer}
 {study}
+<details class="card web-privacy"><summary>Privacy and research limitations</summary>
+<p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
+<p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></details>
 <footer class="web-footer">ATIMA-FL · Research software · Static local-first viewer</footer>
 </main></body></html>"""
     output.mkdir(parents=True, exist_ok=False)
