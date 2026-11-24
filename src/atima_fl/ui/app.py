@@ -97,7 +97,10 @@ def results(workspace):
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
             "dataset_identity": _result_dataset_identity(manifest),
-            "history": read_local_history(path.parent / "validation_history.json"),
+            "history": read_local_history(
+                path.parent / "validation_history.json",
+                classes=manifest.get("dataset_audit", {}).get("classes"),
+            ),
             "baseline_id": None,
             "_identity": _result_runtime_identity(manifest),
         })
