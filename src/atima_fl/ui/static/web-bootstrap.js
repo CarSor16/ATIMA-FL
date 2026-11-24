@@ -13,6 +13,9 @@ function updateResultsOverview(values){
   }
 }
 function startStaticViewer(){
+  // Results first; advanced panels keep the same IDs and controls.
+  const panels=$("results-workspace-panels");
+  for(const id of ["performance-region","detail-region","seed-results-panel","individual-reports-region"])panels.append($(id));
   initializeAnalysisControls();
   $("compare-experiment-a").addEventListener("change",()=>{chosenComparison.first=$("compare-experiment-a").value;refreshManualFromChoices();});
   $("compare-experiment-b").addEventListener("change",()=>{chosenComparison.second=$("compare-experiment-b").value;refreshManualFromChoices();});
