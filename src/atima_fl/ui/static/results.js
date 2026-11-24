@@ -528,7 +528,9 @@ function updateManualComparison(values){
   $("result-comparisons").classList.toggle("hidden",!paired);
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.setAttribute("aria-pressed",String(button.dataset.analysisMode===analysisMode));
   $("experiment-filter-status").textContent=visible.length+" / "+values.length+" "+uiText("experiments")+(compatibleOnly&&!single&&!paired?" · "+optionsB.length+" "+uiText("compatible with A"):"");
-  const b=byId.get(chosenComparison.second);selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
+  const b=byId.get(chosenComparison.second);
+  if($("web-selected-experiment"))$("web-selected-experiment").textContent=paired?"Choose a matched clean/attack pair":a?(single?a.id:a.id+" / "+(b?.id||"—")):"No experiment selected";
+  selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
   if(paired){$("manual-comparison-output").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));performanceOverview(null,null,false);$("analysis-panel").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));}
   else manualComparison(a,single?null:b);
   renderPairedTable(visible,byId);
@@ -605,7 +607,7 @@ function researchFocusedRun(run){
 }
 // Multi-seed evidence is descriptive and never substitutes for trajectory-verified CLI statistics.
 function seedStats(values){return ATIMAAnalysis.stats(values);}
-function seedCohorts(values){
+function seedCohorts(values,strict=$("seed-strict-provenance")?.checked===true){
   const groups=new Map(),excluded=[];
   for(const run of values){
     const condition=run.seed_condition;
@@ -616,7 +618,7 @@ function seedCohorts(values){
     }
     const test=testMetrics(run);
     const population=JSON.stringify([test.samples,classNames(run).map(name=>test.per_class[name].support)]);
-    const key=condition.key+"|"+population;
+    const key=(strict?condition.key:condition.protocol_key||condition.key)+"|"+population;
     if(!groups.has(key))groups.set(key,[]);
     groups.get(key).push(run);
   }
@@ -753,7 +755,7 @@ function seedComparisonRows(pairs,descriptors){
 }
 // Sensitivity: keep exact conditions separate and match the same seeds at every level.
 function sensitivityFamilies(values){
-  const {groups}=seedCohorts(values),families=new Map();
+  const {groups}=seedCohorts(values,true),families=new Map();
   for(const [cohort,runs] of groups){
     for(const axis of runs[0].sensitivity_conditions||[]){
       if(!axis.key||!axis.axis)continue;
@@ -884,7 +886,7 @@ function cohortReportRows(runs,allRuns){
     ["Intrusions predicted benign",r=>seedEvasion(r),true],
     ...labels.flatMap(name=>[[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true],
       ...(!/^(benign|normal)$/i.test(name)?[[name+" · Predicted benign",r=>seedEvasion(r,name),true]]:[])])];
-  const condition=seedLabel(runs[0]);
+  const condition=seedLabel(runs[0])+(new Set(runs.map(r=>r.seed_condition?.key)).size>1?" · mixed provenance (descriptive protocol mean)":"");
   return [["Condition","Metric","Unit","Available seeds","Observed mean","Sample SD","Min","Max","Matched seeds","Matched clean mean","Matched attack mean","Attack minus clean","Paired delta sample SD"],
     ...descriptors.map(([label,get,percent])=>{
       const observed=seedStats(runs.map(get));
@@ -958,18 +960,21 @@ function refreshSeedWorkspace(){
     card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
     overview.append(card);
   }
-  $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
+  $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. "+($("seed-strict-provenance")?.checked?"Exact audited shards and source/runtime identities required.":"Grouped by recorded protocol and global dataset identity; provenance may differ.")+"";
   const selection=$("seed-analysis-selection"),output=$("seed-analysis-output");
   selection.replaceChildren();output.replaceChildren();
   if(excluded.length){
     const details=node("details");details.append(node("summary","Excluded runs and reasons"),dataTable(["Experiment","Reason"],excluded.map(r=>[r.id,r.reason])));selection.append(details);
   }
   const runs=groups.get(select.value);
-  if(!runs)return;
+  if(!runs){if($("web-seed-summary"))$("web-seed-summary").textContent="No compatible conditions";return;}
   const configDetail=node("details");
   const cfg={...runs[0].config};delete cfg.seed;delete cfg.name;delete cfg.paired_clean;
   configDetail.append(node("summary","Recorded condition and parameters"),node("pre",JSON.stringify(cfg,null,2)));selection.append(configDetail);
   const buckets=seedBuckets(runs),chosen=seedChosen(select.value,runs);
+  const versions=new Set(runs.map(r=>r.seed_condition.key)).size;
+  if(versions>1)selection.append(node("p","Mixed provenance: "+versions+" exact identities. Shards, software, runtime or resource settings differ. Descriptive protocol mean only; enable strict provenance to separate them.","warning"));
+  if($("web-seed-summary"))$("web-seed-summary").textContent=seedLabel(runs[0])+" · "+chosen.length+" distinct seeds · Macro-F1 "+score(seedStats(chosen.map(r=>testMetrics(r)?.macro_f1)).mean);
   const duplicates=buckets.filter(([,items])=>items.length>1);
   selection.append(node("p",chosen.length+" distinct compatible seeds included automatically. SD is sample standard deviation; missing metrics are not zero."));
   if(duplicates.length){
@@ -1020,6 +1025,7 @@ function setupResultsWorkspace(){
   if(seedWorkspaceReady)return;
   seedWorkspaceReady=true;
   $("seed-analysis-enabled")?.addEventListener("change",refreshSeedWorkspace);
+  $("seed-strict-provenance")?.addEventListener("change",refreshSeedWorkspace);
   $("seed-cohort-choice")?.addEventListener("change",refreshSeedWorkspace);
   $("local-results-folder")?.addEventListener("change",()=>{const files=Array.from($("local-results-folder").files||[]);if(files.length){localResultFiles=files;refreshResults();}});
   $("local-results-reset")?.addEventListener("click",()=>{localResultFiles=null;localResultEvidence=null;$("local-results-folder").value="";refreshResults();});
