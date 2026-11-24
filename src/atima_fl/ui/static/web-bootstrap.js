@@ -28,5 +28,6 @@ function startStaticViewer(){
   localizeDocument();
   renderResults([]);
   updateLocalResultStatus(null);
+  setupWebFolderAccess();
 }
 document.addEventListener("DOMContentLoaded",startStaticViewer,{once:true});
