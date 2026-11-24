@@ -84,6 +84,9 @@ def check_browser(origin, root, engine="chromium"):
         page.locator("#web-designer summary").click()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally", timeout=60000)
+        expect(page.locator("#web-selected-experiment")).not_to_have_text("No experiment selected")
+        assert not page.locator("#web-seed-menu").get_attribute("open") == ""
+        page.locator("#web-seed-menu > summary").click()
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
@@ -93,6 +96,8 @@ def check_browser(origin, root, engine="chromium"):
         assert download.suggested_filename == "atima_cohort_metrics.csv"
         report = Path(download.path()).read_text(encoding="utf-8")
         assert "Matched clean mean" in report and str(root) not in report
+        page.locator("#web-seed-menu > summary").click()
+        expect(page.locator("#seed-analysis-content")).not_to_be_visible()
         # Exercise a real IndexedDB structured-cloned directory handle on this
         # secure loopback origin, without requiring an OS permission dialog.
         if page.evaluate("typeof navigator.storage?.getDirectory === 'function' && typeof window.showDirectoryPicker === 'function'"):
