@@ -33,7 +33,7 @@ const ATIMALocalResults=(()=>{
       const condition=JSON.parse(JSON.stringify(base)),cfg=condition.config;
       if(axis.includes(".")){const dot=axis.indexOf("."),group=axis.slice(0,dot),name=axis.slice(dot+1);delete cfg[group][name];}
       else if(axis==="malicious_count")delete cfg.malicious_clients;
-      else {delete cfg[axis];if(["model","partition"].includes(axis))delete cfg[axis+"_params"];}
+      else {delete cfg[axis];if(["model","partition"].includes(axis)){delete cfg[axis+"_params"];delete condition.source["component/"+axis+"/"+value];}}
       const partition=axis==="partition"||axis.startsWith("partition_params.");
       if(partition)condition.dataset_hashes=Object.fromEntries(hashKeys.map(k=>[k,condition.dataset_hashes[k]]));
       return {axis,value,key:key([axis,condition]),descriptive:partition||axis==="model"};
