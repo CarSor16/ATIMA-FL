@@ -1088,7 +1088,13 @@ function renderResults(values){
     heading.append(node("strong",value.id),node("span",[value.config?.model,value.config?.attack,Number.isInteger(value.group?.seed)?"Seed "+value.group.seed:null,value.status,uiText("Round")+" "+(value.round??"—")].filter(Boolean).join(" · ")));report.append(heading);
     let rendered=false;
     report.addEventListener("toggle",()=>{
-      if(!report.open||rendered)return;rendered=true;
+      if(!report.open){
+        // Release the heavy detail charts while preserving the report header.
+        if(rendered){report.querySelector(".result-report-content")?.remove();rendered=false;}
+        return;
+      }
+      if(rendered)return;
+      rendered=true;
       const content=node("div",undefined,"result-report-content"),metric=testMetrics(value);
       if(metric)content.append(node("h4","Final test metrics"),metricCards(metric));
       else content.append(node("p","Final test metrics are not available for this run."));
