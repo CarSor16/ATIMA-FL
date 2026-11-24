@@ -79,3 +79,65 @@ def seed_condition(manifest):
     except (TypeError, ValueError):
         return {"key": None, "reason": "Invalid protocol metadata"}
     return {"key": hashlib.sha256(raw.encode()).hexdigest(), "reason": None}
+
+
+def sensitivity_conditions(manifest, eligibility):
+    """Derive per-axis comparison families from complete audited manifests.
+
+    Model/partition comparisons are descriptive condition contrasts, not
+    paired experiments between levels. Each level still needs its own clean.
+    """
+    if not eligibility.get("key"):
+        return []
+    config = manifest["config"]
+    if config["attack"] == "none":
+        return []
+    from copy import deepcopy
+    import math
+
+    base = {
+        "config": {k: v for k, v in config.items() if k not in _IGNORED},
+        "dataset_hashes": manifest["dataset_audit"]["hashes"],
+        "task": manifest["dataset_audit"]["task"],
+        "classes": manifest["dataset_audit"]["classes"],
+        "source": manifest["source_identity"],
+        "runtime": manifest["runtime"],
+        "attack_source": manifest.get("attack_source"),
+        "round": manifest["last_valid_round"],
+    }
+    axes = []
+    for field in ("attack_params", "partition_params"):
+        for key, value in config[field].items():
+            if type(value) in (int, float) and math.isfinite(value):
+                axes.append((f"{field}.{key}", value))
+    for field in ("model", "partition", "attack_start", "attack_end"):
+        axes.append((field, config[field]))
+    ids = config["malicious_clients"]
+    if sorted(ids) == list(range(len(ids))):
+        axes.append(("malicious_count", len(ids)))
+    result = []
+    for axis, value in axes:
+        condition = deepcopy(base)
+        cfg = condition["config"]
+        if "." in axis:
+            group, key = axis.split(".", 1)
+            cfg[group].pop(key)
+        elif axis == "malicious_count":
+            cfg.pop("malicious_clients")
+        else:
+            cfg.pop(axis)
+            if axis in {"model", "partition"}:
+                cfg.pop(axis + "_params")
+        descriptive = axis == "model" or axis == "partition" or axis.startswith("partition_params.")
+        if axis == "partition" or axis.startswith("partition_params."):
+            # Global train/validation/test, schema and labels remain identical.
+            # Shard/assignment identity is deliberately allowed to change.
+            condition["dataset_hashes"] = {
+                k: v for k, v in condition["dataset_hashes"].items()
+                if k in _GLOBAL_HASHES and k != "assignment"
+            }
+        raw = json.dumps([axis, condition], sort_keys=True, allow_nan=False, separators=(",", ":"))
+        result.append({"axis": axis, "value": value,
+                       "key": hashlib.sha256(raw.encode()).hexdigest(),
+                       "descriptive": descriptive})
+    return result
