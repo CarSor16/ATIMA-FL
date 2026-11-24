@@ -293,6 +293,9 @@ function resultMatches(run,query,filters){
   const haystack=[run.id,...FILTER_KEYS.map(key=>runField(run,key))].join(" ").toLocaleLowerCase();
   return haystack.includes(query.trim().toLocaleLowerCase()) && FILTER_KEYS.every(key=>!filters[key]||runField(run,key)===filters[key]);
 }
+function pairEvidenceLabel(local,original){
+  return typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY||typeof localResultFiles!=="undefined"&&localResultFiles!==null?local:original;
+}
 function verifiedPair(run,byId){
   const baseline=byId.get(run.baseline_id);
   if(!baseline || baseline.config?.attack!=="none" || !run.config?.attack || run.config.attack==="none"
@@ -480,8 +483,8 @@ function manualComparison(first,second){
     for(const reason of validation.blockers)root.append(node("p",reason,"error"));
     performanceOverview(first,second,false);renderAnalysis();return;
   }
-  root.append(node("strong",verified?"Verified clean/attack pair":"Compatible dataset · descriptive A/B comparison","comparison-verified"));
-  root.append(node("p",verified?"Verified clean/attack pair. Δ always means B minus A; reverse the selections to change direction.":"Exploratory comparison, not a verified paired attack effect. Δ always means B minus A."));
+  root.append(node("strong",verified?pairEvidenceLabel("Metadata-matched clean/attack pair","Verified clean/attack pair"):"Compatible dataset · descriptive A/B comparison","comparison-verified"));
+  root.append(node("p",verified?pairEvidenceLabel("Metadata-matched clean/attack pair. Δ means B minus A. The underlying files are not independently verified.","Verified clean/attack pair. Δ always means B minus A; reverse the selections to change direction."):"Exploratory comparison, not a verified paired attack effect. Δ always means B minus A."));
   for(const warning of validation.warnings)root.append(node("p",warning,"warning"));
   performanceOverview(first,second,true);renderAnalysis();
 }
@@ -526,7 +529,7 @@ function updateManualComparison(values){
   for(const button of document.querySelectorAll("[data-analysis-mode]"))button.setAttribute("aria-pressed",String(button.dataset.analysisMode===analysisMode));
   $("experiment-filter-status").textContent=visible.length+" / "+values.length+" "+uiText("experiments")+(compatibleOnly&&!single&&!paired?" · "+optionsB.length+" "+uiText("compatible with A"):"");
   const b=byId.get(chosenComparison.second);selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
-  if(paired){$("manual-comparison-output").replaceChildren(node("p","Choose a verified pair to open its A/B analysis."));performanceOverview(null,null,false);$("analysis-panel").replaceChildren(node("p","Choose a verified pair to open its A/B analysis."));}
+  if(paired){$("manual-comparison-output").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));performanceOverview(null,null,false);$("analysis-panel").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));}
   else manualComparison(a,single?null:b);
   renderPairedTable(visible,byId);
 }
@@ -536,8 +539,8 @@ function clearResultFilters(){
 function renderPairedTable(values,byId){
   const root=$("result-comparisons");root.replaceChildren();
   const paired=values.filter(run=>verifiedPair(run,byId));
-  if(!paired.length){root.append(node("p","No verified clean/attack pairs available. Individual reports remain available."));return;}
-  root.append(node("p","Delta = attacked − clean baseline. Only backend-associated, dataset-compatible pairs are listed."));
+  if(!paired.length){root.append(node("p",pairEvidenceLabel("No metadata-matched clean/attack pairs available. Individual reports remain available.","No verified clean/attack pairs available. Individual reports remain available.")));return;}
+  root.append(node("p","Delta = attacked − clean baseline. Only metadata-associated, dataset-compatible pairs are listed."));
   const classes=[...new Set(paired.flatMap(classNames))];
   const metric=choiceControl("Per-class metric",[["recall","Recall"],["precision","Precision"],["f1-score","F1"]],"recall");
   const cls=choiceControl("Class",classes.map(name=>[name,name]),classes.find(name=>name.toLowerCase()==="dos")||classes[0]);
@@ -545,7 +548,7 @@ function renderPairedTable(values,byId){
   function redraw(){
     tableRoot.replaceChildren();const table=dataTable(["Attack experiment","Clean baseline","Model","Dataset / task","Δ accuracy","Δ macro-F1","Per-class delta","Verification"],paired.map(run=>{
       const clean=byId.get(run.baseline_id),a=testMetrics(clean),b=testMetrics(run);
-      return [run.id,clean.id,run.config?.model||"—",[run.config?.dataset,run.dataset_identity?.task].filter(Boolean).join(" / "),deltaScore(b?.accuracy,a?.accuracy),deltaScore(b?.macro_f1,a?.macro_f1),cls.select.value+" · "+deltaScore(b?.per_class?.[cls.select.value]?.[metric.select.value],a?.per_class?.[cls.select.value]?.[metric.select.value]),"Verified"];
+      return [run.id,clean.id,run.config?.model||"—",[run.config?.dataset,run.dataset_identity?.task].filter(Boolean).join(" / "),deltaScore(b?.accuracy,a?.accuracy),deltaScore(b?.macro_f1,a?.macro_f1),cls.select.value+" · "+deltaScore(b?.per_class?.[cls.select.value]?.[metric.select.value],a?.per_class?.[cls.select.value]?.[metric.select.value]),pairEvidenceLabel("Metadata matched","Verified")];
     }));
     for(const [i,row] of [...table.querySelectorAll("tbody tr")].entries()){
       const run=paired[i],button=node("button",run.id,"pair-link");button.type="button";
