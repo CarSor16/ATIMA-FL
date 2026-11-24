@@ -34,3 +34,5 @@ id_dsa*
 secrets/
 ATIMA-workspace/
 Workspace_ATIMA/
+cluster_dataset_paths.json
+deployment_defaults.json
