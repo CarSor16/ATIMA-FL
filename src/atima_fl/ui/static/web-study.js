@@ -30,8 +30,22 @@ const ATIMAStudy=(()=>{
     if(!Array.isArray(runs)||!runs.length||runs.length>1000)throw Error("Choose 1–1000 runs");
     return {schema:"atima.study.summary",version:1,title,observations:runs.map(observation)};
   }
+  async function createWithEvidence(title,runs){
+    const doc=create(title,runs);doc.version=2;
+    for(let i=0;i<runs.length;i++){
+      const run=runs[i],r=doc.observations[i],test=run.metrics?.test;
+      const order=run.classes,source=run.seed_condition?.key;
+      if(!source||typeof source!=="string"||!Array.isArray(order)||order.length<2||!order.every(name=>Number.isSafeInteger(test?.per_class?.[name]?.support)&&test.per_class[name].support>=0))continue;
+      const support=order.map(name=>test.per_class[name].support);
+      if(support.reduce((a,b)=>a+b,0)!==test.samples||!globalThis.crypto?.subtle)continue;
+      const bytes=new TextEncoder().encode(JSON.stringify([source,order,support,test.samples]));
+      const digest=await crypto.subtle.digest("SHA-256",bytes);
+      r.condition_sha256=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+    }
+    return doc;
+  }
   function parse(value){
-    if(!object(value)||value.schema!=="atima.study.summary"||value.version!==1||!token(value.title)||!Array.isArray(value.observations)||!value.observations.length||value.observations.length>1000)throw Error("Unsupported study summary");
+    if(!object(value)||value.schema!=="atima.study.summary"||![1,2].includes(value.version)||!token(value.title)||!Array.isArray(value.observations)||!value.observations.length||value.observations.length>1000)throw Error("Unsupported study summary");
     const ids=new Set();
     const observations=value.observations.map(r=>{
       if(!object(r)||!/^Run-[1-9]\d{0,3}$/.test(r.id)||ids.has(r.id)||!object(r.config)||!object(r.metrics))throw Error("Invalid or duplicate study observation");
@@ -40,6 +54,7 @@ const ATIMAStudy=(()=>{
       const cfg=r.config,run={config:{...cfg,malicious_clients:[]},metrics:{test:r.metrics},dataset_identity:{task:r.task,hashes:r.dataset_hashes},status:r.status,round:r.round};
       const clean=observation(run,ids.size);
       clean.id=r.id;
+      if(value.version===2&&typeof r.condition_sha256==="string"&&/^[a-f0-9]{64}$/.test(r.condition_sha256))clean.condition_sha256=r.condition_sha256;
       clean.config.malicious_count=Number.isSafeInteger(cfg.malicious_count)&&cfg.malicious_count>=0&&cfg.malicious_count<=10000?cfg.malicious_count:null;
       for(const [key,v] of Object.entries(clean.metrics)){
         if(key==="samples")continue;
@@ -47,7 +62,7 @@ const ATIMAStudy=(()=>{
       }
       return clean;
     });
-    return {schema:value.schema,version:1,title:value.title,observations};
+    return {schema:value.schema,version:value.version,title:value.title,observations};
   }
   // Comparability is a statement about supplied summary metadata, never proof of independence.
   const canonical=v=>Array.isArray(v)?v.map(canonical):object(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
@@ -64,8 +79,8 @@ const ATIMAStudy=(()=>{
           excluded.push({study:study.title,id:r.id});continue;
         }
         const {seed,...condition}=c;
-        const key=signature({condition,task:r.task,hashes:r.dataset_hashes,round:r.round,samples:r.metrics.samples});
-        if(!groups.has(key))groups.set(key,{condition,task:r.task,round:r.round,samples:r.metrics.samples,studies:new Map()});
+        const key=signature({condition,task:r.task,hashes:r.dataset_hashes,round:r.round,samples:r.metrics.samples,condition_sha256:r.condition_sha256??null});
+        if(!groups.has(key))groups.set(key,{condition,task:r.task,round:r.round,samples:r.metrics.samples,identity:r.condition_sha256?"Declared full-condition fingerprint match":"Reduced-summary match only",studies:new Map()});
         const group=groups.get(key);
         if(!group.studies.has(studyId))group.studies.set(studyId,{title:study.title,seeds:new Map()});
         const seeds=group.studies.get(studyId).seeds;
@@ -84,12 +99,12 @@ const ATIMAStudy=(()=>{
     }
     return {matches,excluded};
   }
-  return Object.freeze({create,parse,measures,comparisonGroups});
+  return Object.freeze({create,createWithEvidence,parse,measures,comparisonGroups});
 })();
 function setupStudyExchange(){
   const panel=$("web-study");if(!panel)return;
   const studies=new Map(),out=$("web-study-output"),status=$("web-study-status"),preview=$("web-study-preview"),metric=$("web-study-metric"),filter=$("web-study-filter");
-  let pending=null,page=0;
+  let pending=null,page=0,revision=0;
   function render(){
     out.replaceChildren();
     const query=filter.value.trim().toLowerCase(),key=metric.value;
@@ -108,6 +123,7 @@ function setupStudyExchange(){
     for(const group of comparison.matches.slice(0,50)){
       const detail=node("details"),condition=group.condition;
       detail.append(node("summary",[condition.attack,condition.model,condition.partition,group.task,"round "+group.round].join(" · ")));
+      detail.append(node("p",group.identity));
       detail.append(dataTable(["Study","Distinct seeds","Mean","Sample SD","Duplicate seeds excluded"],group.rows.map(r=>[r.title,r.stats.n,score(r.stats.mean,key!=="mcc"&&key!=="loss"),score(r.stats.sd,key!=="mcc"&&key!=="loss"),r.duplicateSeeds])));
       const metadata=node("details");metadata.append(node("summary","Recorded condition"),node("pre",JSON.stringify(condition,null,2)));detail.append(metadata);audit.append(detail);
     }
@@ -118,9 +134,10 @@ function setupStudyExchange(){
   }
   for(const name of ATIMAStudy.measures){const option=node("option",name);option.value=name;metric.append(option);}metric.value="macro_f1";
   metric.addEventListener("change",render);filter.addEventListener("input",()=>{page=0;render();});
-  $("web-study-prepare").addEventListener("click",()=>{
+  $("web-study-prepare").addEventListener("click",async()=>{
+    const ticket=++revision;
     pending=null;preview.textContent="";$("web-study-download").disabled=true;
-    try{pending=ATIMAStudy.parse(ATIMAStudy.create($("web-study-title").value,availableResults));preview.textContent=JSON.stringify(pending,null,2);$("web-study-download").disabled=false;status.textContent="Review the exact summary before downloading. No original run names or paths are included.";}
+    try{const prepared=ATIMAStudy.parse(await ATIMAStudy.createWithEvidence($("web-study-title").value,availableResults));if(ticket!==revision)return;pending=prepared;preview.textContent=JSON.stringify(pending,null,2);$("web-study-download").disabled=false;status.textContent="Review the exact summary before downloading. No original run names or paths are included.";}
     catch(e){status.textContent=e.message;}
   });
   $("web-study-download").addEventListener("click",()=>{
@@ -128,11 +145,12 @@ function setupStudyExchange(){
     const blob=new Blob([JSON.stringify(pending,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=node("a");link.href=url;link.download="atima-study-summary.json";document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
   $("web-study-import").addEventListener("change",async()=>{
-    const files=[...$("web-study-import").files],errors=[];
+    const files=[...$("web-study-import").files],errors=[],ticket=revision;
     for(const file of files){
       try{
         if(file.size>8*1024*1024)throw Error("Study exceeds 8 MiB");
         const parsed=ATIMAStudy.parse(JSON.parse(await file.text())),signature=JSON.stringify(parsed);
+        if(ticket!==revision)return;
         if(studies.has(signature))continue;
         if(studies.size>=10)throw Error("Maximum 10 studies");
         studies.set(signature,parsed);
@@ -140,6 +158,6 @@ function setupStudyExchange(){
     }
     $("web-study-import").value="";page=0;render();status.textContent=errors.length?errors.join(" · "):"Studies read on this device. No upload.";
   });
-  $("web-study-clear").addEventListener("click",()=>{studies.clear();pending=null;preview.textContent="";$("web-study-download").disabled=true;page=0;render();status.textContent="Study summaries cleared from this tab.";});
+  $("web-study-clear").addEventListener("click",()=>{revision++;studies.clear();pending=null;preview.textContent="";$("web-study-download").disabled=true;page=0;render();status.textContent="Study summaries cleared from this tab.";});
   render();
 }
