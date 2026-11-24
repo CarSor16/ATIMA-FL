@@ -11,7 +11,7 @@ function attachWebChartExports(svg,container){
     originals.forEach((element,i)=>{const style=getComputedStyle(element);for(const prop of props)clones[i].style.setProperty(prop,style.getPropertyValue(prop));});
     const view=svg.viewBox.baseVal;
     if(!view.width||!view.height)throw Error("Chart has no valid dimensions");
-    copy.setAttribute("xmlns","http://www.w3.org/2000/svg");copy.setAttribute("width",String(view.width));copy.setAttribute("height",String(view.height));
+    copy.setAttribute("width",String(view.width));copy.setAttribute("height",String(view.height));
     const bg=document.createElementNS("http://www.w3.org/2000/svg","rect");
     bg.setAttribute("x",String(view.x));bg.setAttribute("y",String(view.y));bg.setAttribute("width",String(view.width));bg.setAttribute("height",String(view.height));
     bg.setAttribute("fill",document.documentElement.dataset.theme==="dark"?"#111827":"#ffffff");copy.insertBefore(bg,copy.firstChild);

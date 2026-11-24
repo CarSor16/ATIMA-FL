@@ -457,6 +457,15 @@ function analysisContext(){
   const first=byId.get(chosenComparison.first),second=analysisMode==="single"?null:byId.get(chosenComparison.second);
   return {first,second,compatible:Boolean(first&&second&&first.id!==second.id&&manualWarnings(first,second).compatible)};
 }
+function webAttackEvidence(run){
+  const section=node("section",undefined,"result-section"),metrics=run.metrics?.attack_metrics;
+  section.append(node("h4","Recorded attack metrics"));
+  const rows=metrics&&typeof metrics==="object"?Object.entries(metrics).filter(([,v])=>v===null||numeric(v)||typeof v==="string"||typeof v==="boolean"):[];
+  if(!rows.length)section.append(node("p","No attack-specific evaluation was recorded."));
+  else section.append(dataTable(["Metric / scope","Recorded value"],rows.map(([k,v])=>[k,v===null?"—":numeric(v)&&/asr|target_rate/.test(k)&&v>=0&&v<=1?score(v):String(v)])));
+  section.append(node("p","ASR from a numerical trigger is not evidence of physical packet feasibility. An untriggered target rate is not a clean model evaluated on the same trigger.","helper"));
+  return section;
+}
 function renderAnalysis(){
   const root=$("analysis-panel");root.replaceChildren();
   for(const button of document.querySelectorAll("[data-analysis-tab]")){
@@ -473,7 +482,8 @@ function renderAnalysis(){
     if(analysisTab==="overview"||analysisTab==="rounds"){
       if(analysisTab==="overview")root.append(node("p","Validation curves are measured per round; test metrics are final-only. This single-run comparison is descriptive, not a statistical significance test."));
       root.append(b?roundChart(b,a,true,true):roundChart(a,null));
-    }else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
+    }else if(analysisTab==="attack"){root.append(webAttackEvidence(a));if(b)root.append(webAttackEvidence(b));}
+    else if(analysisTab==="federated")root.append(federatedAnalysis(a,b));
     else if(analysisTab==="classes")root.append(perClassAnalysis(a,b,compatible));
     else if(analysisTab==="matrices")root.append(matrixAnalysis(a,b,compatible));
     else root.append(perClassAnalysis(a,b,compatible,true));
@@ -819,6 +829,8 @@ function renderSensitivityExplorer(root,values){
     const {common,rows}=sensitivitySummary(family,values,get);
     output.append(node("p",family.descriptive?"Descriptive condition contrast: shard assignments, software or runtime may differ; not an isolated causal effect.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
     output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
+    if(family.axis==="protection")output.append(node("p","Compare protection levels by their own clean and attacked scores and damage. Common seed IDs do not establish verified cross-protection quartets; use Runtime defense statistics for that inference.","helper"));
+    if(family.axis==="attack_profile")output.append(node("p","Attack profiles are compared at the recorded parameters, not at a universal equal attack strength.","helper"));
     output.append(dataTable(["Level","Observed mean","Selected seeds","Available pairs","Common clean mean","Common attack mean","Attack − clean","SD of delta"],rows.map(r=>[String(r.value),score(r.observed.mean,percent),r.observed.n+"/"+r.chosen.length,r.pairs.length,score(r.stats.clean.mean,percent),score(r.stats.attack.mean,percent),deltaScore(r.stats.attack.mean,r.stats.clean.mean,percent),numeric(r.stats.delta.sd)?(percent?(100*r.stats.delta.sd).toFixed(2)+" pp":score(r.stats.delta.sd,false)):"—"])));
     const exportButton=node("button","Export sensitivity CSV","secondary");exportButton.type="button";
     exportButton.addEventListener("click",()=>downloadResearchCSV(
@@ -950,6 +962,25 @@ function seedSummary(root,runs,allRuns){
       seedCurve(pairs.map(p=>p.run),pairs.map(p=>p.clean)));
   }else paired.append(node("p",runs[0]?.config?.attack==="none"?"Clean cohort: no attacked reference is needed.":"No verified matching clean baseline. The attack averages above remain descriptive."));
   root.append(paired,seedMatrixSummary(runs,pairs));
+  if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY)root.append(webSeedResearchTools(runs,pairs));
+}
+function webSeedResearchTools(runs,pairs){
+  const panel=node("details",undefined,"seed-block");panel.append(node("summary","Research report and uncertainty"));
+  const notes="Exploratory percentile bootstrap of seed-level metadata-matched macro-F1 deltas (10,000 resamples, RNG seed 2026). Not trajectory-verified or corrected for multiple tests. Mixed provenance is descriptive.";
+  const output=node("div"),calculate=node("button","Calculate exploratory 95% interval","secondary");calculate.type="button";
+  const deltas=pairs.map(({run,clean})=>[testMetrics(run)?.macro_f1,testMetrics(clean)?.macro_f1]).filter(([a,b])=>numeric(a)&&numeric(b)).map(([a,b])=>a-b);
+  calculate.disabled=deltas.length<3||new Set(runs.map(r=>r.seed_condition?.key)).size!==1;
+  if(calculate.disabled)panel.append(node("p","At least three metadata-matched seeds with identical recorded attack provenance are required for this interval."));
+  let interval=null;
+  calculate.addEventListener("click",()=>{interval=ATIMAAnalysis.bootstrapMean(deltas);output.replaceChildren();if(interval)output.append(dataTable(["Matched seeds","Mean delta","95% lower","95% upper"],[[interval.n,deltaScore(interval.mean,0),deltaScore(interval.lower,0),deltaScore(interval.upper,0)]]));});
+  const report=node("button","Export research report (JSON)","secondary");report.type="button";
+  report.addEventListener("click",()=>{
+    const config=runs[0].config;
+    const keys=["dataset","dataset_params","partition","partition_params","model","model_params","attack","attack_params","clients","malicious_clients","rounds","local_epochs","batch_size","learning_rate","aggregation","aggregation_params","defenses","training_method","evaluation_scope"];
+    const documentData={schema_version:1,condition:seedLabel(runs[0]),recorded_settings:Object.fromEntries(keys.filter(k=>Object.hasOwn(config,k)).map(k=>[k,config[k]])),seed_ids:runs.map(r=>r.config.seed),matched_seed_ids:pairs.map(p=>p.run.config.seed),exact_provenance_count:new Set(runs.map(r=>r.seed_condition?.key)).size,metrics:cohortReportRows(runs,[...runs,...pairs.map(p=>p.clean)]),exploratory_interval:interval,limitations:notes+" Review parameter values before sharing. This is not a full reproducibility bundle."};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(documentData,null,2)],{type:"application/json"})),link=node("a");link.href=url;link.download="atima-research-report.json";document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  panel.append(node("p",notes,"helper"),calculate,output,report);return panel;
 }
 let seedWorkspaceReady=false;
 function refreshSeedWorkspace(){
@@ -993,7 +1024,12 @@ function refreshSeedWorkspace(){
   configDetail.append(node("summary","Recorded condition and parameters"),node("pre",JSON.stringify(cfg,null,2)));selection.append(configDetail);
   const buckets=seedBuckets(runs),chosen=seedChosen(select.value,runs);
   const versions=new Set(runs.map(r=>r.seed_condition.key)).size;
-  if(versions>1)selection.append(node("p","Mixed provenance: "+versions+" exact identities. Shards, software, runtime or resource settings differ. Descriptive protocol mean only; enable strict provenance to separate them.","warning"));
+  if(versions>1){
+    selection.append(node("p","Mixed provenance: "+versions+" exact identities. Shards, software, runtime or resource settings differ. Descriptive protocol mean only; enable strict provenance to separate them.","warning"));
+    if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY){
+      const inspector=node("details");inspector.append(node("summary","Inspect provenance groups"),dataTable(["Seed","Exact identity (display ID)","Device","Experiment"],runs.map(r=>[r.config.seed,shortConditionLabel(r.seed_condition.key),r.config.compute_device||"—",r.id])));selection.append(inspector);
+    }
+  }
   if($("web-seed-summary"))$("web-seed-summary").textContent=seedLabel(runs[0])+" · "+chosen.length+" distinct seeds · Macro-F1 "+score(seedStats(chosen.map(r=>testMetrics(r)?.macro_f1)).mean);
   const duplicates=buckets.filter(([,items])=>items.length>1);
   selection.append(node("p",chosen.length+" distinct compatible seeds included automatically. SD is sample standard deviation; missing metrics are not zero."));

@@ -12,6 +12,20 @@ const ATIMAAnalysis = (() => {
       ?Math.sqrt(valid.reduce((sum,value)=>sum+(value-mean)**2,0)/(valid.length-1)):null,
       min:Math.min(...valid),max:Math.max(...valid)};
   }
+  // Deterministic exploratory bootstrap, resampling complete seed observations.
+  function bootstrapMean(values,resamples=10000){
+    if(!Array.isArray(values)||values.length<3||values.length>1000||values.some(v=>!finite(v)))return null;
+    let state=2026;
+    const means=[];
+    for(let b=0;b<resamples;b++){
+      let sum=0;
+      for(let i=0;i<values.length;i++){state=(Math.imul(1664525,state)+1013904223)>>>0;sum+=values[Math.floor(state/4294967296*values.length)];}
+      means.push(sum/values.length);
+    }
+    means.sort((a,b)=>a-b);
+    const quantile=p=>{const i=p*(means.length-1),lo=Math.floor(i),hi=Math.ceil(i);return means[lo]+(i-lo)*(means[hi]-means[lo]);};
+    return {n:values.length,mean:stats(values).mean,lower:quantile(.025),upper:quantile(.975),resamples};
+  }
   function pairedStats(observations) {
     const pairs=observations.filter(([a,b])=>finite(a)&&finite(b));
     return {clean:stats(pairs.map(p=>p[0])),attack:stats(pairs.map(p=>p[1])),
@@ -72,5 +86,5 @@ const ATIMAAnalysis = (() => {
     };
     return rows.map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
   }
-  return Object.freeze({stats,pairedStats,meanMatrices,pairedMatrices,campaignCoverage,csv});
+  return Object.freeze({stats,pairedStats,meanMatrices,pairedMatrices,campaignCoverage,csv,bootstrapMean});
 })();

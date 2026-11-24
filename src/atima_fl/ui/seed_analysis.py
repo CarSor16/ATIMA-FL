@@ -127,6 +127,10 @@ def sensitivity_conditions(manifest, eligibility):
                 axes.append((f"{field}.{key}", value))
     for field in ("model", "partition", "attack_start", "attack_end"):
         axes.append((field, config[field]))
+    axes.extend([
+        ("attack_profile", json.dumps({"attack": config["attack"], "params": config["attack_params"]}, sort_keys=True)),
+        ("protection", json.dumps({"aggregation": config["aggregation"], "params": config["aggregation_params"], "defenses": config["defenses"]}, sort_keys=True)),
+    ])
     ids = config["malicious_clients"]
     if sorted(ids) == list(range(len(ids))):
         axes.append(("malicious_count", len(ids)))
@@ -139,6 +143,16 @@ def sensitivity_conditions(manifest, eligibility):
             cfg[group].pop(key)
         elif axis == "malicious_count":
             cfg.pop("malicious_clients")
+        elif axis == "attack_profile":
+            cfg.pop("attack")
+            cfg.pop("attack_params")
+            condition.pop("attack_source")
+        elif axis == "protection":
+            for key in ("aggregation", "aggregation_params", "defenses"):
+                cfg.pop(key)
+            for key in list(condition["source"]):
+                if key.startswith(("component/aggregator/", "component/defense/")):
+                    condition["source"].pop(key)
         else:
             cfg.pop(axis)
             if axis in {"model", "partition"}:
@@ -146,7 +160,7 @@ def sensitivity_conditions(manifest, eligibility):
                 # The selected component is the deliberately varied variable.
                 # Keep every other shared source fingerprint unchanged.
                 condition["source"].pop(f"component/{axis}/{value}", None)
-        descriptive = axis == "model" or axis == "partition" or axis.startswith("partition_params.")
+        descriptive = axis in {"model", "partition", "attack_profile", "protection"} or axis.startswith("partition_params.")
         if axis == "partition" or axis.startswith("partition_params."):
             # Global train/validation/test, schema and labels remain identical.
             # Shard/assignment identity is deliberately allowed to change.

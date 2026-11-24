@@ -33,18 +33,24 @@ const ATIMALocalResults=(()=>{
     const axes=[];
     for(const group of ["attack_params","partition_params"])for(const [name,value] of Object.entries(c[group]))if(finite(value))axes.push([group+"."+name,value]);
     for(const field of ["model","partition","attack_start","attack_end"])axes.push([field,c[field]]);
+    axes.push(["attack_profile",key({attack:c.attack,params:c.attack_params})],["protection",key({aggregation:c.aggregation,params:c.aggregation_params,defenses:c.defenses})]);
     if([...c.malicious_clients].sort((a,b)=>a-b).every((id,i)=>id===i))axes.push(["malicious_count",c.malicious_clients.length]);
     if(axes.length>64)throw Error("Too many sensitivity axes in manifest");
     return axes.map(([axis,value])=>{
       const condition=JSON.parse(JSON.stringify(base)),cfg=condition.config;
       if(axis.includes(".")){const dot=axis.indexOf("."),group=axis.slice(0,dot),name=axis.slice(dot+1);delete cfg[group][name];}
       else if(axis==="malicious_count")delete cfg.malicious_clients;
+      else if(axis==="attack_profile"){delete cfg.attack;delete cfg.attack_params;delete condition.attack_source;}
+      else if(axis==="protection"){
+        for(const k of ["aggregation","aggregation_params","defenses"])delete cfg[k];
+        for(const k of Object.keys(condition.source))if(k.startsWith("component/aggregator/")||k.startsWith("component/defense/"))delete condition.source[k];
+      }
       else {delete cfg[axis];if(["model","partition"].includes(axis)){delete cfg[axis+"_params"];delete condition.source["component/"+axis+"/"+value];}}
       const partition=axis==="partition"||axis.startsWith("partition_params.");
       if(partition)condition.dataset_hashes=Object.fromEntries(hashKeys.map(k=>[k,condition.dataset_hashes[k]]));
       const protocol={config:Object.fromEntries(Object.entries(cfg).filter(([k])=>!["cpu_budget","client_cpus","client_gpu_fraction","compute_device"].includes(k))),
         dataset_hashes:Object.fromEntries(hashKeys.map(k=>[k,base.dataset_hashes[k]])),task:base.task,classes:base.classes,round:base.round};
-      return {axis,value,key:key([axis,condition]),protocol_key:key([axis,protocol]),descriptive:partition||axis==="model"};
+      return {axis,value,key:key([axis,condition]),protocol_key:key([axis,protocol]),descriptive:partition||["model","attack_profile","protection"].includes(axis)};
     });
   }
   function historyRows(history){

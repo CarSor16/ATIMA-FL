@@ -184,3 +184,14 @@ Campaign fields appear only for the applicable mode. Validation remains
 authoritative in local Studio. Validation, federated and sensitivity SVG
 charts support standalone SVG and 3x PNG export, preserving current chart
 styles and theme. The files are generated in the browser.
+
+The detailed Results tabs include recorded attack-specific evaluation metrics.
+Sensitivity additionally supports contrasts between complete attack profiles
+and protection settings, with each condition retaining its own clean reference.
+These contrasts are descriptive, not independently verified defense quartets.
+A collapsed research panel can export condition metadata and summary statistics
+as JSON. For at least three metadata-matched seeds with identical attack
+provenance, it offers a deterministic exploratory 95% percentile bootstrap
+of macro-F1 deltas. The Runtime is still authoritative for trajectory-verified
+analysis. No raw training data or experiment directory paths are included
+by the report generator, but users should inspect arbitrary parameter values.

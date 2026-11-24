@@ -48,6 +48,9 @@ async function main(){
   assert.equal(modelKey(modelA),modelKey(modelB));
   modelB.source_identity.engine="different";
   assert.notEqual(modelKey(modelA),modelKey(modelB));
+  const protectedRun=fixture(1);protectedRun.config.defenses=[{id:"norm_clipping",params:{clip_norm:1}}];
+  const protectionKey=m=>reader.project("p",m).sensitivity_conditions.find(v=>v.axis==="protection").protocol_key;
+  assert.equal(protectionKey(a),protectionKey(protectedRun));
   const pairs=reader.pair([ar,reader.project("clean",clean)]);
   assert.equal(pairs[0].baseline_id,"clean");
   const wrong=fixture(1,"none");wrong.pair_id=a.pair_id;

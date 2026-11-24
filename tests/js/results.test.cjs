@@ -330,4 +330,10 @@ check("protocol sensitivity combines levels without pooling ambiguous seeds",()=
   context.sa.integrity_errors=["Accuracy differs from confusion matrix"];
   assert.equal(evaluate("manualWarnings(sa,sa).compatible"),false);
 });
+check("exploratory bootstrap resamples seed-level observations deterministically",()=>{
+  assert.equal(evaluate("ATIMAAnalysis.bootstrapMean([1,2])"),null);
+  const result=plain(evaluate("ATIMAAnalysis.bootstrapMean([.1,.1,.1])"));
+  assert.ok(Math.abs(result.lower-.1)<1e-12&&Math.abs(result.upper-.1)<1e-12);
+  assert.deepEqual(plain(evaluate("ATIMAAnalysis.bootstrapMean([-.2,.1,.3])")),plain(evaluate("ATIMAAnalysis.bootstrapMean([-.2,.1,.3])")));
+});
 console.log(checks+" functional Results checks passed.");
