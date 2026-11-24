@@ -56,7 +56,8 @@ function setupWebFolderAccess(){
   if(!panel||typeof window.showDirectoryPicker!=="function")return;
   panel.classList.remove("hidden");
   const open=$("web-folder-open"),reconnect=$("web-folder-reconnect"),refresh=$("web-folder-refresh"),remember=$("web-folder-remember");
-  let handle=null,saved=null,busy=false,revision=0;
+  let handle=null,saved=null,busy=false,revision=0,persistence=Promise.resolve();
+  function persist(operation){const next=persistence.then(operation);persistence=next.catch(()=>{});return next;}
   function buttons(){open.disabled=busy;reconnect.disabled=busy||!saved;refresh.disabled=busy||!handle;}
   async function read(selected){
     const ticket=++revision;busy=true;buttons();
@@ -67,7 +68,7 @@ function setupWebFolderAccess(){
       handle=selected;localResultFiles=files;
       status.textContent="Authorized folder read locally. No file contents are stored.";
       if(remember.checked){
-        try{await ATIMAFolderAccess.remember(selected);saved=selected;}
+        try{await persist(()=>ATIMAFolderAccess.remember(selected));if(ticket===revision&&remember.checked)saved=selected;}
         catch{status.textContent+=" Browser could not save the folder reference.";}
       }
       if(ticket===revision)await refreshResults();
@@ -81,8 +82,8 @@ function setupWebFolderAccess(){
   reconnect.addEventListener("click",()=>{if(saved)read(saved);});
   refresh.addEventListener("click",()=>{if(handle)read(handle);});
   remember.addEventListener("change",async()=>{
-    if(!remember.checked){saved=null;buttons();try{await ATIMAFolderAccess.forget();}catch{status.textContent="Could not remove the stored folder reference; review browser site storage.";}}
-    else if(handle){try{await ATIMAFolderAccess.remember(handle);saved=handle;buttons();}catch{status.textContent="Browser could not save the folder reference.";}}
+    if(!remember.checked){saved=null;buttons();try{await persist(()=>ATIMAFolderAccess.forget());}catch{status.textContent="Could not remove the stored folder reference; review browser site storage.";}}
+    else if(handle){const selected=handle,ticket=revision;try{await persist(()=>ATIMAFolderAccess.remember(selected));if(ticket===revision&&remember.checked){saved=selected;buttons();}}catch{status.textContent="Browser could not save the folder reference.";}}
   });
   $("local-results-reset").addEventListener("click",async()=>{
     revision++;handle=null;saved=null;busy=false;remember.checked=false;buttons();
@@ -91,6 +92,6 @@ function setupWebFolderAccess(){
   });
   $("local-results-folder").addEventListener("change",()=>{revision++;handle=null;busy=false;buttons();});
   const startup=revision;
-  ATIMAFolderAccess.recall().then(value=>{if(startup===revision&&value?.kind==="directory"){saved=value;remember.checked=true;buttons();status.textContent="A folder reference is remembered. Reconnect explicitly to read it.";}}).catch(()=>{});
+  persist(()=>ATIMAFolderAccess.recall()).then(value=>{if(startup===revision&&value?.kind==="directory"){saved=value;remember.checked=true;buttons();status.textContent="A folder reference is remembered. Reconnect explicitly to read it.";}}).catch(()=>{});
   buttons();
 }
