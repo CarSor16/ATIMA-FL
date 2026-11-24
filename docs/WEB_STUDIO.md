@@ -1,6 +1,6 @@
 # ATIMA Web Studio
 
-A static, local-first Results Explorer for federated intrusion-detection research.
+A static, local-first Results Explorer, draft Designer and Study Exchange for federated intrusion-detection research.
 The Python Studio and Runtime remain supported independently.
 
 ## Build and audit
@@ -8,6 +8,7 @@ The Python Studio and Runtime remain supported independently.
 From the repository root, using Python 3.12:
 
 ```sh
+python -m pip install -e .
 python scripts/build_web_studio.py _site
 python -m http.server 8000 --directory _site
 ```
@@ -19,21 +20,20 @@ examples, logs, environment files, SSH settings or experiment artifacts.
 The Web Studio workflow checks JavaScript, the local-file reader and the shared
 Results fixtures, then exercises the generated site in Chromium using synthetic
 results under an ATIMA-FL subpath. Network is blocked after initial loading.
-Deploy is conditional on the build and browser test passing.
+The test also exercises local draft and study-summary downloads and multi-study import. Pushes build and test only. Publication requires an explicit workflow dispatch.
 
 ## Free GitHub Pages activation
 
 CarSor16/ATIMA-FL is public; do not change its visibility or create personal
 access tokens just to publish. In repository Settings → Pages, select GitHub
-Actions as the source. The workflow's automatic enablement option can only
-create the site if its repository token has sufficient administrative access.
-If it reports "Resource not accessible by integration", the owner must enable
-Pages in Settings. No token escalation is attempted.
+Actions as the source. No personal token is needed.
 
-After activation, rerun the failed deployment (or push an updated web asset).
-If the github-pages environment restricts deployment branches, permit only the
-intended tested branch or merge through the usual review process. Manual
-workflow dispatch becomes available when the workflow is on the default branch.
+Once the reviewed workflow is on the default branch, open Actions → Web Studio
+→ Run workflow, choose main, and explicitly enable the publish input. The
+default is false. Pushes and pull requests do not publish. The deploy job runs
+only after successful build and browser tests, then the live audit checks the
+served application assets and local-only behavior. Configure branch protection
+for the github-pages environment as appropriate.
 
 Expected project URL: https://carsor16.github.io/ATIMA-FL/
 A successful build is not proof that Pages has been enabled or published.
@@ -56,9 +56,46 @@ reader computes separate descriptive metrics; existing Runtime runs do not
 automatically record raw logits. Historical incomplete evidence stays missing.
 
 The CSV reports contain selected summary statistics, not full provenance or
-raw records. They are not complete reproducibility bundles. The site does not
-perform SSH, schedule jobs, or generate Runtime-validated experiment plans.
-Use Local Studio for the Designer and validated batch/sweep exports.
+raw records. They are not complete reproducibility bundles.
+
+## Draft Designer
+
+The build exports the built-in Registry catalog and configuration defaults as
+static metadata; no workspace settings or extra plugin directory are included.
+Select components, inspect their descriptions, edit parameter JSON, and choose
+a single experiment, batch or parameter sweep. The browser checks registered
+parameter schemas, common configuration bounds, distinct seeds and levels,
+and the campaign size. It downloads a versioned draft JSON, not a validated
+Runtime plan.
+
+Use the matching local Studio installation to perform authoritative validation:
+
+```sh
+atima-studio web-plan atima-web-draft.json --workspace workspace --dataset-root /path/to/prepared/data
+```
+
+Optional local flags: --output-root and --compute-device. The converter rejects
+embedded deployment settings and delegates to Core validation and the existing
+plan exporters. It never starts training. The matching Runtime and dataset
+preflight remain necessary. Browser checks do not reproduce every plugin hook.
+
+## Study Exchange
+
+Prepare a reduced summary from the current folder, inspect the exact JSON
+preview and explicitly download it. The summary excludes original run names,
+paths, raw records, weights, logits and deployment settings. It includes
+selected scalar scientific configuration and metrics plus available global
+dataset fingerprints. Titles and parameter strings should still be reviewed
+before sharing; filtering is not a guarantee against arbitrary secrets.
+
+Import up to ten study summaries (at most 1,000 observations and 8 MiB per
+file). Duplicate summaries are ignored. Select a metric and filter the
+paginated observations to compare studies descriptively. The format omits
+full provenance and does not establish scientific equivalence; no cross-study
+seed pooling, statistical inference, automatic publication or network transfer
+is performed. The summaries remain in memory until cleared or the tab closes.
+
+The site does not perform SSH or schedule jobs.
 
 ## Security and research limits
 
