@@ -654,10 +654,11 @@ function seedEvasion(run,name=null){
   const total=rows.reduce((sum,i)=>sum+matrix[i].reduce((a,b)=>a+b,0),0);
   return total?rows.reduce((sum,i)=>sum+matrix[i][benign],0)/total:null;
 }
-function seedMetricRows(runs,descriptors){
+function seedMetricRows(runs,descriptors,delta=false){
   return descriptors.map(([label,get,percent])=>{
     const v=seedStats(runs.map(get));
-    return [label,score(v.mean,percent),score(v.sd,percent),score(v.min,percent),score(v.max,percent),v.n+"/"+runs.length];
+    const format=value=>delta&&percent?(numeric(value)?(100*value).toFixed(2)+" pp":"—"):score(value,percent);
+    return [label,format(v.mean),format(v.sd),format(v.min),format(v.max),v.n+"/"+runs.length];
   });
 }
 function seedCurve(runs){
@@ -723,7 +724,7 @@ function seedSummary(root,runs,allRuns){
           return numeric(a)&&numeric(b)?b-a:null;
         },percent]),
         ["Δ intrusion-to-benign",r=>{const a=seedEvasion(byId.get(r.baseline_id)),b=seedEvasion(r);return numeric(a)&&numeric(b)?b-a:null;},true]
-      ])));
+      ],true)));
   }else paired.append(node("p","Fewer than two selected seeds have a metadata-compatible clean baseline; no aggregate paired difference is shown."));
   root.append(paired);
 }
@@ -829,7 +830,7 @@ function renderResults(values){
   // Organize imports for browsing, not for scientific comparison. Only the
   // separately verified pairing logic may authorize clean/attack deltas.
   const familyGroups=new Map(),campaignGroups=new Map();
-  const ordered=$('group-results-enabled').checked?[...focused].sort((a,b)=>{
+  const ordered=$("group-results-enabled").checked?[...focused].sort((a,b)=>{
     const label=r=>[r.group?.family,r.group?.attack,r.group?.campaign_date,
       r.group?.distribution,r.group?.partition_detail,r.group?.model,
       r.group?.dataset,r.group?.task,r.id].join("|");
