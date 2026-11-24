@@ -1,7 +1,7 @@
 name: Web Studio
 on:
   push:
-    branches: [main, feature/multiseed-results-workspace]
+    branches: [main, feature/multiseed-results-workspace, fix/protocol-seed-aggregation]
     paths:
       - 'src/atima_fl/ui/static/**'
       - 'scripts/build_web_studio.py'
