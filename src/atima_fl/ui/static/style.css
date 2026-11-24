@@ -766,3 +766,5 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 #seed-analysis-output{min-width:0}
 #seed-analysis-selection pre{white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:600px){.seed-results-panel{padding:12px}.seed-selection-grid{grid-template-columns:minmax(0,1fr)}}
+
+.component-description{white-space:pre-line}
