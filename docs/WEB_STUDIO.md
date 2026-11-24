@@ -127,3 +127,25 @@ malicious extension or altered future site build. Metadata matching is not
 independent verification of the underlying model or dataset. Only compare
 conditions supported by recorded identities, and use Runtime trajectory
 verification for stronger paired inference.
+
+
+## Protocol cohorts and compact Results workspace
+
+Multi-seed analysis defaults to descriptive protocol groups. Identical global
+train/validation/test, feature schema, label mapping and preprocessor hashes,
+class order, test supports, completed round and recorded scientific
+configuration are still required. Different shard/assignment hashes,
+software/runtime identity and CPU/GPU allocation settings no longer split a
+protocol group automatically. Exact evidence identity is retained, and mixed
+provenance is explicitly flagged. Enable Strict provenance to recover the
+original exact grouping. Do not interpret mixed-provenance statistics as
+fixed-shard, independently verified causal estimates. Duplicate seed IDs
+remain ambiguous and are excluded. Clean/attack pairing, strict sensitivity
+families and Study Exchange evidence fingerprints are not relaxed.
+
+The static workspace places selection and performance metrics before
+advanced tools, provides a compact selected-experiment label and a collapsed
+multi-seed drawer with a summary. Filters, configuration details and the
+complete cohort browser can be expanded when needed. The system font stack
+and amber accents require no external asset requests. The local Studio
+retains its original presentation.
