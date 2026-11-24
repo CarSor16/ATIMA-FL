@@ -128,6 +128,9 @@ def sensitivity_conditions(manifest, eligibility):
             cfg.pop(axis)
             if axis in {"model", "partition"}:
                 cfg.pop(axis + "_params")
+                # The selected component is the deliberately varied variable.
+                # Keep every other shared source fingerprint unchanged.
+                condition["source"].pop(f"component/{axis}/{value}", None)
         descriptive = axis == "model" or axis == "partition" or axis.startswith("partition_params.")
         if axis == "partition" or axis.startswith("partition_params."):
             # Global train/validation/test, schema and labels remain identical.
