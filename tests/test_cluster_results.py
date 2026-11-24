@@ -424,3 +424,67 @@ def test_last_allowed_page_does_not_offer_invalid_offset(tmp_path):
     assert result["imported"] == 1
     assert result["next_offset"] is None
     assert result["pagination_limit_reached"] is True
+
+
+def test_import_keeps_verified_class_order_and_confusion_evidence(tmp_path):
+    config(tmp_path)
+    record = {
+        "round": 1, "macro_f1": 1.0, "recall": [1.0, 1.0], "samples": 5,
+        "confusion_matrix": [[3, 0], [0, 2]],
+        # Deliberately opposite insertion order: audit defines matrix axes.
+        "per_class": {
+            "attack": {"precision": 1.0, "recall": 1.0, "f1-score": 1.0, "support": 2.0},
+            "benign": {"precision": 1.0, "recall": 1.0, "f1-score": 1.0, "support": 3.0},
+        },
+        "private_fixture": "not retained",
+    }
+
+    def runner(*args, **kwargs):
+        assert '"confusion_matrix","per_class","samples"' in kwargs["input"]
+        return SimpleNamespace(returncode=0, stdout=json.dumps([{
+            "id": "PatternRun",
+            "manifest": {"status": "complete", "last_valid_round": 1,
+                         "dataset_audit": {"classes": ["benign", "attack"]}},
+            "final_metrics": {}, "validation_history": [record],
+        }]))
+
+    sync_cluster_results(tmp_path, runner=runner)
+    saved = json.loads((tmp_path / "results/PatternRun/validation_history.json").read_text())[0]
+    assert saved["classes"] == ["benign", "attack"]
+    assert list(saved["per_class"]) == ["benign", "attack"]
+    assert saved["confusion_matrix"] == [[3, 0], [0, 2]]
+    assert saved["samples"] == 5
+    assert "private_fixture" not in saved
+    from atima_fl.ui.app import results
+    assert results(tmp_path)[0]["history"][0] == saved
+
+
+def test_invalid_confusion_evidence_is_rejected_before_write(tmp_path):
+    config(tmp_path)
+    record = {
+        "round": 1, "confusion_matrix": [[2, 0], [0, 1]],
+        "per_class": {"benign": {"support": 5}, "attack": {"support": 1}},
+    }
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps([{
+            "id": "InvalidPattern",
+            "manifest": {"status": "complete", "dataset_audit": {"classes": ["benign", "attack"]}},
+            "final_metrics": {}, "validation_history": [record],
+        }]))
+
+    with pytest.raises(ValueError, match="support"):
+        sync_cluster_results(tmp_path, runner=runner)
+    assert not (tmp_path / "results").exists()
+
+
+def test_duplicate_cluster_entries_are_rejected_before_write(tmp_path):
+    config(tmp_path)
+    entry = {"id": "Duplicate", "manifest": {"status": "complete"}, "final_metrics": {}}
+
+    def runner(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps([entry, entry]))
+
+    with pytest.raises(ValueError, match="Duplicate experiment"):
+        sync_cluster_results(tmp_path, runner=runner)
+    assert not (tmp_path / "results").exists()
