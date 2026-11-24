@@ -163,4 +163,65 @@ check("new Results modes remain optional and do not alter paired A/B selection",
   assert.equal(root.children.length,3);
   assert.deepEqual([context.focusClean,context.focusAttack,context.focusOther].map(v=>JSON.stringify(v)),originals);
 });
+check("multi-seed aggregation handles missing metrics and uses sample SD",()=>{
+  const v=plain(evaluate("seedStats([0.2,0.4,null,NaN])"));
+  assert.equal(v.n,2);assert.ok(Math.abs(v.mean-0.3)<1e-12);
+  assert.ok(Math.abs(v.sd-Math.sqrt(.02))<1e-12);
+  assert.equal(evaluate("seedStats([null]).mean"),null);
+  assert.equal(evaluate("seedStats([.2]).sd"),null);
+  assert.equal(evaluate("seedMetricRows([{v:.1}],[['delta',r=>r.v,true]],true)[0][1]"),"10.00 pp");
+});
+check("cohorts use distinct condition keys and actual seeds, with duplicates explicit",()=>{
+  context.s0=run("LCG_seed0","local_class_gradient");
+  context.s1=run("LCG_seed1","local_class_gradient");
+  context.dup=structuredClone(context.s1);context.dup.id="LCG_seed1_duplicate";
+  context.other=structuredClone(context.s1);context.other.id="Other_partition";
+  context.invalid=structuredClone(context.s1);context.invalid.id="No_audit";
+  context.s0.config.seed=0;context.s1.config.seed=1;
+  context.s0.seed_condition=context.s1.seed_condition=context.dup.seed_condition={key:"condition-one",reason:null};
+  context.other.seed_condition={key:"different-partition",reason:null};
+  context.invalid.seed_condition={key:null,reason:"Missing assignment hash"};
+  context.dup.config.seed=1;
+  const facts=plain(evaluate("(()=>{const c=seedCohorts([s0,s1,dup,other,invalid]);return {groups:c.groups.size,excluded:c.excluded,buckets:seedBuckets([...c.groups.values()][0]).map(([s,r])=>[s,r.length])};})()"));
+  assert.equal(facts.groups,2);assert.equal(facts.excluded.length,1);
+  assert.deepEqual(facts.buckets,[[0,1],[1,2]]);
+  const differentSupport=structuredClone(context.s1);
+  differentSupport.id="different_support";differentSupport.metrics.test.samples=6;
+  differentSupport.metrics.test.per_class.dos.support=3;context.differentSupport=differentSupport;
+  assert.equal(evaluate("seedCohorts([s0,differentSupport]).groups.size"),2);
+});
+check("multi-seed curves count observed seed values per actual round and preserve gaps",()=>{
+  context.s0.history=[{round:1,macro_f1:.4},{round:3,macro_f1:.6}];
+  context.s1.history=[{round:1,macro_f1:.8},{round:2,macro_f1:.7}];
+  const rows=plain(evaluate("seedRoundStats([s0,s1],'macro_f1')"));
+  assert.deepEqual(rows.map(r=>[r.round,r.n]),[[1,2],[2,1],[3,1]]);
+  assert.ok(Math.abs(rows[0].mean-.6)<1e-12);
+  assert.equal(evaluate("seedEvasion(s0)"),.5);
+});
+check("multi-seed panel is opt-in and duplicate seed must be explicitly selected",()=>{
+  ids.get("seed-analysis-enabled").checked=false;
+  evaluate("renderResults([s0,s1,dup,other,invalid])");
+  assert.equal(ids.get("seed-analysis-content").classList.contains("hidden"),true);
+  ids.get("seed-analysis-enabled").checked=true;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  const cohort=ids.get("seed-cohort-choice");
+  cohort.value=cohort.options[1].value;cohort.dispatch("change");
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("at least two distinct seeds"));
+  const select=ids.get("seed-analysis-selection").querySelectorAll("select")[1];
+  select.value="LCG_seed1";select.dispatch("change");
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Final test metrics across seeds"));
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Mean validation trajectory"));
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Metadata-matched attack minus clean"));
+  ids.get("seed-analysis-enabled").checked=false;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  assert.ok(ids.get("seed-analysis-content").classList.contains("hidden"));
+});
+check("custom panel permutations are valid and never drop or duplicate a section",()=>{
+  assert.equal(evaluate("validResultsOrder(RESULTS_LAYOUT_DEFAULT)"),true);
+  assert.equal(evaluate("validResultsOrder(['bad'])"),false);
+  assert.deepEqual(plain(evaluate("moveResultsPanel(RESULTS_LAYOUT_DEFAULT,'detail-region',-1)")),
+    ["seed-results-panel","detail-region","performance-region","individual-reports-region"]);
+  assert.deepEqual(plain(evaluate("moveResultsPanel(RESULTS_LAYOUT_DEFAULT,'seed-results-panel',-1)")),
+    plain(evaluate("RESULTS_LAYOUT_DEFAULT")));
+});
 console.log(checks+" functional Results checks passed.");
