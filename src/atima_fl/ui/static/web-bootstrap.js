@@ -73,7 +73,7 @@ function setupWebNavigation(){
 function startStaticViewer(){
   setupWebNavigation();
   const advancedFilters=$("filter-dataset").parentElement.parentElement;
-  for(const [key,label] of [["partition","Partition"],["alpha","Dirichlet alpha"],["seed","Seed"],["training_method","Training method"],["malicious_count","Malicious clients"],["aggregation","Aggregator"]]){
+  for(const [key,label] of [["partition","Partition"],["alpha","Dirichlet alpha"],["seed","Seed"],["training_method","Training method"],["malicious_count","Malicious clients"],["aggregation","Aggregator"],["campaign_folder","Campaign folder"]]){
     const wrapper=node("label",label),select=node("select");select.id="filter-"+key;select.setAttribute("aria-label",label);wrapper.append(select);advancedFilters.append(wrapper);
   }
   const attackTab=node("button","Attack metrics");attackTab.id="tab-attack";attackTab.type="button";attackTab.dataset.analysisTab="attack";

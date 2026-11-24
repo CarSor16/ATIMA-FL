@@ -97,6 +97,7 @@ def check_browser(origin, root, engine="chromium"):
         page.locator("#web-open-cohort").click()
         expect(page.locator("#web-seed-summary")).to_contain_text("Clean")
         page.locator('[data-web-view="results"]').click()
+        expect(page.locator("#filter-campaign_folder")).to_have_count(1)
         attack_id = page.evaluate("availableResults.find(r=>r.config.attack!=='none').id")
         page.locator("#compare-experiment-a").select_option(attack_id)
         page.locator("#web-open-cohort").click()

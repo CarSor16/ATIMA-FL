@@ -21,7 +21,7 @@ const ATIMAStudy=(()=>{
     config.malicious_count=Array.isArray(c.malicious_clients)?c.malicious_clients.length:null;
     const metrics=Object.fromEntries(measures.filter(k=>finite(test[k])).map(k=>[k,test[k]]));
     if(Number.isSafeInteger(test.samples)&&test.samples>=0)metrics.samples=test.samples;
-    return {id:"Run-"+(index+1),status:token(run.status)?run.status:"unknown",round:Number.isSafeInteger(run.round)?run.round:null,
+    return {id:"Run-"+(index+1),status:run.integrity_errors?.length?"inconsistent":token(run.status)?run.status:"unknown",round:Number.isSafeInteger(run.round)?run.round:null,
       task:token(identity.task)?identity.task:null,config,metrics,
       dataset_hashes:Object.fromEntries(hashes.filter(k=>/^[a-f0-9]{64}$/i.test(identity.hashes?.[k]||"")).map(k=>[k,identity.hashes[k]]))};
   }
@@ -35,7 +35,7 @@ const ATIMAStudy=(()=>{
     for(let i=0;i<runs.length;i++){
       const run=runs[i],r=doc.observations[i],test=run.metrics?.test;
       const order=run.classes,source=run.seed_condition?.key;
-      if(!source||typeof source!=="string"||!Array.isArray(order)||order.length<2||!order.every(name=>Number.isSafeInteger(test?.per_class?.[name]?.support)&&test.per_class[name].support>=0))continue;
+      if(run.integrity_errors?.length||!source||typeof source!=="string"||!Array.isArray(order)||order.length<2||!order.every(name=>Number.isSafeInteger(test?.per_class?.[name]?.support)&&test.per_class[name].support>=0))continue;
       const support=order.map(name=>test.per_class[name].support);
       if(support.reduce((a,b)=>a+b,0)!==test.samples||!globalThis.crypto?.subtle)continue;
       const bytes=new TextEncoder().encode(JSON.stringify([source,order,support,test.samples]));

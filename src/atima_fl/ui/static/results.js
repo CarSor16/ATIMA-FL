@@ -293,10 +293,10 @@ function manualWarnings(first,second){
 }
 let availableResults=[];
 let analysisMode="single",analysisTab="overview";
-const FILTER_KEYS=["dataset","task","model","attack","status",...(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?["partition","alpha","seed","training_method","malicious_count","aggregation"]:[])];
+const FILTER_KEYS=["dataset","task","model","attack","status",...(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?["partition","alpha","seed","training_method","malicious_count","aggregation","campaign_folder"]:[])];
 function runField(run,key){
   const c=run.config||{};
-  const value=key==="task"?run.dataset_identity?.task:key==="status"?run.status:key==="alpha"?c.partition_params?.alpha:key==="malicious_count"?(c.attack==="none"?0:c.malicious_clients?.length):key==="training_method"?(c.training_method||"standard"):c[key];
+  const value=key==="task"?run.dataset_identity?.task:key==="status"?run.status:key==="alpha"?c.partition_params?.alpha:key==="campaign_folder"?(run.id.includes("/")?run.id.slice(0,run.id.lastIndexOf("/")):"Selected folder"):key==="malicious_count"?(c.attack==="none"?0:c.malicious_clients?.length):key==="training_method"?(c.training_method||"standard"):c[key];
   return value===null||value===undefined?"":String(value);
 }
 function resultMatches(run,query,filters){
@@ -492,7 +492,7 @@ function renderAnalysis(){
 function manualComparison(first,second){
   const root=$("manual-comparison-output");root.replaceChildren();
   if(!first){performanceOverview(null,null,false);renderAnalysis();return;}
-  if(!second){root.append(node("p",analysisMode==="single"?"Single experiment · recorded evidence only.":"Select experiment B to compare. Only individual A evidence is shown."));performanceOverview(first,null,false);renderAnalysis();return;}
+  if(!second){if(first.integrity_errors?.length)root.append(node("p","Data integrity warning: "+first.integrity_errors.join("; "),"warning"));root.append(node("p",analysisMode==="single"?"Single experiment · recorded evidence only.":"Select experiment B to compare. Only individual A evidence is shown."));performanceOverview(first,null,false);renderAnalysis();return;}
   if(first.id===second.id){root.append(node("p","Select two different experiments.","warning"));performanceOverview(first,null,false);renderAnalysis();return;}
   const validation=manualWarnings(first,second);
   const byId=new Map(availableResults.map(run=>[run.id,run]));

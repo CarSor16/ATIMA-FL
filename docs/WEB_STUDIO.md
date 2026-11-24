@@ -169,7 +169,7 @@ use extra decimals when ordinary rounding would turn them into zero.
 ### Research refinements
 
 Web filters include partition, alpha, seed, training method, malicious count and
-aggregation. Sensitivity defaults to descriptive protocol families, with an
+aggregation, plus parent-folder grouping as a browsing aid (not proof of a common campaign). Sensitivity defaults to descriptive protocol families, with an
 independent strict-provenance switch. Numeric levels use their numeric spacing;
 observed means remain visible without matched clean evidence. Comparisons across
 levels require the intersection of individually metadata-matched clean/attack
@@ -195,3 +195,8 @@ provenance, it offers a deterministic exploratory 95% percentile bootstrap
 of macro-F1 deltas. The Runtime is still authoritative for trajectory-verified
 analysis. No raw training data or experiment directory paths are included
 by the report generator, but users should inspect arbitrary parameter values.
+
+Inconsistent imported classifications are explicitly flagged in individual
+results and in portable study status, without granting a condition fingerprint.
+The campaign-folder filter is based only on the imported relative directory
+structure; it does not establish scientific equivalence.

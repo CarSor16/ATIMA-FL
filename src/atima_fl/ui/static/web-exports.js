@@ -11,11 +11,19 @@ function attachWebChartExports(svg,container){
     originals.forEach((element,i)=>{const style=getComputedStyle(element);for(const prop of props)clones[i].style.setProperty(prop,style.getPropertyValue(prop));});
     const view=svg.viewBox.baseVal;
     if(!view.width||!view.height)throw Error("Chart has no valid dimensions");
-    copy.setAttribute("width",String(view.width));copy.setAttribute("height",String(view.height));
+    const legend=container.querySelector(".chart-legend");
+    const lines=legend?[...legend.children].map(el=>({label:el.textContent,color:el.className.includes("baseline")?"#64748b":el.className.includes("delta")?"#b7791f":"#168c92"})):[];
+    const height=view.height+lines.length*20;
+    copy.setAttribute("width",String(view.width));copy.setAttribute("height",String(height));copy.setAttribute("viewBox",[view.x,view.y,view.width,height].join(" "));
     const bg=document.createElementNS("http://www.w3.org/2000/svg","rect");
-    bg.setAttribute("x",String(view.x));bg.setAttribute("y",String(view.y));bg.setAttribute("width",String(view.width));bg.setAttribute("height",String(view.height));
+    bg.setAttribute("x",String(view.x));bg.setAttribute("y",String(view.y));bg.setAttribute("width",String(view.width));bg.setAttribute("height",String(height));
     bg.setAttribute("fill",document.documentElement.dataset.theme==="dark"?"#111827":"#ffffff");copy.insertBefore(bg,copy.firstChild);
-    return {xml:new XMLSerializer().serializeToString(copy),width:view.width,height:view.height};
+    lines.forEach((line,i)=>{
+      const y=view.y+view.height+15+i*20,swatch=document.createElementNS("http://www.w3.org/2000/svg","line"),label=document.createElementNS("http://www.w3.org/2000/svg","text");
+      swatch.setAttribute("x1",String(view.x+12));swatch.setAttribute("x2",String(view.x+30));swatch.setAttribute("y1",String(y-4));swatch.setAttribute("y2",String(y-4));swatch.setAttribute("stroke",line.color);swatch.setAttribute("stroke-width","3");
+      label.setAttribute("x",String(view.x+40));label.setAttribute("y",String(y));label.setAttribute("font-size","12");label.setAttribute("fill",document.documentElement.dataset.theme==="dark"?"#f8fafc":"#17202a");label.textContent=line.label.slice(0,180);copy.append(swatch,label);
+    });
+    return {xml:new XMLSerializer().serializeToString(copy),width:view.width,height};
   }
   for(const ext of ["svg","png"]){
     const button=node("button",ext.toUpperCase(),"secondary");button.type="button";button.setAttribute("aria-label","Export "+title+" as "+ext.toUpperCase());
