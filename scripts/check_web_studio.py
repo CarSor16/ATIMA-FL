@@ -1,5 +1,6 @@
 """Real-browser smoke test for the static viewer, using synthetic evidence only."""
 import json
+import hashlib
 import shutil
 from pathlib import Path
 import argparse
@@ -19,13 +20,13 @@ def fixture(seed, attack):
         "malicious_clients": [] if attack == "none" else [0], "clients": 2, "servers": 1,
         "dataset": "edge_iiot", "dataset_params": {"task": "binary"}, "partition": "iid",
         "partition_params": {}, "model": "mlp", "model_params": {}, "rounds": 5,
-        "local_epochs": 3, "aggregation": "fedavg", "aggregation_params": {}, "defenses": [],
+        "local_epochs": 3, "num_classes": 2, "training_method": "standard", "evaluation_scope": "shared", "aggregation": "fedavg", "aggregation_params": {}, "defenses": [],
         "optimizer": "adam", "optimizer_params": {}, "loss": "cross_entropy", "loss_params": {},
         "batch_size": 128, "learning_rate": 0.001, "attack_start": 1, "attack_end": 5,
     }
     return {"status": "complete", "last_valid_round": 5, "pair_id": f"fixture-{seed}",
             "config": config, "dataset_audit": {"task": "binary", "classes": ["benign", "dos"],
-            "hashes": {k: f"fixture-{k}" for k in keys}},
+            "hashes": {k: hashlib.sha256(k.encode()).hexdigest() for k in keys}},
             "source_identity": {"version": "fixture"}, "runtime": {"device": "cpu"}}
 
 
@@ -111,6 +112,8 @@ def check_browser(origin, root, engine='chromium', expected=4, large=False):
         summary_path = Path(study_event.value.path())
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         assert len(summary["observations"]) == 4
+        assert summary["version"] == 2
+        assert all(len(r["condition_sha256"]) == 64 for r in summary["observations"])
         assert str(root) not in json.dumps(summary)
         first = root / "study-a.json"
         first.write_text(json.dumps(summary), encoding="utf-8")
@@ -120,6 +123,8 @@ def check_browser(origin, root, engine='chromium', expected=4, large=False):
         page.locator("#web-study-import").set_input_files([str(first), str(second)])
         expect(page.locator("#web-study-output")).to_contain_text("2 studies")
         expect(page.locator("#web-study-output")).to_contain_text("8 matching observations")
+        expect(page.locator("#web-study-output")).to_contain_text("2 matching recorded conditions")
+        expect(page.locator("#web-study-output")).to_contain_text("Declared full-condition fingerprint match")
         page.locator("#web-study-clear").click()
         page.locator("#web-study > summary").click()
         page.locator("#local-logits-panel summary").click()
