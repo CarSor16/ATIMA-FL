@@ -198,7 +198,7 @@ check("multi-seed curves count observed seed values per actual round and preserv
   assert.ok(Math.abs(rows[0].mean-.6)<1e-12);
   assert.equal(evaluate("seedEvasion(s0)"),.5);
 });
-check("multi-seed panel is opt-in and duplicate seed must be explicitly selected",()=>{
+check("automatic multi-seed panel can be disabled and duplicate seed requires explicit selection",()=>{
   ids.get("seed-analysis-enabled").checked=false;
   evaluate("renderResults([s0,s1,dup,other,invalid])");
   assert.equal(ids.get("seed-analysis-content").classList.contains("hidden"),true);
@@ -206,7 +206,7 @@ check("multi-seed panel is opt-in and duplicate seed must be explicitly selected
   ids.get("seed-analysis-enabled").dispatch("change");
   const cohort=ids.get("seed-cohort-choice");
   cohort.value=cohort.options[1].value;cohort.dispatch("change");
-  assert.ok(ids.get("seed-analysis-output").textContent.includes("at least two distinct seeds"));
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Only one seed selected"));
   const select=ids.get("seed-analysis-selection").querySelectorAll("select")[1];
   select.value="LCG_seed1";select.dispatch("change");
   assert.ok(ids.get("seed-analysis-output").textContent.includes("Final test metrics across seeds"));
@@ -223,5 +223,30 @@ check("custom panel permutations are valid and never drop or duplicate a section
     ["seed-results-panel","detail-region","performance-region","individual-reports-region"]);
   assert.deepEqual(plain(evaluate("moveResultsPanel(RESULTS_LAYOUT_DEFAULT,'seed-results-panel',-1)")),
     plain(evaluate("RESULTS_LAYOUT_DEFAULT")));
+});
+check("automatic cohorts show the matched clean mean using exactly the same seeds",()=>{
+  context.lcg0=structuredClone(context.s0);context.lcg1=structuredClone(context.s1);
+  context.lcg0.config.partition=context.lcg1.config.partition="dirichlet";
+  context.lcg0.config.partition_params=context.lcg1.config.partition_params={alpha:.5};
+  context.lcg0.config.malicious_clients=context.lcg1.config.malicious_clients=[0];
+  context.lcg0.config.attack=context.lcg1.config.attack="local_class_gradient";
+  context.clean0=run("CleanSeed0");context.clean0.config.seed=0;context.clean0.config.partition="dirichlet";
+  context.clean0.metrics.test.macro_f1=.8;context.lcg0.baseline_id="CleanSeed0";
+  context.clean1=run("CleanSeed1");context.clean1.config.seed=1;context.clean1.config.partition="dirichlet";
+  context.clean1.metrics.test.macro_f1=.9;context.lcg1.baseline_id="CleanSeed1";
+  context.lcg0.metrics.test.macro_f1=.4;context.lcg1.metrics.test.macro_f1=.6;
+  const all=plain(evaluate("seedComparisonRows(seedMatched([lcg0,lcg1],[clean0,clean1]),[['Macro-F1',r=>testMetrics(r).macro_f1,true]])"));
+  assert.equal(all[0][1],"85.00%");assert.equal(all[0][2],"50.00%");assert.equal(all[0][3],"-35.00 pp");assert.equal(all[0][5],"2/2");
+  context.clean1.config.seed=2;
+  const partial=plain(evaluate("seedComparisonRows(seedMatched([lcg0,lcg1],[clean0,clean1]),[['Macro-F1',r=>testMetrics(r).macro_f1,true]])"));
+  assert.equal(partial[0][1],"80.00%");assert.equal(partial[0][2],"40.00%");assert.equal(partial[0][5],"1/1");
+  ids.get("seed-analysis-enabled").checked=true;
+  evaluate("renderResults([lcg0,lcg1,clean0,clean1])");
+  assert.ok(ids.get("seed-cohort-overview").textContent.includes("LCG · Non-IID · α=0.5"));
+  assert.ok(ids.get("seed-cohort-overview").textContent.includes("Matched 1 seeds"));
+  assert.ok(ids.get("seed-cohort-choice").value);
+  ids.get("seed-analysis-enabled").checked=false;
+  ids.get("seed-analysis-enabled").dispatch("change");
+  assert.ok(ids.get("seed-analysis-content").classList.contains("hidden"));
 });
 console.log(checks+" functional Results checks passed.");
