@@ -78,7 +78,22 @@ def seed_condition(manifest):
         raw = json.dumps(condition, sort_keys=True, allow_nan=False, separators=(",", ":"))
     except (TypeError, ValueError):
         return {"key": None, "reason": "Invalid protocol metadata"}
-    return {"key": hashlib.sha256(raw.encode()).hexdigest(), "reason": None}
+    # Preserve exact provenance for strict cohorts and portable study evidence.
+    # A descriptive protocol cohort may span prepared shard and runtime versions.
+    protocol = {
+        "config": {k: v for k, v in condition["config"].items()
+                   if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction"}},
+        "dataset_hashes": {k: hashes[k] for k in _GLOBAL_HASHES if k != "assignment"},
+        "task": condition["task"],
+        "classes": classes,
+        "round": rounds,
+    }
+    protocol_raw = json.dumps(protocol, sort_keys=True, allow_nan=False, separators=(",", ":"))
+    return {
+        "key": hashlib.sha256(raw.encode()).hexdigest(),
+        "protocol_key": hashlib.sha256(protocol_raw.encode()).hexdigest(),
+        "reason": None,
+    }
 
 
 def sensitivity_conditions(manifest, eligibility):
