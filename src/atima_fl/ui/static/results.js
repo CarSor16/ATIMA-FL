@@ -599,10 +599,227 @@ function researchFocusedRun(run){
   // and manual A/B comparisons do not inherit this presentation-only filter.
   return id==="none"||researchFocusSelected.has(id);
 }
+// Multi-seed evidence is descriptive and never substitutes for trajectory-verified CLI statistics.
+function seedStats(values){
+  const valid=values.filter(numeric);
+  if(!valid.length)return {n:0,mean:null,sd:null,min:null,max:null};
+  const mean=average(valid);
+  return {n:valid.length,mean,sd:valid.length>1
+    ?Math.sqrt(valid.reduce((sum,x)=>sum+(x-mean)**2,0)/(valid.length-1)):null,
+    min:Math.min(...valid),max:Math.max(...valid)};
+}
+function seedCohorts(values){
+  const groups=new Map(),excluded=[];
+  for(const run of values){
+    const condition=run.seed_condition;
+    if(run.status!=="complete"||!condition?.key||!Number.isInteger(run.config?.seed)
+      ||!manualWarnings(run,run).compatible){
+      excluded.push({id:run.id,reason:condition?.reason||"Missing or invalid final test evidence"});
+      continue;
+    }
+    const test=testMetrics(run);
+    const population=JSON.stringify([test.samples,classNames(run).map(name=>test.per_class[name].support)]);
+    const key=condition.key+"|"+population;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(run);
+  }
+  return {groups,excluded};
+}
+function seedBuckets(runs){
+  const buckets=new Map();
+  for(const run of runs){
+    const seed=run.config.seed;
+    if(!buckets.has(seed))buckets.set(seed,[]);
+    buckets.get(seed).push(run);
+  }
+  return [...buckets].sort((a,b)=>a[0]-b[0]);
+}
+function seedRoundStats(runs,metric){
+  const byRound=new Map();
+  for(const run of runs){
+    const distinct=new Map(roundSeries(run,metric,0).map(p=>[p.round,p.value]));
+    for(const [round,value] of distinct){
+      if(!byRound.has(round))byRound.set(round,[]);
+      byRound.get(round).push(value);
+    }
+  }
+  return [...byRound].sort((a,b)=>a[0]-b[0]).map(([round,values])=>({round,...seedStats(values)}));
+}
+function seedEvasion(run,name=null){
+  if(!validMatrix(run))return null;
+  const classes=classNames(run),benign=classes.findIndex(c=>/^(benign|normal)$/i.test(c));
+  if(benign<0)return null;
+  const matrix=testMetrics(run).confusion_matrix;
+  const rows=classes.map((c,i)=>i).filter(i=>i!==benign&&(name===null||classes[i]===name));
+  const total=rows.reduce((sum,i)=>sum+matrix[i].reduce((a,b)=>a+b,0),0);
+  return total?rows.reduce((sum,i)=>sum+matrix[i][benign],0)/total:null;
+}
+function seedMetricRows(runs,descriptors){
+  return descriptors.map(([label,get,percent])=>{
+    const v=seedStats(runs.map(get));
+    return [label,score(v.mean,percent),score(v.sd,percent),score(v.min,percent),score(v.max,percent),v.n+"/"+runs.length];
+  });
+}
+function seedCurve(runs){
+  const root=node("section",undefined,"seed-block");
+  root.append(node("h4","Mean validation trajectory"));
+  const metrics=RESULT_METRICS.map(([key,label])=>[key,label]);
+  const metric=choiceControl("Validation metric",metrics,"macro_f1"),body=node("div");
+  root.append(metric.label,body);
+  function redraw(){
+    body.replaceChildren();
+    const key=metric.select.value,percent=key!=="loss"&&key!=="mcc";
+    const rows=seedRoundStats(runs,key);
+    if(!rows.length){body.append(node("p","No recorded validation observations for this metric."));return;}
+    // Plot only full-cohort points; partial observations remain visible in the table.
+    const full=rows.filter(row=>row.n===runs.length);
+    const lo=percent?0:Math.min(0,...rows.map(r=>r.min));
+    const hi=percent?1:Math.max(lo+.001,...rows.map(r=>r.max));
+    const maxRound=Math.max(1,...rows.map(r=>r.round));
+    const x=round=>52+(round-1)/Math.max(1,maxRound-1)*710;
+    const y=value=>232-(value-lo)/(hi-lo)*194;
+    const svg=svgElement("svg",{viewBox:"0 0 800 260",role:"img","aria-label":"Mean validation trajectory for rounds with all selected seeds",class:"seed-curve"});
+    svg.append(svgElement("line",{x1:52,y1:38,x2:52,y2:232,stroke:"currentColor"}),
+      svgElement("line",{x1:52,y1:232,x2:762,y2:232,stroke:"currentColor"}),
+      svgElement("text",{x:6,y:42,fill:"currentColor","font-size":11},score(hi,percent)),
+      svgElement("text",{x:6,y:232,fill:"currentColor","font-size":11},score(lo,percent)),
+      svgElement("text",{x:52,y:250,fill:"currentColor","font-size":11},"1"),
+      svgElement("text",{x:738,y:250,fill:"currentColor","font-size":11},String(maxRound)));
+    for(const segment of roundSegments(full.map(r=>({round:r.round,value:r.mean})))){
+      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"currentColor","stroke-width":2.5}));
+      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"currentColor"}));
+    }
+    if(full.length)body.append(svg);
+    body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated."));
+    const details=node("details"),table=dataTable(["Round","Mean","SD","Min","Max","n"],rows.map(row=>[row.round,score(row.mean,percent),score(row.sd,percent),score(row.min,percent),score(row.max,percent),row.n+"/"+runs.length]));
+    details.append(node("summary","Round-by-round values and sample counts"),table);body.append(details);
+  }
+  metric.select.addEventListener("change",redraw);redraw();return root;
+}
+function seedSummary(root,runs,allRuns){
+  root.replaceChildren();
+  if(runs.length<2){root.append(node("p","Select at least two distinct seeds to calculate a descriptive average."));return;}
+  const headings=["Metric","Mean","SD","Min","Max","Available seeds"];
+  const final=node("section",undefined,"seed-block");
+  final.append(node("h4","Final test metrics across seeds"),dataTable(headings,seedMetricRows(runs,[
+    ...FINAL_METRICS.map(([key,label,percent])=>[label,r=>testMetrics(r)?.[key],percent]),
+    ["Intrusions predicted benign",r=>seedEvasion(r),true]
+  ])));
+  root.append(final);
+  const classes=node("section",undefined,"seed-block"),labels=classNames(runs[0]);
+  classes.append(node("h4","Per-class recall and intrusion-to-benign rate"),dataTable(headings,seedMetricRows(runs,
+    labels.flatMap(name=>[[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true],
+      ...(!/^(benign|normal)$/i.test(name)?[[name+" · Predicted benign",r=>seedEvasion(r,name),true]]:[])]))));
+  root.append(classes,seedCurve(runs));
+  const byId=new Map(allRuns.map(r=>[r.id,r]));
+  const pairs=runs.filter(r=>verifiedPair(r,byId));
+  const paired=node("section",undefined,"seed-block");
+  paired.append(node("h4","Metadata-matched attack minus clean"));
+  if(pairs.length>=2){
+    paired.append(node("p",pairs.length+"/"+runs.length+" selected seeds have compatible clean baselines. Initial weights are not verified from imported summaries; use the trajectory-based CLI for paired inference."),
+      dataTable(headings,seedMetricRows(pairs,[
+        ...RESULT_METRICS.map(([key,label,percent])=>["Δ "+label,r=>{
+          const a=testMetrics(byId.get(r.baseline_id))?.[key],b=testMetrics(r)?.[key];
+          return numeric(a)&&numeric(b)?b-a:null;
+        },percent]),
+        ["Δ intrusion-to-benign",r=>{const a=seedEvasion(byId.get(r.baseline_id)),b=seedEvasion(r);return numeric(a)&&numeric(b)?b-a:null;},true]
+      ])));
+  }else paired.append(node("p","Fewer than two selected seeds have a metadata-compatible clean baseline; no aggregate paired difference is shown."));
+  root.append(paired);
+}
+let seedWorkspaceReady=false;
+const seedSelections=new Map();
+function refreshSeedWorkspace(){
+  const enabled=$("seed-analysis-enabled"),body=$("seed-analysis-content");
+  if(!enabled||!body)return;
+  body.classList.toggle("hidden",!enabled.checked);
+  if(!enabled.checked)return;
+  const {groups,excluded}=seedCohorts(availableResults);
+  const select=$("seed-cohort-choice"),previous=select.value;
+  select.replaceChildren();
+  const empty=node("option","Choose a condition");empty.value="";select.append(empty);
+  for(const [key,runs] of groups){
+    const r=runs[0],c=r.config,n=seedBuckets(runs).length;
+    const detail=[c.attack,c.attack==="none"?"0 malicious":c.malicious_clients?.length+" malicious",c.model,
+      c.training_method||"legacy method",c.evaluation_scope||"legacy scope",r.group?.partition_detail||c.partition,
+      r.dataset_identity?.task,n+" distinct seeds",key.slice(0,8)].join(" · ");
+    const option=node("option",detail);option.value=key;select.append(option);
+  }
+  select.value=groups.has(previous)?previous:"";
+  $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
+  const selection=$("seed-analysis-selection"),output=$("seed-analysis-output");
+  selection.replaceChildren();output.replaceChildren();
+  if(excluded.length){
+    const details=node("details");details.append(node("summary","Excluded runs and reasons"),dataTable(["Experiment","Reason"],excluded.map(r=>[r.id,r.reason])));selection.append(details);
+  }
+  const runs=groups.get(select.value);
+  if(!runs)return;
+  const configDetail=node("details");
+  const cfg={...runs[0].config};delete cfg.seed;delete cfg.name;delete cfg.paired_clean;
+  configDetail.append(node("summary","Recorded condition and parameters"),node("pre",JSON.stringify(cfg,null,2)));selection.append(configDetail);
+  const buckets=seedBuckets(runs),chosen=[];
+  const controls=node("div",undefined,"seed-selection-grid");
+  for(const [seed,items] of buckets){
+    const key=select.value+"|"+seed;
+    const choice=choiceControl("Seed "+seed,[["","Exclude / choose replicate"],...items.map(r=>[r.id,r.id])],"");
+    const previous=seedSelections.get(key);
+    choice.select.value=items.some(r=>r.id===previous)?previous:previous===""?"":items.length===1?items[0].id:"";
+    const run=items.find(r=>r.id===choice.select.value);if(run)chosen.push(run);
+    if(items.length>1)choice.label.append(node("span"," Duplicate seed — choose at most one.","warning"));
+    choice.select.addEventListener("change",()=>{seedSelections.set(key,choice.select.value);refreshSeedWorkspace();});
+    controls.append(choice.label);
+  }
+  selection.append(node("p",chosen.length+" distinct seeds selected; duplicate seeds are never counted twice. SD is sample standard deviation; missing metrics are not zero."),controls);
+  seedSummary(output,chosen,availableResults);
+}
+const RESULTS_LAYOUT_DEFAULT=["seed-results-panel","performance-region","detail-region","individual-reports-region"];
+let resultsPanelOrder=[...RESULTS_LAYOUT_DEFAULT];
+function validResultsOrder(order){
+  return Array.isArray(order)&&order.length===RESULTS_LAYOUT_DEFAULT.length
+    &&new Set(order).size===order.length&&order.every(id=>RESULTS_LAYOUT_DEFAULT.includes(id));
+}
+function moveResultsPanel(order,id,step){
+  const next=[...order],i=next.indexOf(id),j=i+step;
+  if(i>=0&&j>=0&&j<next.length)[next[i],next[j]]=[next[j],next[i]];
+  return next;
+}
+function applyResultsLayout(){
+  const enabled=$("custom-results-layout"),controls=$("results-layout-controls"),container=$("results-workspace-panels");
+  if(!enabled||!controls||!container)return;
+  controls.classList.toggle("hidden",!enabled.checked);controls.replaceChildren();
+  const order=enabled.checked?resultsPanelOrder:RESULTS_LAYOUT_DEFAULT;
+  // Move existing DOM nodes rather than redraw; preserves charts and selection state.
+  for(const id of order){const panel=$(id);if(panel&&panel.parentElement===container)container.append(panel);}
+  if(!enabled.checked)return;
+  const labels={"seed-results-panel":"Multi-seed analysis","performance-region":"Performance overview","detail-region":"Detailed analysis / graphs","individual-reports-region":"Individual reports"};
+  const save=()=>{
+    try{localStorage.setItem("atima-results-panel-order",JSON.stringify(resultsPanelOrder));}catch{}
+    applyResultsLayout();
+  };
+  for(const [index,id] of resultsPanelOrder.entries()){
+    const row=node("div",undefined,"layout-control-row"),up=node("button","↑","secondary"),down=node("button","↓","secondary");
+    up.type=down.type="button";up.disabled=index===0;down.disabled=index===resultsPanelOrder.length-1;
+    up.setAttribute("aria-label","Move "+labels[id]+" up");down.setAttribute("aria-label","Move "+labels[id]+" down");
+    up.addEventListener("click",()=>{resultsPanelOrder=moveResultsPanel(resultsPanelOrder,id,-1);save();});
+    down.addEventListener("click",()=>{resultsPanelOrder=moveResultsPanel(resultsPanelOrder,id,1);save();});
+    row.append(node("span",labels[id]),up,down);controls.append(row);
+  }
+  const reset=node("button","Reset panel order","text-button");reset.type="button";
+  reset.addEventListener("click",()=>{resultsPanelOrder=[...RESULTS_LAYOUT_DEFAULT];save();});controls.append(reset);
+}
+function setupResultsWorkspace(){
+  if(seedWorkspaceReady)return;
+  seedWorkspaceReady=true;
+  $("seed-analysis-enabled")?.addEventListener("change",refreshSeedWorkspace);
+  $("seed-cohort-choice")?.addEventListener("change",refreshSeedWorkspace);
+  $("custom-results-layout")?.addEventListener("change",applyResultsLayout);
+  try{const saved=JSON.parse(localStorage.getItem("atima-results-panel-order")||"null");if(validResultsOrder(saved))resultsPanelOrder=saved;}catch{}
+}
+
 function renderResults(values){
-  setupResearchFocus();
+  setupResearchFocus();setupResultsWorkspace();
   const target=$("results-list");target.replaceChildren();
-  availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);
+  availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);refreshSeedWorkspace();
   if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
   const focused=values.filter(researchFocusedRun);
   $("research-focus-status").textContent=$("research-focus-enabled").checked
@@ -612,12 +829,12 @@ function renderResults(values){
   // Organize imports for browsing, not for scientific comparison. Only the
   // separately verified pairing logic may authorize clean/attack deltas.
   const familyGroups=new Map(),campaignGroups=new Map();
-  const ordered=[...focused].sort((a,b)=>{
+  const ordered=$('group-results-enabled').checked?[...focused].sort((a,b)=>{
     const label=r=>[r.group?.family,r.group?.attack,r.group?.campaign_date,
       r.group?.distribution,r.group?.partition_detail,r.group?.model,
       r.group?.dataset,r.group?.task,r.id].join("|");
     return label(a).localeCompare(label(b));
-  });
+  }):focused;
   for(const value of ordered){
     const info=value.group||{},family=info.family||"Other / unclassified";
     let reportParent=target;
