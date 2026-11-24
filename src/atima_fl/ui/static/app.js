@@ -694,6 +694,7 @@ async function exportSeedBatch(){
 }
 let clusterImportOffset=0;
 async function syncClusterResults(){
+  if(localResultFiles)return;
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
   button.disabled=true;
   output.textContent="Connecting securely over SSH and reading up to 100 result summaries…";
