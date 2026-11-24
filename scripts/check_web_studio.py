@@ -55,7 +55,7 @@ def write_fixture(root, seed, attack):
         }), encoding="utf-8")
 
 
-def check_browser(origin, root, engine='chromium', expected=4, large=False):
+def check_browser(origin, root, engine="chromium"):
     with sync_playwright() as p:
         browser = getattr(p, engine).launch()
         page = browser.new_page(viewport={"width": 1280, "height": 850})
@@ -83,7 +83,7 @@ def check_browser(origin, root, engine='chromium', expected=4, large=False):
         assert batch["seeds"] == list(range(11))
         page.locator("#web-designer summary").click()
         page.locator("#local-results-folder").set_input_files(str(root))
-        expect(page.locator("#local-results-status")).to_contain_text(f"{expected} experiments read locally", timeout=60000)
+        expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally", timeout=60000)
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
@@ -143,7 +143,63 @@ def check_browser(origin, root, engine='chromium', expected=4, large=False):
     print("Static viewer passed real-browser local import, aggregation, logits, reset and offline-network checks.")
 
 
-def main(site, live=False, engine='chromium'):
+def check_archive(origin, root, engine="chromium", expected=None):
+    """Test actual selected-folder rendering; never publish the directory."""
+    from time import perf_counter
+
+    with sync_playwright() as p:
+        browser = getattr(p, engine).launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 850})
+        errors, requests = [], []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("request", lambda req: requests.append((req.method, req.url)))
+        page.goto(origin, wait_until="networkidle")
+        expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
+        page.route("**/*", lambda route: route.abort())
+        count = len(requests)
+        start = perf_counter()
+        page.locator("#local-results-folder").set_input_files(str(root))
+        expect(page.locator("#local-results-status")).to_contain_text("experiments read locally", timeout=90000)
+        page.wait_for_function("availableResults.length > 0 && !document.getElementById('refresh-results').disabled", timeout=90000)
+        result = page.evaluate("""() => ({
+            runs: availableResults.length,
+            complete: availableResults.filter(r => r.status === 'complete').length,
+            failures: localResultEvidence.errors.length,
+            reportHeaders: [...document.querySelectorAll('#results-list details')].filter(d => !d.querySelector('details')).length
+        })""")
+        if expected is not None:
+            assert result["runs"] == expected, result
+        assert result["failures"] == 0, result
+        assert result["reportHeaders"] == result["runs"], result
+        elapsed = perf_counter() - start
+        # Individual reports are lazy: exercise every report, then close it.
+        # Do not retain hundreds of expanded SVGs at once.
+        result["renderedReports"] = page.evaluate("""async () => {
+            const leaf = [...document.querySelectorAll('#results-list details')].filter(d => !d.querySelector('details'));
+            let n = 0;
+            for(const report of leaf){
+                report.open = true;
+                // dispatchEvent is deterministic, even if the parent group is collapsed.
+                report.dispatchEvent(new Event('toggle'));
+                if(!report.querySelector('.result-report-content'))throw Error('Missing individual report content');
+                n++;
+                report.open = false;
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            return n;
+        }""")
+        assert result["renderedReports"] == result["runs"], result
+        assert not errors, errors
+        assert not [(method, url) for method, url in requests[count:] if url.startswith(("http:", "https:"))]
+        page.locator("#local-results-reset").click()
+        expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
+        assert page.evaluate("availableResults.length") == 0
+        browser.close()
+        # No experiment IDs, paths or private metric values are printed.
+        print(f"{engine} archive rendering: {result}; initial rendering seconds={elapsed:.3f}")
+
+
+def main(site, live=False, engine="chromium", archive=None, expected=None, stress=False):
     with TemporaryDirectory() as temp:
         root = Path(temp) / "fixtures"
         root.mkdir()
@@ -171,7 +227,19 @@ def main(site, live=False, engine='chromium'):
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            check_browser(f"http://127.0.0.1:{server.server_port}/ATIMA-FL/", root, engine)
+            origin = f"http://127.0.0.1:{server.server_port}/ATIMA-FL/"
+            if archive is not None:
+                check_archive(origin, archive, engine, expected)
+            else:
+                check_browser(origin, root, engine)
+                if stress:
+                    large_root = Path(temp) / "large"
+                    large_root.mkdir()
+                    for seed in range(101):
+                        for attack in ("none", "update_scaling"):
+                            write_fixture(large_root, seed, attack)
+                    write_fixture(large_root, 101, "none")
+                    check_archive(origin, large_root, engine, 203)
         finally:
             server.shutdown()
             server.server_close()
@@ -182,5 +250,10 @@ if __name__ == "__main__":
     parser.add_argument("site", type=Path)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--browser", choices=("chromium", "firefox", "webkit"), default="chromium")
+    parser.add_argument("--results-folder", type=Path, help="Private local folder; never added to site")
+    parser.add_argument("--expected-runs", type=int)
+    parser.add_argument("--stress", action="store_true", help="Also render 203 synthetic experiments")
     args = parser.parse_args()
-    main(str(args.site.resolve()), args.live, args.browser)
+    if args.live and (args.results_folder or args.stress):
+        parser.error("Live audit accepts synthetic smoke fixtures only")
+    main(str(args.site.resolve()), args.live, args.browser, args.results_folder, args.expected_runs, args.stress)
