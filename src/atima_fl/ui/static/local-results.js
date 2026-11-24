@@ -22,6 +22,12 @@ const ATIMALocalResults=(()=>{
     if(keys.some(k=>typeof a.hashes[k]!=="string"||!a.hashes[k])||!object(m.source_identity)||!Object.keys(m.source_identity).length||!object(m.runtime)||!Object.keys(m.runtime).length)return null;
     return {config:Object.fromEntries(Object.entries(c).filter(([k])=>!ignored.has(k))),dataset_hashes:a.hashes,task:a.task,classes:a.classes,source:m.source_identity,runtime:m.runtime,attack_source:m.attack_source??null,round:m.last_valid_round};
   }
+  function protocolKey(base){
+    if(!base)return null;
+    return key({config:Object.fromEntries(Object.entries(base.config).filter(([k])=>!["cpu_budget","client_cpus","client_gpu_fraction"].includes(k))),
+      dataset_hashes:Object.fromEntries(hashKeys.map(k=>[k,base.dataset_hashes[k]])),
+      task:base.task,classes:base.classes,round:base.round});
+  }
   function sensitivity(base,c){
     if(!base||c.attack==="none")return [];
     const axes=[];
@@ -79,7 +85,7 @@ const ATIMALocalResults=(()=>{
     }
     return {id,updated_at:updated,status:m.status||"unknown",round:m.last_valid_round??null,config:c,
       group:{family:c.attack==="none"?"Clean baseline":"Local experiments",attack:c.attack,distribution:c.partition==="iid"?"IID":c.partition==="dirichlet"?"Non-IID":"Unknown",partition_detail:c.partition==="dirichlet"?"Dirichlet alpha="+(c.partition_params?.alpha??"unknown"):c.partition,model:c.model,dataset:c.dataset,task:a.task,seed:c.seed},
-      seed_condition:base?{key:key(base),reason:null}:{key:null,reason:"Incomplete audited local metadata"},
+      seed_condition:base?{key:key(base),protocol_key:protocolKey(base),reason:null}:{key:null,reason:"Incomplete audited local metadata"},
       sensitivity_conditions:sensitivity(base,c),metrics,classes:classOrder(a.classes)?a.classes:[],
       dataset_identity:{task:a.task??null,hashes:Object.fromEntries(hashKeys.map(k=>[k,a.hashes?.[k]??null]))},
       pair_id:typeof m.pair_id==="string"?m.pair_id:null,history:historyRows(history),baseline_id:null,
