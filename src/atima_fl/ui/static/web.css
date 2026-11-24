@@ -14,3 +14,6 @@ body.web-viewer main{margin:0 auto;width:100%;max-width:1440px;padding:26px clam
 .web-viewer #web-designer .component-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
 .web-viewer #web-designer textarea{width:100%;font-family:monospace;resize:vertical}
 .web-viewer #web-designer{margin:16px 0}
+
+.web-viewer #web-study{margin-top:16px;min-width:0}
+.web-viewer #web-study pre,.web-viewer #web-designer pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:28rem;overflow:auto}
