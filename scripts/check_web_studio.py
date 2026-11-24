@@ -1,5 +1,6 @@
 """Real-browser smoke test for the static viewer, using synthetic evidence only."""
 import json
+import shutil
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -55,11 +56,14 @@ def write_fixture(root, seed, attack):
 
 def main(site):
     with TemporaryDirectory() as temp:
-        root = Path(temp)
+        root = Path(temp) / "fixtures"
+        root.mkdir()
+        www = Path(temp) / "www"
+        shutil.copytree(site, www / "ATIMA-FL")
         for seed in (0, 1):
             for attack in ("none", "update_scaling"):
                 write_fixture(root, seed, attack)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=site))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(www)))
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -69,9 +73,12 @@ def main(site):
                 errors, requests = [], []
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.on("request", lambda req: requests.append((req.method, req.url)))
-                page.goto(f"http://127.0.0.1:{server.server_port}/", wait_until="networkidle")
+                origin = f"http://127.0.0.1:{server.server_port}/ATIMA-FL/"
+                page.goto(origin, wait_until="networkidle")
                 expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
                 assert not errors, errors
+                assert all(method == "GET" and url.startswith(origin) for method, url in requests), requests
+                assert "connect-src 'none'" in page.locator("meta[http-equiv=Content-Security-Policy]").get_attribute("content")
                 # Block every request after the static assets have loaded.
                 page.route("**/*", lambda route: route.abort())
                 count = len(requests)
@@ -80,6 +87,23 @@ def main(site):
                 expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
                 expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
                 expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
+                with page.expect_download() as event:
+                    page.get_by_role("button", name="Export aggregate metrics CSV").click()
+                download = event.value
+                assert download.suggested_filename == "atima_cohort_metrics.csv"
+                report = Path(download.path()).read_text(encoding="utf-8")
+                assert "Matched clean mean" in report and str(root) not in report
+                # Exercise a real IndexedDB structured-cloned directory handle on this
+                # secure loopback origin, without requiring an OS permission dialog.
+                assert page.evaluate("""async () => {
+                  const root = await navigator.storage.getDirectory();
+                  const dir = await root.getDirectoryHandle('fixture-folder', {create:true});
+                  await ATIMAFolderAccess.remember(dir);
+                  const saved = await ATIMAFolderAccess.recall();
+                  const same = await saved.isSameEntry(dir);
+                  await ATIMAFolderAccess.forget();
+                  return same && !(await ATIMAFolderAccess.recall());
+                }""")
                 page.locator("#local-logits-panel summary").click()
                 page.locator("#local-logits-analyze").click()
                 expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
