@@ -744,6 +744,67 @@ function seedComparisonRows(pairs,descriptors){
       numeric(d.sd)?(percent?(100*d.sd).toFixed(2)+" pp":score(d.sd,false)):"—",d.n+"/"+pairs.length];
   });
 }
+// Sensitivity: keep exact conditions separate and match the same seeds at every level.
+function sensitivityFamilies(values){
+  const {groups}=seedCohorts(values),families=new Map();
+  for(const [cohort,runs] of groups){
+    for(const axis of runs[0].sensitivity_conditions||[]){
+      if(!axis.key||!axis.axis)continue;
+      const key=axis.key+"|"+cohort.slice(cohort.indexOf("|")+1);
+      if(!families.has(key))families.set(key,{axis:axis.axis,descriptive:axis.descriptive,levels:new Map(),ambiguous:false});
+      const family=families.get(key),level=JSON.stringify(axis.value);
+      if(family.levels.has(level)){family.ambiguous=true;continue;}
+      family.levels.set(level,{value:axis.value,cohort,runs});
+    }
+  }
+  return [...families].filter(([,f])=>!f.ambiguous&&f.levels.size>1);
+}
+function sensitivitySummary(family,allRuns,get){
+  const levels=[...family.levels.values()].sort((a,b)=>typeof a.value==="number"&&typeof b.value==="number"?a.value-b.value:String(a.value).localeCompare(String(b.value)));
+  const evidence=levels.map(level=>{
+    const chosen=seedChosen(level.cohort,level.runs);
+    const pairs=seedMatched(chosen,allRuns).filter(({run,clean})=>numeric(get(run))&&numeric(get(clean)));
+    return {...level,chosen,pairs};
+  });
+  const common=evidence.length?evidence[0].pairs.map(p=>p.run.config.seed).filter(seed=>evidence.every(level=>level.pairs.some(p=>p.run.config.seed===seed))):[];
+  return {common,rows:evidence.map(level=>{
+    const pairs=level.pairs.filter(p=>common.includes(p.run.config.seed));
+    return {...level,stats:ATIMAAnalysis.pairedStats(pairs.map(({run,clean})=>[get(clean),get(run)])),observed:seedStats(level.chosen.map(get))};
+  })};
+}
+let sensitivityChoice="";
+function renderSensitivityExplorer(root,values){
+  root.replaceChildren();
+  const details=node("details",undefined,"seed-block");details.append(node("summary","Parameter Sensitivity Explorer"));
+  root.append(details);
+  const families=sensitivityFamilies(values);
+  details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
+  if(!families.length){details.append(node("p","No audited sensitivity family with at least two distinct levels is available."));return;}
+  const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+key.slice(0,8)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
+  const metric=choiceControl("Metric",[...FINAL_METRICS.map(([key,label])=>[key,label]),["intrusion_to_benign","Intrusions predicted benign"]],"macro_f1");
+  const output=node("div");details.append(selector.label,metric.label,output);
+  function redraw(){
+    output.replaceChildren();sensitivityChoice=selector.select.value;
+    const family=families.find(([key])=>key===sensitivityChoice)?.[1];if(!family)return;
+    const key=metric.select.value,percent=key!=="loss"&&key!=="mcc",get=key==="intrusion_to_benign"?r=>seedEvasion(r):r=>testMetrics(r)?.[key];
+    const {common,rows}=sensitivitySummary(family,values,get);
+    output.append(node("p",family.descriptive?"Descriptive condition contrast: architecture or shard assignments can differ.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
+    output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
+    output.append(dataTable(["Level","Observed mean","Selected seeds","Available pairs","Common clean mean","Common attack mean","Attack − clean","SD of delta"],rows.map(r=>[String(r.value),score(r.observed.mean,percent),r.observed.n+"/"+r.chosen.length,r.pairs.length,score(r.stats.clean.mean,percent),score(r.stats.attack.mean,percent),deltaScore(r.stats.attack.mean,r.stats.clean.mean,percent),numeric(r.stats.delta.sd)?(percent?(100*r.stats.delta.sd).toFixed(2)+" pp":score(r.stats.delta.sd,false)):"—"])));
+    if(!common.length)return;
+    const all=rows.flatMap(r=>[r.stats.clean.mean,r.stats.attack.mean]),lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
+    const x=i=>65+i*660/Math.max(1,rows.length-1),y=v=>210-(v-lo)/(hi-lo)*175;
+    const svg=svgElement("svg",{viewBox:"0 0 800 250",role:"img","aria-label":"Matched means by parameter level",class:"seed-curve"});
+    svg.append(svgElement("line",{x1:65,y1:210,x2:725,y2:210,stroke:"currentColor"}),svgElement("line",{x1:65,y1:35,x2:65,y2:210,stroke:"currentColor"}),svgElement("text",{x:5,y:39,fill:"currentColor","font-size":11},score(hi,percent)),svgElement("text",{x:5,y:210,fill:"currentColor","font-size":11},score(lo,percent)));
+    for(const [field,color,dash] of [["attack","currentColor","none"],["clean","#64748b","6 4"]]){
+      svg.append(svgElement("polyline",{points:rows.map((r,i)=>x(i)+","+y(r.stats[field].mean)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-dasharray":dash}));
+      rows.forEach((r,i)=>svg.append(svgElement("circle",{cx:x(i),cy:y(r.stats[field].mean),r:3,fill:color})));
+    }
+    rows.forEach((r,i)=>svg.append(svgElement("text",{x:x(i),y:230,"text-anchor":"middle","font-size":10,fill:"currentColor"},String(i+1))));
+    output.append(svg,node("p","Solid: attacked · dashed: clean. Equally spaced level indices refer to the table, not a continuous numerical scale.","helper"));
+  }
+  selector.select.addEventListener("change",redraw);metric.select.addEventListener("change",redraw);redraw();
+}
 function seedMatrixSummary(runs,pairs){
   const section=node("section",undefined,"seed-block");
   section.append(node("h4","Mean normalized confusion matrices"));
@@ -835,6 +896,7 @@ function refreshSeedWorkspace(){
   if(!enabled||!body)return;
   body.classList.toggle("hidden",!enabled.checked);
   if(!enabled.checked)return;
+  renderSensitivityExplorer($("sensitivity-explorer"),availableResults);
   const {groups,excluded}=seedCohorts(availableResults);
   const select=$("seed-cohort-choice"),previous=select.value;
   select.replaceChildren();
