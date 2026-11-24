@@ -781,12 +781,16 @@ function renderSensitivityExplorer(root,values){
   details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
   if(!families.length){details.append(node("p","No audited sensitivity family with at least two distinct levels is available."));return;}
   const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+key.slice(0,8)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
-  const metric=choiceControl("Metric",[...FINAL_METRICS.map(([key,label])=>[key,label]),["intrusion_to_benign","Intrusions predicted benign"]],"macro_f1");
+  const labels=[...new Set(families.flatMap(([,f])=>classNames([...f.levels.values()][0].runs[0])))];
+  const metric=choiceControl("Metric",[...FINAL_METRICS.map(([key,label])=>[key,label]),["intrusion_to_benign","Intrusions predicted benign"],...labels.map(name=>["recall:"+name,name+" · Recall"]),...labels.filter(name=>!/^(benign|normal)$/i.test(name)).map(name=>["evasion:"+name,name+" · Predicted benign"])],"macro_f1");
   const output=node("div");details.append(selector.label,metric.label,output);
   function redraw(){
     output.replaceChildren();sensitivityChoice=selector.select.value;
     const family=families.find(([key])=>key===sensitivityChoice)?.[1];if(!family)return;
-    const key=metric.select.value,percent=key!=="loss"&&key!=="mcc",get=key==="intrusion_to_benign"?r=>seedEvasion(r):r=>testMetrics(r)?.[key];
+    const key=metric.select.value,percent=key!=="loss"&&key!=="mcc";
+    const get=key==="intrusion_to_benign"?r=>seedEvasion(r)
+      :key.startsWith("recall:")?r=>{const row=testMetrics(r)?.per_class?.[key.slice(7)];return row?.support>0?row.recall:null;}
+      :key.startsWith("evasion:")?r=>seedEvasion(r,key.slice(8)):r=>testMetrics(r)?.[key];
     const {common,rows}=sensitivitySummary(family,values,get);
     output.append(node("p",family.descriptive?"Descriptive condition contrast: architecture or shard assignments can differ.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
     output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
