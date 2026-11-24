@@ -802,6 +802,12 @@ function renderSensitivityExplorer(root,values){
     output.append(node("p",family.descriptive?"Descriptive condition contrast: architecture or shard assignments can differ.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
     output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
     output.append(dataTable(["Level","Observed mean","Selected seeds","Available pairs","Common clean mean","Common attack mean","Attack − clean","SD of delta"],rows.map(r=>[String(r.value),score(r.observed.mean,percent),r.observed.n+"/"+r.chosen.length,r.pairs.length,score(r.stats.clean.mean,percent),score(r.stats.attack.mean,percent),deltaScore(r.stats.attack.mean,r.stats.clean.mean,percent),numeric(r.stats.delta.sd)?(percent?(100*r.stats.delta.sd).toFixed(2)+" pp":score(r.stats.delta.sd,false)):"—"])));
+    const exportButton=node("button","Export sensitivity CSV","secondary");exportButton.type="button";
+    exportButton.addEventListener("click",()=>downloadResearchCSV(
+      [["Variable","Level","Metric","Unit","Observed seeds","Observed mean","Available pairs","Common matched seeds","Clean mean","Attack mean","Attack minus clean","Paired delta sample SD"],
+       ...rows.map(r=>[family.axis,r.value,key,percent?"proportion":"native score",r.observed.n,r.observed.mean,r.pairs.length,r.stats.delta.n,r.stats.clean.mean,r.stats.attack.mean,r.stats.delta.mean,r.stats.delta.sd])],
+      "atima_sensitivity.csv"));
+    output.append(exportButton);
     if(!common.length)return;
     const all=rows.flatMap(r=>[r.stats.clean.mean,r.stats.attack.mean]),lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
     const x=i=>65+i*660/Math.max(1,rows.length-1),y=v=>210-(v-lo)/(hi-lo)*175;
@@ -871,10 +877,33 @@ function campaignCoveragePanel(key,runs,chosen,allRuns){
   section.append(node("p","Coverage is scoped to this exact compatible completed condition. Failed or excluded runs remain available in individual reports.","helper"),label,apply,preset,output);
   render();return section;
 }
+function cohortReportRows(runs,allRuns){
+  if(!runs.length)return [];
+  const pairs=seedMatched(runs,allRuns),labels=classNames(runs[0]);
+  const descriptors=[...FINAL_METRICS.map(([key,label,percent])=>[label,r=>testMetrics(r)?.[key],percent]),
+    ["Intrusions predicted benign",r=>seedEvasion(r),true],
+    ...labels.flatMap(name=>[[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true],
+      ...(!/^(benign|normal)$/i.test(name)?[[name+" · Predicted benign",r=>seedEvasion(r,name),true]]:[])])];
+  const condition=seedLabel(runs[0]);
+  return [["Condition","Metric","Unit","Available seeds","Observed mean","Sample SD","Min","Max","Matched seeds","Matched clean mean","Matched attack mean","Attack minus clean","Paired delta sample SD"],
+    ...descriptors.map(([label,get,percent])=>{
+      const observed=seedStats(runs.map(get));
+      const matched=ATIMAAnalysis.pairedStats(pairs.map(({run,clean})=>[get(clean),get(run)]));
+      return [condition,label,percent?"proportion":"native score",observed.n,observed.mean,observed.sd,observed.min,observed.max,matched.delta.n,matched.clean.mean,matched.attack.mean,matched.delta.mean,matched.delta.sd];
+    })];
+}
+function downloadResearchCSV(rows,filename){
+  if(!rows.length)return;
+  const blob=new Blob([ATIMAAnalysis.csv(rows)],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),link=node("a");link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 function seedSummary(root,runs,allRuns){
   root.replaceChildren();
   if(!runs.length){root.append(node("p","No unambiguous compatible seed is available. Inspect individual runs below."));return;}
   if(runs.length===1)root.append(node("p","Only one seed available; this is a single observation, not a replicated estimate."));
+  const exportButton=node("button","Export aggregate metrics CSV","secondary");exportButton.type="button";
+  exportButton.addEventListener("click",()=>downloadResearchCSV(cohortReportRows(runs,allRuns),"atima_cohort_metrics.csv"));
+  root.append(exportButton,node("p","CSV contains summary metrics and counts, not local paths, manifests or raw data. Proportion values are fractions, not percentages.","helper"));
   const headings=["Metric","Mean","SD","Min","Max","Available seeds"];
   const final=node("section",undefined,"seed-block");
   final.append(node("h4","Final test metrics across seeds"),dataTable(headings,seedMetricRows(runs,[
