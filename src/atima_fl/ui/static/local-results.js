@@ -58,6 +58,13 @@ const ATIMALocalResults=(()=>{
     const test=metrics.test;
     if(test!==undefined){
       if(!object(test))throw Error("Invalid final test metrics");
+      if(test.per_class!==undefined&&(!object(test.per_class)||Object.keys(test.per_class).length>100||Object.values(test.per_class).some(row=>!object(row))))throw Error("Invalid per-class metrics");
+      if(test.samples!==undefined&&(!Number.isSafeInteger(test.samples)||test.samples<0))throw Error("Invalid test sample count");
+      for(const row of Object.values(test.per_class||{})){
+        if(row.support!==undefined&&(!Number.isSafeInteger(row.support)||row.support<0))throw Error("Invalid class support");
+        for(const name of ["precision","recall","f1-score"])if(row[name]!==undefined&&(!finite(row[name])||row[name]<0||row[name]>1))throw Error("Invalid class metric: "+name);
+      }
+      if(test.confusion_matrix!==undefined&&(!Array.isArray(test.confusion_matrix)||test.confusion_matrix.length<2||test.confusion_matrix.length>100||test.confusion_matrix.some(row=>!Array.isArray(row)||row.length!==test.confusion_matrix.length||row.some(v=>!Number.isSafeInteger(v)||v<0)||!Number.isSafeInteger(row.reduce((s,v)=>s+v,0)))))throw Error("Invalid test confusion matrix");
       for(const name of ["accuracy","macro_f1","weighted_f1","balanced_accuracy","mcc","loss"]){
         if(!Object.hasOwn(test,name))continue;
         const v=test[name];
