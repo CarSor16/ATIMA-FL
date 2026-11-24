@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from atima_fl.ui.seed_analysis import seed_condition
+from atima_fl.ui.seed_analysis import seed_condition, sensitivity_conditions
 
 
 def manifest(seed=0):
@@ -122,3 +122,17 @@ def test_grouping_is_read_only():
     copy = deepcopy(original)
     seed_condition(original)
     assert original == copy
+
+
+def test_sensitivity_changes_only_declared_variable():
+    a, b = manifest(), manifest(1)
+    b["config"]["attack_params"]["fixture"] = 2
+
+    def key(m, axis):
+        return next(x["key"] for x in sensitivity_conditions(m, seed_condition(m))
+                    if x["axis"] == axis)
+
+    assert key(a, "attack_params.fixture") == key(b, "attack_params.fixture")
+    assert key(a, "model") != key(b, "model")
+    b["dataset_audit"]["hashes"]["client_0"] = "different"
+    assert key(a, "attack_params.fixture") != key(b, "attack_params.fixture")
