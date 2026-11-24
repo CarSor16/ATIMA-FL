@@ -103,7 +103,7 @@ def check_browser(origin, root):
           await ATIMAFolderAccess.forget();
           return same && !(await ATIMAFolderAccess.recall());
         }""")
-        page.locator("#web-study summary").click()
+        page.locator("#web-study > summary").click()
         page.locator("#web-study-prepare").click()
         with page.expect_download() as study_event:
             page.locator("#web-study-download").click()
@@ -120,7 +120,7 @@ def check_browser(origin, root):
         expect(page.locator("#web-study-output")).to_contain_text("2 studies")
         expect(page.locator("#web-study-output")).to_contain_text("8 matching observations")
         page.locator("#web-study-clear").click()
-        page.locator("#web-study summary").click()
+        page.locator("#web-study > summary").click()
         page.locator("#local-logits-panel summary").click()
         page.locator("#local-logits-analyze").click()
         expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
