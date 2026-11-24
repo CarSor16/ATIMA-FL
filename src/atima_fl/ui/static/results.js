@@ -982,6 +982,9 @@ function setupResultsWorkspace(){
   seedWorkspaceReady=true;
   $("seed-analysis-enabled")?.addEventListener("change",refreshSeedWorkspace);
   $("seed-cohort-choice")?.addEventListener("change",refreshSeedWorkspace);
+  $("local-results-folder")?.addEventListener("change",()=>{const files=Array.from($("local-results-folder").files||[]);if(files.length){localResultFiles=files;refreshResults();}});
+  $("local-results-reset")?.addEventListener("click",()=>{localResultFiles=null;localResultEvidence=null;$("local-results-folder").value="";refreshResults();});
+  $("local-logits-analyze")?.addEventListener("click",analyzeLocalLogits);
   $("custom-results-layout")?.addEventListener("change",applyResultsLayout);
   try{const saved=JSON.parse(localStorage.getItem("atima-results-panel-order")||"null");if(validResultsOrder(saved))resultsPanelOrder=saved;}catch{}
 }
@@ -1075,16 +1078,45 @@ function initializeAnalysisControls(){
     });
   }
 }
+// Local file source stays in this tab; no browser storage or API upload.
+let localResultFiles=null,localResultEvidence=null;
+function updateLocalResultStatus(evidence){
+  const status=$("local-results-status"),errors=$("local-results-errors"),panel=$("local-logits-panel"),select=$("local-logits-run");
+  if(!status||!errors||!panel||!select)return;
+  errors.replaceChildren();select.replaceChildren();$("local-logits-output").replaceChildren();
+  panel.classList.toggle("hidden",!evidence?.logits.size);
+  status.textContent=evidence?evidence.runs.length+" experiments read locally · "+evidence.errors.length+" skipped · "+evidence.logits.size+" optional logit files. No files uploaded.":"Source: Studio workspace.";
+  if(evidence?.errors.length)errors.append(dataTable(["Experiment","Read error"],evidence.errors.map(r=>[r.id,r.reason])));
+  if(evidence)for(const id of evidence.logits.keys()){const option=node("option",id);option.value=id;select.append(option);}
+  if(evidence?.logits.size)select.value=[...evidence.logits.keys()][0];
+}
+async function analyzeLocalLogits(){
+  const evidence=localResultEvidence,id=$("local-logits-run").value,output=$("local-logits-output");
+  const run=evidence?.runs.find(r=>r.id===id),file=evidence?.logits.get(id);
+  if(!run||!file)return;
+  output.replaceChildren(node("p","Reading logits locally…"));
+  try{
+    const summary=await ATIMALocalResults.readLogits(file,run.classes);
+    if(evidence!==localResultEvidence||id!==$("local-logits-run").value)return;
+    output.replaceChildren(node("p","Computed from the supplied file; test-population identity is not independently verified. Not used for automatic pairing."),
+      dataTable(["Samples","Accuracy","Mean max-softmax confidence","Unclipped NLL"],[[summary.samples,score(summary.accuracy),score(summary.mean_confidence),score(summary.nll,false)]]),
+      matrixView(run.classes,summary.confusion_matrix,"Logit-derived confusion matrix",false));
+  }catch(error){if(evidence===localResultEvidence&&id===$("local-logits-run").value)output.replaceChildren(node("p",error.message,"error"));}
+}
 let resultsRequestId=0;
 async function refreshResults(){
   const requestId=++resultsRequestId,target=$("results-list"),button=$("refresh-results");
   button.disabled=true;$("results").setAttribute("aria-busy","true");
+  if($("sync-cluster-results"))$("sync-cluster-results").disabled=!!localResultFiles;
   $("experiment-filter-status").textContent=uiText("Loading results…");
   try{
-    const values=await request("/api/results");
-    if(requestId===resultsRequestId)renderResults(values);
+    const evidence=localResultFiles?await ATIMALocalResults.load(localResultFiles):null;
+    const values=evidence?evidence.runs:await request("/api/results");
+    if(requestId===resultsRequestId){localResultEvidence=evidence;updateLocalResultStatus(evidence);renderResults(values);}
   }catch(error){
     if(requestId!==resultsRequestId)return;
+    localResultEvidence=null;updateLocalResultStatus(null);
+    if(localResultFiles&&$("local-results-status"))$("local-results-status").textContent="Local read failed: "+error.message;
     renderResults([]);target.replaceChildren(node("p",error.message,"error"));
     $("manual-comparison-output").replaceChildren(node("p",error.message,"error"));
   }finally{
