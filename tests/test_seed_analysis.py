@@ -136,3 +136,18 @@ def test_sensitivity_changes_only_declared_variable():
     assert key(a, "model") != key(b, "model")
     b["dataset_audit"]["hashes"]["client_0"] = "different"
     assert key(a, "attack_params.fixture") != key(b, "attack_params.fixture")
+
+
+def test_model_contrast_allows_only_selected_component_source_to_change():
+    a, b = manifest(), manifest(1)
+    a["source_identity"]["component/model/lopez_cnn"] = "cnn-source"
+    b["config"]["model"] = "mlp"
+    b["source_identity"]["component/model/mlp"] = "mlp-source"
+
+    def model_key(m):
+        return next(x["key"] for x in sensitivity_conditions(m, seed_condition(m))
+                    if x["axis"] == "model")
+
+    assert model_key(a) == model_key(b)
+    b["source_identity"]["shared_engine"] = "different"
+    assert model_key(a) != model_key(b)
