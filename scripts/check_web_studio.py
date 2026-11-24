@@ -69,6 +69,18 @@ def check_browser(origin, root):
         # Block every request after the static assets have loaded.
         page.route("**/*", lambda route: route.abort())
         count = len(requests)
+        page.locator("#web-designer summary").click()
+        with page.expect_download() as draft_event:
+            page.locator("#web-design-download").click()
+        draft = json.loads(Path(draft_event.value.path()).read_text(encoding="utf-8"))
+        assert draft["schema_version"] == 1 and draft["mode"] == "single"
+        assert not {"dataset_root", "output_root", "plugin_directory"} & set(draft["config"])
+        page.locator("#web-design-mode").select_option("batch")
+        with page.expect_download() as batch_event:
+            page.locator("#web-design-download").click()
+        batch = json.loads(Path(batch_event.value.path()).read_text(encoding="utf-8"))
+        assert batch["seeds"] == list(range(11))
+        page.locator("#web-designer summary").click()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally")
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
@@ -91,6 +103,24 @@ def check_browser(origin, root):
           await ATIMAFolderAccess.forget();
           return same && !(await ATIMAFolderAccess.recall());
         }""")
+        page.locator("#web-study summary").click()
+        page.locator("#web-study-prepare").click()
+        with page.expect_download() as study_event:
+            page.locator("#web-study-download").click()
+        summary_path = Path(study_event.value.path())
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert len(summary["observations"]) == 4
+        assert str(root) not in json.dumps(summary)
+        first = root / "study-a.json"
+        first.write_text(json.dumps(summary), encoding="utf-8")
+        summary["title"] = "Second study"
+        second = root / "study-b.json"
+        second.write_text(json.dumps(summary), encoding="utf-8")
+        page.locator("#web-study-import").set_input_files([str(first), str(second)])
+        expect(page.locator("#web-study-output")).to_contain_text("2 studies")
+        expect(page.locator("#web-study-output")).to_contain_text("8 matching observations")
+        page.locator("#web-study-clear").click()
+        page.locator("#web-study summary").click()
         page.locator("#local-logits-panel summary").click()
         page.locator("#local-logits-analyze").click()
         expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
