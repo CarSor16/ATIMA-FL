@@ -5,6 +5,10 @@ on:
     paths:
       - 'src/atima_fl/ui/static/**'
       - 'scripts/build_web_studio.py'
+      - 'src/atima_fl/core/**'
+      - 'src/atima_fl/components/**'
+      - 'src/atima_fl/studio/web_plan.py'
+      - 'tests/js/**'
       - 'scripts/check_web_studio.py'
       - '.github/workflows/web-studio.yml'
   workflow_dispatch:
@@ -30,7 +34,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build allowlisted static site
-        run: python scripts/build_web_studio.py _site
+        run: |
+          python -m pip install -e .
+          python scripts/build_web_studio.py _site
       - name: Check JavaScript and local reader
         run: |
           for f in _site/*.js; do node --check "$f"; done
