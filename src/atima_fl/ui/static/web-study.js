@@ -49,7 +49,42 @@ const ATIMAStudy=(()=>{
     });
     return {schema:value.schema,version:1,title:value.title,observations};
   }
-  return Object.freeze({create,parse,measures});
+  // Comparability is a statement about supplied summary metadata, never proof of independence.
+  const canonical=v=>Array.isArray(v)?v.map(canonical):object(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+  const signature=v=>JSON.stringify(canonical(v));
+  function comparisonGroups(studies,metric){
+    if(!measures.includes(metric))throw Error("Unknown study metric");
+    const groups=new Map(),excluded=[];
+    for(const [studyId,study] of studies.entries()){
+      for(const r of study.observations){
+        const c=r.config;
+        const missing=hashes.filter(k=>!r.dataset_hashes[k]);
+        if(r.status!=="complete"||!finite(r.metrics[metric])||missing.length||!r.task||!Number.isSafeInteger(r.metrics.samples)||r.metrics.samples<=0||!Number.isSafeInteger(r.round)||r.round<=0||
+          fields.some(k=>!token(c[k]))||nums.some(k=>!finite(c[k]))||!Number.isSafeInteger(c.seed)||c.seed<0||!Number.isSafeInteger(c.malicious_count)||c.malicious_count<0){
+          excluded.push({study:study.title,id:r.id});continue;
+        }
+        const {seed,...condition}=c;
+        const key=signature({condition,task:r.task,hashes:r.dataset_hashes,round:r.round,samples:r.metrics.samples});
+        if(!groups.has(key))groups.set(key,{condition,task:r.task,round:r.round,samples:r.metrics.samples,studies:new Map()});
+        const group=groups.get(key);
+        if(!group.studies.has(studyId))group.studies.set(studyId,{title:study.title,seeds:new Map()});
+        const seeds=group.studies.get(studyId).seeds;
+        if(!seeds.has(seed))seeds.set(seed,[]);
+        seeds.get(seed).push(r.metrics[metric]);
+      }
+    }
+    const matches=[];
+    for(const group of groups.values()){
+      if(group.studies.size<2)continue;
+      const rows=[...group.studies.values()].map(s=>{
+        const valid=[...s.seeds.values()].filter(v=>v.length===1).map(v=>v[0]);
+        return {title:s.title,stats:ATIMAAnalysis.stats(valid),duplicateSeeds:[...s.seeds.values()].filter(v=>v.length>1).length};
+      });
+      matches.push({...group,rows});
+    }
+    return {matches,excluded};
+  }
+  return Object.freeze({create,parse,measures,comparisonGroups});
 })();
 function setupStudyExchange(){
   const panel=$("web-study");if(!panel)return;
@@ -66,6 +101,19 @@ function setupStudyExchange(){
     const prev=node("button","Previous","secondary"),next=node("button","Next","secondary");prev.type=next.type="button";prev.disabled=page===0;next.disabled=page>=last;
     prev.addEventListener("click",()=>{page--;render();});next.addEventListener("click",()=>{page++;render();});
     out.append(prev,node("span"," Page "+(page+1)+" / "+(last+1)+" "),next);
+    const audit=node("details");audit.append(node("summary","Cross-study condition audit and separate seed statistics"));
+    const comparison=ATIMAStudy.comparisonGroups([...studies.values()],key);
+    audit.append(node("p",comparison.matches.length+" matching recorded conditions across studies; "+comparison.excluded.length+" observations lack complete comparison metadata."));
+    audit.append(node("p","Matching summary fields do not verify full configuration, software, sample identity or study independence. Means and sample SD are computed separately within each study. No pooled estimates, causal effects or significance tests."));
+    for(const group of comparison.matches.slice(0,50)){
+      const detail=node("details"),condition=group.condition;
+      detail.append(node("summary",[condition.attack,condition.model,condition.partition,group.task,"round "+group.round].join(" · ")));
+      detail.append(dataTable(["Study","Distinct seeds","Mean","Sample SD","Duplicate seeds excluded"],group.rows.map(r=>[r.title,r.stats.n,score(r.stats.mean,key!=="mcc"&&key!=="loss"),score(r.stats.sd,key!=="mcc"&&key!=="loss"),r.duplicateSeeds])));
+      const metadata=node("details");metadata.append(node("summary","Recorded condition"),node("pre",JSON.stringify(condition,null,2)));detail.append(metadata);audit.append(detail);
+    }
+    if(comparison.matches.length>50)audit.append(node("p","Showing first 50 matching conditions."));
+    out.append(audit);
+
     const details=node("details");details.append(node("summary","Recorded conditions and dataset fingerprints (selected page)"),node("pre",JSON.stringify(rows.slice(page*size,(page+1)*size),null,2)));out.append(details);
   }
   for(const name of ATIMAStudy.measures){const option=node("option",name);option.value=name;metric.append(option);}metric.value="macro_f1";
