@@ -30,7 +30,7 @@ const ATIMAStudy=(()=>{
     if(!Array.isArray(runs)||!runs.length||runs.length>1000)throw Error("Choose 1–1000 runs");
     return {schema:"atima.study.summary",version:1,title,observations:runs.map(observation)};
   }
-  async function createWithEvidence(title,runs){
+  async function createWithEvidence(title,runs,pairCheck=()=>false){
     const doc=create(title,runs);doc.version=2;
     for(let i=0;i<runs.length;i++){
       const run=runs[i],r=doc.observations[i],test=run.metrics?.test;
@@ -41,6 +41,14 @@ const ATIMAStudy=(()=>{
       const bytes=new TextEncoder().encode(JSON.stringify([source,order,support,test.samples]));
       const digest=await crypto.subtle.digest("SHA-256",bytes);
       r.condition_sha256=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+    }
+    const byId=new Map(runs.map(run=>[run.id,run]));
+    const indices=new Map(runs.map((run,i)=>[run.id,i]));
+    if(byId.size===runs.length)for(let i=0;i<runs.length;i++){
+      const run=runs[i],cleanIndex=indices.get(run.baseline_id);
+      if(cleanIndex===undefined||!pairCheck(run,byId))continue;
+      const attack=doc.observations[i],clean=doc.observations[cleanIndex];
+      if(declaredPair(attack,clean))attack.matched_clean_id=clean.id;
     }
     return doc;
   }
@@ -55,6 +63,10 @@ const ATIMAStudy=(()=>{
       const clean=observation(run,ids.size);
       clean.id=r.id;
       if(value.version===2&&typeof r.condition_sha256==="string"&&/^[a-f0-9]{64}$/.test(r.condition_sha256))clean.condition_sha256=r.condition_sha256;
+      if(value.version===2&&r.matched_clean_id!==undefined){
+        if(typeof r.matched_clean_id!=="string"||!/^Run-[1-9]\d{0,3}$/.test(r.matched_clean_id))throw Error("Invalid declared baseline reference");
+        clean.matched_clean_id=r.matched_clean_id;
+      }
       clean.config.malicious_count=Number.isSafeInteger(cfg.malicious_count)&&cfg.malicious_count>=0&&cfg.malicious_count<=10000?cfg.malicious_count:null;
       for(const [key,v] of Object.entries(clean.metrics)){
         if(key==="samples")continue;
@@ -62,15 +74,29 @@ const ATIMAStudy=(()=>{
       }
       return clean;
     });
+    const byId=new Map(observations.map(r=>[r.id,r]));
+    for(const r of observations)if(r.matched_clean_id&&!declaredPair(r,byId.get(r.matched_clean_id)))throw Error("Incompatible declared baseline reference");
     return {schema:value.schema,version:value.version,title:value.title,observations};
   }
   // Comparability is a statement about supplied summary metadata, never proof of independence.
   const canonical=v=>Array.isArray(v)?v.map(canonical):object(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
   const signature=v=>JSON.stringify(canonical(v));
+  function declaredPair(attack,clean){
+    if(!attack||!clean||attack.status!=="complete"||clean.status!=="complete"||attack.config.attack==="none"||clean.config.attack!=="none"||clean.config.malicious_count!==0||
+      !attack.condition_sha256||!clean.condition_sha256||!Number.isSafeInteger(attack.config.seed)||attack.config.seed!==clean.config.seed||!Number.isSafeInteger(attack.round)||attack.round<=0||attack.round!==clean.round||
+      !attack.task||attack.task!==clean.task||!Number.isSafeInteger(attack.metrics.samples)||attack.metrics.samples<=0||attack.metrics.samples!==clean.metrics.samples||hashes.some(k=>!attack.dataset_hashes[k]||attack.dataset_hashes[k]!==clean.dataset_hashes[k]))return false;
+    const comparable=c=>Object.fromEntries(Object.entries(c).filter(([k])=>!["attack","attack_params","malicious_count","attack_start","attack_end"].includes(k)));
+    return signature(comparable(attack.config))===signature(comparable(clean.config));
+  }
   function comparisonGroups(studies,metric){
     if(!measures.includes(metric))throw Error("Unknown study metric");
     const groups=new Map(),excluded=[];
     for(const [studyId,study] of studies.entries()){
+      const byId=new Map(study.observations.map(r=>[r.id,r])),cleanCounts=new Map();
+      const cleanKey=r=>signature([r.condition_sha256,r.config.seed]);
+      for(const r of study.observations)if(r.status==="complete"&&r.config.attack==="none"&&r.condition_sha256){
+        const k=cleanKey(r);cleanCounts.set(k,(cleanCounts.get(k)||0)+1);
+      }
       for(const r of study.observations){
         const c=r.config;
         const missing=hashes.filter(k=>!r.dataset_hashes[k]);
@@ -85,7 +111,9 @@ const ATIMAStudy=(()=>{
         if(!group.studies.has(studyId))group.studies.set(studyId,{title:study.title,seeds:new Map()});
         const seeds=group.studies.get(studyId).seeds;
         if(!seeds.has(seed))seeds.set(seed,[]);
-        seeds.get(seed).push(r.metrics[metric]);
+        const clean=byId.get(r.matched_clean_id);
+        const paired=declaredPair(r,clean)&&cleanCounts.get(cleanKey(clean))===1&&finite(clean.metrics[metric]);
+        seeds.get(seed).push({value:r.metrics[metric],clean:paired?clean.metrics[metric]:null,baseline:paired?clean.condition_sha256:null});
       }
     }
     const matches=[];
@@ -93,9 +121,12 @@ const ATIMAStudy=(()=>{
       if(group.studies.size<2)continue;
       const rows=[...group.studies.values()].map(s=>{
         const valid=[...s.seeds.values()].filter(v=>v.length===1).map(v=>v[0]);
-        return {title:s.title,stats:ATIMAAnalysis.stats(valid),duplicateSeeds:[...s.seeds.values()].filter(v=>v.length>1).length};
+        const paired=ATIMAAnalysis.pairedStats(valid.map(v=>[v.clean,v.value]));
+        return {title:s.title,stats:ATIMAAnalysis.stats(valid.map(v=>v.value)),paired,
+          baselineConditions:[...new Set(valid.map(v=>v.baseline).filter(Boolean))],
+          duplicateSeeds:[...s.seeds.values()].filter(v=>v.length>1).length};
       });
-      matches.push({...group,rows});
+      matches.push({...group,rows,baselineConditions:[...new Set(rows.flatMap(r=>r.baselineConditions))]});
     }
     return {matches,excluded};
   }
@@ -110,7 +141,7 @@ function setupStudyExchange(){
     const query=filter.value.trim().toLowerCase(),key=metric.value;
     const rows=[...studies.values()].flatMap(study=>study.observations.map(r=>({title:study.title,r}))).filter(({title,r})=>JSON.stringify([title,r.config,r.task]).toLowerCase().includes(query));
     const size=50,last=Math.max(0,Math.ceil(rows.length/size)-1);page=Math.min(page,last);
-    out.append(node("p",studies.size+" studies · "+rows.length+" matching observations. No cross-study pooling or paired-effect claims."));
+    out.append(node("p",studies.size+" studies · "+rows.length+" matching observations. No cross-study pooling; reported clean/attack pairs stay within each study."));
     const tableRows=rows.slice(page*size,(page+1)*size).map(({title,r})=>[title,r.id,r.task??"—",r.config.attack??"—",r.config.partition??"—",r.config.model??"—",r.config.seed??"—",r.config.malicious_count??"—",score(r.metrics[key],key!=="loss"&&key!=="mcc"),r.metrics.samples??"—"]);
     out.append(dataTable(["Study","Run","Task","Attack","Partition","Model","Seed","Malicious clients",key,"Samples"],tableRows));
     const prev=node("button","Previous","secondary"),next=node("button","Next","secondary");prev.type=next.type="button";prev.disabled=page===0;next.disabled=page>=last;
@@ -119,12 +150,17 @@ function setupStudyExchange(){
     const audit=node("details");audit.append(node("summary","Cross-study condition audit and separate seed statistics"));
     const comparison=ATIMAStudy.comparisonGroups([...studies.values()],key);
     audit.append(node("p",comparison.matches.length+" matching recorded conditions across studies; "+comparison.excluded.length+" observations lack complete comparison metadata."));
-    audit.append(node("p","Matching summary fields do not verify full configuration, software, sample identity or study independence. Means and sample SD are computed separately within each study. No pooled estimates, causal effects or significance tests."));
+    audit.append(node("p","Matching summary fields do not verify full configuration, software, sample identity or study independence. Means and sample SD are computed separately within each study. Reported within-study pairs use only compatible declared clean references. No pooled estimates, causal effects or significance tests."));
     for(const group of comparison.matches.slice(0,50)){
       const detail=node("details"),condition=group.condition;
       detail.append(node("summary",[condition.attack,condition.model,condition.partition,group.task,"round "+group.round].join(" · ")));
       detail.append(node("p",group.identity));
       detail.append(dataTable(["Study","Distinct seeds","Mean","Sample SD","Duplicate seeds excluded"],group.rows.map(r=>[r.title,r.stats.n,score(r.stats.mean,key!=="mcc"&&key!=="loss"),score(r.stats.sd,key!=="mcc"&&key!=="loss"),r.duplicateSeeds])));
+      if(condition.attack!=="none"){
+        const percent=key!=="mcc"&&key!=="loss";
+        detail.append(node("p",group.baselineConditions.length>1?"Different declared clean-condition fingerprints: do not interpret differences between studies as controlled effects.":"Within-study reported clean/attack pairs only; missing or ambiguous pairs are not estimated."));
+        detail.append(dataTable(["Study","Matched seeds","Clean mean","Attack mean","Attack − clean","SD of paired delta"],group.rows.map(r=>[r.title,r.paired.delta.n,score(r.paired.clean.mean,percent),score(r.paired.attack.mean,percent),deltaScore(r.paired.attack.mean,r.paired.clean.mean,percent),numeric(r.paired.delta.sd)?percent?(100*r.paired.delta.sd).toFixed(2)+" pp":score(r.paired.delta.sd,false):"—"])));
+      }
       const metadata=node("details");metadata.append(node("summary","Recorded condition"),node("pre",JSON.stringify(condition,null,2)));detail.append(metadata);audit.append(detail);
     }
     if(comparison.matches.length>50)audit.append(node("p","Showing first 50 matching conditions."));
@@ -137,7 +173,7 @@ function setupStudyExchange(){
   $("web-study-prepare").addEventListener("click",async()=>{
     const ticket=++revision;
     pending=null;preview.textContent="";$("web-study-download").disabled=true;
-    try{const prepared=ATIMAStudy.parse(await ATIMAStudy.createWithEvidence($("web-study-title").value,availableResults));if(ticket!==revision)return;pending=prepared;preview.textContent=JSON.stringify(pending,null,2);$("web-study-download").disabled=false;status.textContent="Review the exact summary before downloading. No original run names or paths are included.";}
+    try{const prepared=ATIMAStudy.parse(await ATIMAStudy.createWithEvidence($("web-study-title").value,availableResults,verifiedPair));if(ticket!==revision)return;pending=prepared;preview.textContent=JSON.stringify(pending,null,2);$("web-study-download").disabled=false;status.textContent="Review the exact summary before downloading. No original run names or paths are included.";}
     catch(e){status.textContent=e.message;}
   });
   $("web-study-download").addEventListener("click",()=>{
