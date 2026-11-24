@@ -659,7 +659,8 @@ function seedCurve(runs,cleans=[]){
   root.append(node("h4",cleans.length?"Matched mean validation trajectories: clean vs attack":"Mean validation trajectory"));
   const metrics=RESULT_METRICS.map(([key,label])=>[key,label]);
   const metric=choiceControl("Validation metric",metrics,"macro_f1"),body=node("div");
-  root.append(metric.label,body);
+  const bands=checkControl("Show variability (±1 sample SD)",true);
+  root.append(metric.label,bands.label,body);
   function redraw(){
     body.replaceChildren();
     const key=metric.select.value,percent=key!=="loss"&&key!=="mcc";
@@ -670,8 +671,9 @@ function seedCurve(runs,cleans=[]){
     const full=rows.filter(row=>row.n===runs.length&&(!cleans.length||cleanByRound.get(row.round)?.n===cleans.length));
     const cleanFull=full.map(row=>cleanByRound.get(row.round)).filter(Boolean);
     const bounds=[...rows,...cleanRows];
-    const lo=percent?0:Math.min(0,...bounds.map(r=>r.min));
-    const hi=percent?1:Math.max(lo+.001,...bounds.map(r=>r.max));
+    const extent=bounds.flatMap(row=>bands.input.checked&&numeric(row.sd)?[row.min,row.max,row.mean-row.sd,row.mean+row.sd]:[row.min,row.max]);
+    const lo=percent?0:Math.min(0,...extent);
+    const hi=percent?1:Math.max(lo+.001,...extent);
     const maxRound=Math.max(1,...rows.map(r=>r.round));
     const x=round=>52+(round-1)/Math.max(1,maxRound-1)*710;
     const y=value=>232-(value-lo)/(hi-lo)*194;
@@ -682,6 +684,18 @@ function seedCurve(runs,cleans=[]){
       svgElement("text",{x:6,y:232,fill:"currentColor","font-size":11},score(lo,percent)),
       svgElement("text",{x:52,y:250,fill:"currentColor","font-size":11},"1"),
       svgElement("text",{x:738,y:250,fill:"currentColor","font-size":11},String(maxRound)));
+    if(bands.input.checked){
+      for(const [series,color] of [[full,"currentColor"],[cleanFull,"#64748b"]]){
+        const byRound=new Map(series.map(row=>[row.round,row]));
+        for(const segment of roundSegments(series.filter(row=>numeric(row.sd)).map(row=>({round:row.round,value:row.mean})))){
+          const clip=value=>Math.max(lo,Math.min(hi,value));
+          const upper=segment.map(p=>x(p.round)+","+y(clip(p.value+byRound.get(p.round).sd)));
+          const lower=[...segment].reverse().map(p=>x(p.round)+","+y(clip(p.value-byRound.get(p.round).sd)));
+          if(segment.length>1)svg.append(svgElement("polygon",{points:[...upper,...lower].join(" "),fill:color,opacity:.13}));
+          else{const p=segment[0],sd=byRound.get(p.round).sd;svg.append(svgElement("line",{x1:x(p.round),x2:x(p.round),y1:y(clip(p.value-sd)),y2:y(clip(p.value+sd)),stroke:color,opacity:.4,"stroke-width":4}));}
+        }
+      }
+    }
     for(const segment of roundSegments(full.map(r=>({round:r.round,value:r.mean})))){
       svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"currentColor","stroke-width":2.5}));
       for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"currentColor"}));
@@ -692,7 +706,7 @@ function seedCurve(runs,cleans=[]){
     }
     if(full.length)body.append(svg);
     if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
-    body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated."));
+    body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated. "+(bands.input.checked?"Shading: mean ± one sample SD (not a confidence interval); proportion bands are clipped to 0–100%.":"")));
     const details=node("details"),table=cleans.length
       ?dataTable(["Round","Clean mean","Attack mean","Attack − clean","Clean n","Attack n"],rows.map(row=>{
         const clean=cleanByRound.get(row.round),matched=row.n===runs.length&&clean?.n===cleans.length;
@@ -701,7 +715,7 @@ function seedCurve(runs,cleans=[]){
       :dataTable(["Round","Mean","SD","Min","Max","n"],rows.map(row=>[row.round,score(row.mean,percent),score(row.sd,percent),score(row.min,percent),score(row.max,percent),row.n+"/"+runs.length]));
     details.append(node("summary","Round-by-round values and sample counts"),table);body.append(details);
   }
-  metric.select.addEventListener("change",redraw);redraw();return root;
+  metric.select.addEventListener("change",redraw);bands.input.addEventListener("change",redraw);redraw();return root;
 }
 function seedLabel(r){
   const c=r.config||{},names={local_class_gradient:"LCG",model_replacement:"ModelReplacement",class_withholding:"ClassWithholding",sample_weight_hijack:"SampleWeightHijack",update_scaling:"UpdateScaling",stale_replay:"StaleReplay",free_rider:"FreeRider",label_flip:"LabelFlip",none:"Clean"};
