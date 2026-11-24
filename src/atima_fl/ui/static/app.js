@@ -82,7 +82,14 @@ function updateResultsOverview(values){
 
 const groups = {"data-components":[["dataset","dataset"],["partition","partition"]],"model-components":[["model","model"],["optimizer","optimizer"],["loss","loss"],["metrics","metrics"]],"attack-components":[["attack","attack"],["aggregator","aggregation"]]};
 const titles = {dataset:"Dataset",partition:"Partizione",model:"Modello",optimizer:"Ottimizzatore",loss:"Loss",metrics:"Metriche",attack:"Attacco",aggregator:"Aggregazione"};
-function componentLabel(component,key){return component.translations?.[currentLanguage]?.[key] || component[key];}
+function componentLabel(component,key){
+  const help=component.help?.[currentLanguage]||component.help?.en;
+  if(key==="description"&&help){
+    const label=currentLanguage==="it"?"Parametri e intensità: ":"Parameters and intensity: ";
+    return help.mechanism+"\n"+label+help.intensity;
+  }
+  return component.translations?.[currentLanguage]?.[key] || component[key];
+}
 
 const CATALOG_GROUPS = [
   {title:"Data & partitions",kinds:[["dataset","Datasets"],["partition","Partitions"]]},
