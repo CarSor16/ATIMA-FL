@@ -27,6 +27,14 @@ async function main(){
   const changed=reader.project("b",b);
   assert.notEqual(ar.seed_condition.key,changed.seed_condition.key);
   assert.equal(ar.sensitivity_conditions.find(v=>v.axis==="attack_params.factor").key,changed.sensitivity_conditions.find(v=>v.axis==="attack_params.factor").key);
+  const modelA=fixture(),modelB=fixture(1);
+  modelA.source_identity["component/model/mlp"]="mlp-source";
+  modelB.config.model="lopez_cnn";
+  modelB.source_identity["component/model/lopez_cnn"]="cnn-source";
+  const modelKey=m=>reader.project("model",m).sensitivity_conditions.find(v=>v.axis==="model").key;
+  assert.equal(modelKey(modelA),modelKey(modelB));
+  modelB.source_identity.engine="different";
+  assert.notEqual(modelKey(modelA),modelKey(modelB));
   const pairs=reader.pair([ar,reader.project("clean",clean)]);
   assert.equal(pairs[0].baseline_id,"clean");
   const wrong=fixture(1,"none");wrong.pair_id=a.pair_id;
