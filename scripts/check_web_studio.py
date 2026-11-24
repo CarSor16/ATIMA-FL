@@ -2,7 +2,7 @@
 import json
 import shutil
 from pathlib import Path
-import sys
+import argparse
 from tempfile import TemporaryDirectory
 from threading import Thread
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -54,73 +54,96 @@ def write_fixture(root, seed, attack):
         }), encoding="utf-8")
 
 
-def main(site):
+def check_browser(origin, root):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 850})
+        errors, requests = [], []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("request", lambda req: requests.append((req.method, req.url)))
+        page.goto(origin, wait_until="networkidle")
+        expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
+        assert not errors, errors
+        assert all(method == "GET" and url.startswith(origin) for method, url in requests), requests
+        assert "connect-src 'none'" in page.locator("meta[http-equiv=Content-Security-Policy]").get_attribute("content")
+        # Block every request after the static assets have loaded.
+        page.route("**/*", lambda route: route.abort())
+        count = len(requests)
+        page.locator("#local-results-folder").set_input_files(str(root))
+        expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally")
+        expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
+        expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
+        expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
+        with page.expect_download() as event:
+            page.get_by_role("button", name="Export aggregate metrics CSV").click()
+        download = event.value
+        assert download.suggested_filename == "atima_cohort_metrics.csv"
+        report = Path(download.path()).read_text(encoding="utf-8")
+        assert "Matched clean mean" in report and str(root) not in report
+        # Exercise a real IndexedDB structured-cloned directory handle on this
+        # secure loopback origin, without requiring an OS permission dialog.
+        assert page.evaluate("""async () => {
+          const root = await navigator.storage.getDirectory();
+          const dir = await root.getDirectoryHandle('fixture-folder', {create:true});
+          await ATIMAFolderAccess.remember(dir);
+          const saved = await ATIMAFolderAccess.recall();
+          const same = await saved.isSameEntry(dir);
+          await ATIMAFolderAccess.forget();
+          return same && !(await ATIMAFolderAccess.recall());
+        }""")
+        page.locator("#local-logits-panel summary").click()
+        page.locator("#local-logits-analyze").click()
+        expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
+        page.locator("#local-results-reset").click()
+        expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
+        assert not [(method, url) for method, url in requests[count:] if url.startswith(("http:", "https:"))], requests[count:]
+        assert not errors, errors
+        assert page.evaluate("document.cookie") == ""
+        # Recheck responsive layout without reading or transmitting any real data.
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 2")
+        browser.close()
+
+    print("Static viewer passed real-browser local import, aggregation, logits, reset and offline-network checks.")
+
+
+def main(site, live=False):
     with TemporaryDirectory() as temp:
         root = Path(temp) / "fixtures"
         root.mkdir()
-        www = Path(temp) / "www"
-        shutil.copytree(site, www / "ATIMA-FL")
         for seed in (0, 1):
             for attack in ("none", "update_scaling"):
                 write_fixture(root, seed, attack)
+        if live:
+            # Public application assets only. Never send fixture files to the origin.
+            from urllib.request import urlopen
+            from urllib.parse import urljoin
+
+            origin = "https://carsor16.github.io/ATIMA-FL/"
+            for asset in sorted(Path(site).iterdir()):
+                if asset.name == ".nojekyll":
+                    continue
+                with urlopen(urljoin(origin, asset.name), timeout=20) as response:
+                    assert response.geturl().startswith(origin)
+                    assert response.read() == asset.read_bytes(), f"Deployed asset differs: {asset.name}"
+            check_browser(origin, root)
+            print("Live HTTPS site matches the audited static build.")
+            return
+        www = Path(temp) / "www"
+        shutil.copytree(site, www / "ATIMA-FL")
         server = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(www)))
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch()
-                page = browser.new_page(viewport={"width": 1280, "height": 850})
-                errors, requests = [], []
-                page.on("pageerror", lambda e: errors.append(str(e)))
-                page.on("request", lambda req: requests.append((req.method, req.url)))
-                origin = f"http://127.0.0.1:{server.server_port}/ATIMA-FL/"
-                page.goto(origin, wait_until="networkidle")
-                expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
-                assert not errors, errors
-                assert all(method == "GET" and url.startswith(origin) for method, url in requests), requests
-                assert "connect-src 'none'" in page.locator("meta[http-equiv=Content-Security-Policy]").get_attribute("content")
-                # Block every request after the static assets have loaded.
-                page.route("**/*", lambda route: route.abort())
-                count = len(requests)
-                page.locator("#local-results-folder").set_input_files(str(root))
-                expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally")
-                expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
-                expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
-                expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
-                with page.expect_download() as event:
-                    page.get_by_role("button", name="Export aggregate metrics CSV").click()
-                download = event.value
-                assert download.suggested_filename == "atima_cohort_metrics.csv"
-                report = Path(download.path()).read_text(encoding="utf-8")
-                assert "Matched clean mean" in report and str(root) not in report
-                # Exercise a real IndexedDB structured-cloned directory handle on this
-                # secure loopback origin, without requiring an OS permission dialog.
-                assert page.evaluate("""async () => {
-                  const root = await navigator.storage.getDirectory();
-                  const dir = await root.getDirectoryHandle('fixture-folder', {create:true});
-                  await ATIMAFolderAccess.remember(dir);
-                  const saved = await ATIMAFolderAccess.recall();
-                  const same = await saved.isSameEntry(dir);
-                  await ATIMAFolderAccess.forget();
-                  return same && !(await ATIMAFolderAccess.recall());
-                }""")
-                page.locator("#local-logits-panel summary").click()
-                page.locator("#local-logits-analyze").click()
-                expect(page.locator("#local-logits-output")).to_contain_text("50.00%")
-                page.locator("#local-results-reset").click()
-                expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
-                assert len(requests) == count, requests[count:]
-                assert not errors, errors
-                assert page.evaluate("document.cookie") == ""
-                # Recheck responsive layout without reading or transmitting any real data.
-                page.set_viewport_size({"width": 390, "height": 844})
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 2")
-                browser.close()
+            check_browser(f"http://127.0.0.1:{server.server_port}/ATIMA-FL/", root)
         finally:
             server.shutdown()
             server.server_close()
-    print("Static viewer passed real-browser local import, aggregation, logits, reset and offline-network checks.")
 
 
 if __name__ == "__main__":
-    main(str(Path(sys.argv[1]).resolve()))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("site", type=Path)
+    parser.add_argument("--live", action="store_true")
+    args = parser.parse_args()
+    main(str(args.site.resolve()), args.live)
