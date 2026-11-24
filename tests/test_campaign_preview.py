@@ -129,3 +129,34 @@ def test_batch_export_clean_only_and_validation_before_writes(tmp_path):
     assert manifest["runs"] == 3
     assert all(len(entry["profiles"]) == 1 for entry in manifest["entries"])
     assert not (tmp_path / "results").exists()
+
+
+def test_sweep_shared_clean_and_distinct_model_baselines(tmp_path):
+    from atima_fl.engine.plans import save_parameter_sweep
+
+    cfg = profile(attack="update_scaling", malicious_clients=[0],
+                  output_root=str(tmp_path / "results"))
+    root = save_parameter_sweep(cfg, tmp_path, [0, 1], "attack_params.factor", [1, 2])
+    campaign = json.loads((root / "campaign.json").read_text())
+    assert campaign["runs"] == 6
+    assert campaign["sweep"]["axis"] == "attack_params.factor"
+    for entry in campaign["entries"]:
+        clean, first, second = [ExperimentConfig.load(root / p) for p in entry["profiles"]]
+        assert clean.attack == "none"
+        assert first.seed == second.seed == clean.seed
+        assert first.attack_params["factor"] == 1
+        assert second.attack_params["factor"] == 2
+        assert first.paired_clean == second.paired_clean
+        assert first.paired_clean.endswith(clean.name)
+    assert not (tmp_path / "results").exists()
+
+
+def test_invalid_sweep_does_not_write(tmp_path):
+    from atima_fl.engine.plans import save_parameter_sweep
+
+    cfg = profile(attack="update_scaling", malicious_clients=[0])
+    for axis, values in [("unknown", [1, 2]), ("attack_params.factor", [1, 1]),
+                         ("malicious_count", [1, 999])]:
+        with pytest.raises(ValueError):
+            save_parameter_sweep(cfg, tmp_path, [0, 1], axis, values)
+    assert not (tmp_path / "plans").exists()
