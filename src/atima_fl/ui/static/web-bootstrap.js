@@ -26,6 +26,7 @@ const webViews={
 let webView="results";
 function openWebView(name){
   if(!Object.hasOwn(webViews,name))name="results";
+  const changed=webView!==name;
   webView=name;
   for(const key of Object.keys(webViews))$("web-view-"+key).hidden=key!==name;
   for(const button of document.querySelectorAll("[data-web-view]")){
@@ -41,6 +42,7 @@ function openWebView(name){
   }
   if(name==="designer")$("web-designer").open=true;
   if(name==="studies")$("web-study").open=true;
+  if(changed){window.scrollTo(0,0);$("web-view-title").tabIndex=-1;$("web-view-title").focus({preventScroll:true});}
 }
 function setupWebNavigation(){
   const data=$("web-view-data"),panels=$("results-workspace-panels");
@@ -64,8 +66,7 @@ function setupWebNavigation(){
     const run=availableResults.find(r=>r.id===chosenComparison.first);
     const {groups}=seedCohorts(availableResults);
     const match=[...groups].find(([,runs])=>runs.some(r=>r.id===run?.id));
-    openWebView("seeds");
-    if(match){$("seed-cohort-choice").value=match[0];refreshSeedWorkspace();}
+    if(match){$("seed-cohort-choice").value=match[0];refreshSeedWorkspace();openWebView("seeds");}
   });
   openWebView("results");
 }

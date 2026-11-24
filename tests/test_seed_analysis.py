@@ -160,6 +160,8 @@ def test_protocol_group_ignores_shard_and_software_variation_but_not_global_data
     second["source_identity"]["version"] = "other-source"
     second["runtime"]["gpu"] = "other-gpu"
     second["config"]["cpu_budget"] = 96
+    first["config"]["compute_device"] = "cpu"
+    second["config"]["compute_device"] = "cuda"
     a, b = seed_condition(first), seed_condition(second)
     assert a["key"] != b["key"]
     assert a["protocol_key"] == b["protocol_key"]

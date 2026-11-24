@@ -24,7 +24,7 @@ const ATIMALocalResults=(()=>{
   }
   function protocolKey(base){
     if(!base)return null;
-    return key({config:Object.fromEntries(Object.entries(base.config).filter(([k])=>!["cpu_budget","client_cpus","client_gpu_fraction"].includes(k))),
+    return key({config:Object.fromEntries(Object.entries(base.config).filter(([k])=>!["cpu_budget","client_cpus","client_gpu_fraction","compute_device"].includes(k))),
       dataset_hashes:Object.fromEntries(hashKeys.map(k=>[k,base.dataset_hashes[k]])),
       task:base.task,classes:base.classes,round:base.round});
   }

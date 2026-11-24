@@ -29,6 +29,7 @@ async function main(){
   other.source_identity.version="different source";
   other.runtime.gpu="different gpu";
   other.config.cpu_budget=96;
+  other.config.compute_device="cuda";
   const revised=reader.project("other",other);
   assert.notEqual(ar.seed_condition.key,revised.seed_condition.key);
   assert.equal(ar.seed_condition.protocol_key,revised.seed_condition.protocol_key);

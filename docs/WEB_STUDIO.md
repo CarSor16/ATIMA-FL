@@ -160,3 +160,8 @@ loaded. From a compatible selected experiment, **Analyze selected condition
 across seeds** opens the corresponding cohort rather than an unrelated default.
 Provenance settings and the full cohort browser remain available on demand.
 No changes are made to the Runtime or local Studio layout.
+
+The descriptive protocol key also ignores the explicit CPU/CUDA device field.
+Exact provenance still retains it, and metadata-matched clean/attack pairs
+still require matching runtime identities. Small nonzero displayed deltas
+use extra decimals when ordinary rounding would turn them into zero.

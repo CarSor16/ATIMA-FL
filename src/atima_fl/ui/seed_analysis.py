@@ -82,7 +82,7 @@ def seed_condition(manifest):
     # A descriptive protocol cohort may span prepared shard and runtime versions.
     protocol = {
         "config": {k: v for k, v in condition["config"].items()
-                   if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction"}},
+                   if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction", "compute_device"}},
         "dataset_hashes": {k: hashes[k] for k in _GLOBAL_HASHES if k != "assignment"},
         "task": condition["task"],
         "classes": classes,

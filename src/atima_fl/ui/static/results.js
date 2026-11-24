@@ -11,7 +11,11 @@ function score(v, percent=true){return numeric(v) ? (percent?(100*v).toFixed(2)+
 function deltaScore(value, reference, percent=true){
   if(!numeric(value)||!numeric(reference))return "—";
   const difference=(value-reference)*(percent?100:1);
-  return (difference>0?"+":"")+difference.toFixed(percent?2:4)+(percent?" pp":"");
+  const base=percent?2:4;
+  // Preserve small nonzero effects without making every table unnecessarily dense.
+  let digits=base;
+  while(difference!==0&&Number(difference.toFixed(digits))===0&&digits<8)digits++;
+  return (difference>0?"+":"")+difference.toFixed(digits)+(percent?" pp":"");
 }
 function supportedClassEntries(test){
   return Object.entries(test.per_class||{}).filter(([,v])=>numeric(v?.support)&&v.support>0&&numeric(v?.recall));
