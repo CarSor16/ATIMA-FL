@@ -627,6 +627,21 @@ async function previewSeedCampaign(){
   }catch(error){output.textContent="Campaign preview failed: "+error.message;}
   finally{button.disabled=false;}
 }
+async function exportSeedBatch(){
+  const button=$("export-seed-batch"),status=$("seed-batch-status"),download=$("seed-batch-download");
+  button.disabled=true;download.classList.add("hidden");
+  try{
+    const seeds=integerList($("seed-batch-seeds").value,"Seeds");
+    if(!seeds.length||seeds.length>50||seeds.some(seed=>seed<0||seed>4294967295)||new Set(seeds).size!==seeds.length)
+      throw new Error("Choose 1–50 distinct non-negative integer seeds.");
+    const c=config(),count=seeds.length*(c.attack==="none"?1:2);
+    status.textContent="Validating "+count+" profiles…";
+    const result=await request("/api/seed-batch",{config:c,seeds});
+    download.href=result.download;download.classList.remove("hidden");
+    status.textContent="Saved "+count+" profiles. No jobs were submitted.";
+  }catch(error){status.textContent="Batch export failed: "+error.message;}
+  finally{button.disabled=false;}
+}
 let clusterImportOffset=0;
 async function syncClusterResults(){
   const button=$("sync-cluster-results"),output=$("cluster-sync-message");
@@ -757,7 +772,7 @@ async function initialize(){
     $("compare-experiment-b").value=chosenComparison.second||"";
     refreshManualFromChoices();
   });
-  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
+  $("validate").addEventListener("click",()=>action(false));$("save").addEventListener("click",()=>action("toml"));$("save-zip").addEventListener("click",()=>action("zip"));$("save-study").addEventListener("click",()=>saveStudy());$("campaign-preview").addEventListener("click",previewSeedCampaign);$("export-seed-batch").addEventListener("click",exportSeedBatch);$("refresh-results").addEventListener("click",refreshResults);$("sync-cluster-results").addEventListener("click",syncClusterResults);refreshClusterStatus();$("inspect-labels").addEventListener("click",inspectLabels);
   $("component-search").addEventListener("input",()=>{delete $("component-search").dataset.kind;renderComponentCatalog();});
   for(const button of document.querySelectorAll(".nav[data-page]"))
     button.addEventListener("click",()=>navigateTo(button.dataset.page,true));
