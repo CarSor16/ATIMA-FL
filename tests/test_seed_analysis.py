@@ -151,3 +151,31 @@ def test_model_contrast_allows_only_selected_component_source_to_change():
     assert model_key(a) == model_key(b)
     b["source_identity"]["shared_engine"] = "different"
     assert model_key(a) != model_key(b)
+
+
+def test_protocol_group_ignores_shard_and_software_variation_but_not_global_data():
+    first, second = manifest(0), manifest(1)
+    second["dataset_audit"]["hashes"]["client_0"] = "other-shard"
+    second["dataset_audit"]["hashes"]["assignment"] = "other-assignment"
+    second["source_identity"]["version"] = "other-source"
+    second["runtime"]["gpu"] = "other-gpu"
+    second["config"]["cpu_budget"] = 96
+    a, b = seed_condition(first), seed_condition(second)
+    assert a["key"] != b["key"]
+    assert a["protocol_key"] == b["protocol_key"]
+    second["dataset_audit"]["hashes"]["test"] = "other-test"
+    assert seed_condition(second)["protocol_key"] != a["protocol_key"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("attack_params", {"fixture": 2}),
+    ("partition_params", {"alpha": 0.1}),
+    ("malicious_clients", [1]),
+    ("model", "mlp"),
+    ("training_method", "hyperfl_plus_plus"),
+    ("evaluation_scope", "slice"),
+])
+def test_protocol_groups_keep_scientific_settings(field, value):
+    a, b = manifest(), manifest(1)
+    b["config"][field] = value
+    assert seed_condition(a)["protocol_key"] != seed_condition(b)["protocol_key"]
