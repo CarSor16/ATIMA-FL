@@ -15,3 +15,22 @@ results/
 *.csv
 .env
 credentials*
+
+# Local credentials, SSH configuration and workspace connection metadata.
+.env.*
+!.env.example
+cluster_connection.json
+.ssh/
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.kdbx
+secrets/
+ATIMA-workspace/
+Workspace_ATIMA/
