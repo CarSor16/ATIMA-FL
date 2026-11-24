@@ -155,7 +155,15 @@ def sensitivity_conditions(manifest, eligibility):
                 if k in _GLOBAL_HASHES and k != "assignment"
             }
         raw = json.dumps([axis, condition], sort_keys=True, allow_nan=False, separators=(",", ":"))
+        protocol = {
+            "config": {k: v for k, v in cfg.items()
+                       if k not in {"cpu_budget", "client_cpus", "client_gpu_fraction", "compute_device"}},
+            "dataset_hashes": {k: base["dataset_hashes"][k] for k in _GLOBAL_HASHES if k != "assignment"},
+            "task": base["task"], "classes": base["classes"], "round": base["round"],
+        }
+        protocol_raw = json.dumps([axis, protocol], sort_keys=True, allow_nan=False, separators=(",", ":"))
         result.append({"axis": axis, "value": value,
                        "key": hashlib.sha256(raw.encode()).hexdigest(),
+                       "protocol_key": hashlib.sha256(protocol_raw.encode()).hexdigest(),
                        "descriptive": descriptive})
     return result

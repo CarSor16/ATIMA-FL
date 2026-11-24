@@ -165,3 +165,15 @@ The descriptive protocol key also ignores the explicit CPU/CUDA device field.
 Exact provenance still retains it, and metadata-matched clean/attack pairs
 still require matching runtime identities. Small nonzero displayed deltas
 use extra decimals when ordinary rounding would turn them into zero.
+
+### Research refinements
+
+Web filters include partition, alpha, seed, training method, malicious count and
+aggregation. Sensitivity defaults to descriptive protocol families, with an
+independent strict-provenance switch. Numeric levels use their numeric spacing;
+observed means remain visible without matched clean evidence. Comparisons across
+levels require the intersection of individually metadata-matched clean/attack
+seeds. Mixed provenance is not a controlled causal effect. The local viewer
+retains strict sensitivity by default. Built-in classification summaries are
+checked against their confusion matrices when present; inconsistent records
+remain visible individually but cannot enter compatible comparisons.

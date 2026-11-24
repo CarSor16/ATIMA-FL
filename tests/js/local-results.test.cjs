@@ -55,6 +55,10 @@ async function main(){
   assert.equal(reader.pair([ar,reader.project("c1",clean),reader.project("c2",clean)])[0].baseline_id,null);
   const incomplete=fixture();delete incomplete.dataset_audit.hashes.assignment;
   assert.equal(reader.project("legacy",incomplete).seed_condition.key,null);
+  const valid={samples:4,accuracy:.5,macro_f1:1/3,confusion_matrix:[[2,0],[2,0]],per_class:{benign:{support:2,recall:1,precision:.5,"f1-score":2/3},dos:{support:2,recall:0,precision:0,"f1-score":0}}};
+  assert.equal(reader.project("valid",a,{test:valid}).integrity_errors.length,0);
+  assert.ok(reader.project("bad",a,{test:{...valid,accuracy:.9}}).integrity_errors.some(v=>v.includes("Accuracy")));
+  assert.equal(ar.sensitivity_conditions.find(v=>v.axis==="attack_params.factor").protocol_key,revised.sensitivity_conditions.find(v=>v.axis==="attack_params.factor").protocol_key);
   assert.throws(()=>reader.project("bad",a,{test:{accuracy:2}}),/Invalid final metric/);
   assert.throws(()=>reader.project("bad",a,{},[{round:2},{round:1}]),/Invalid validation round/);
   assert.throws(()=>reader.project("bad",a,{federated:{rounds:[null]}}),/Invalid federated telemetry/);

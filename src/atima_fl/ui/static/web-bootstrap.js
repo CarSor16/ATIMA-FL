@@ -72,6 +72,10 @@ function setupWebNavigation(){
 }
 function startStaticViewer(){
   setupWebNavigation();
+  const advancedFilters=$("filter-dataset").parentElement.parentElement;
+  for(const [key,label] of [["partition","Partition"],["alpha","Dirichlet alpha"],["seed","Seed"],["training_method","Training method"],["malicious_count","Malicious clients"],["aggregation","Aggregator"]]){
+    const wrapper=node("label",label),select=node("select");select.id="filter-"+key;select.setAttribute("aria-label",label);wrapper.append(select);advancedFilters.append(wrapper);
+  }
   initializeAnalysisControls();
   $("compare-experiment-a").addEventListener("change",()=>{chosenComparison.first=$("compare-experiment-a").value;refreshManualFromChoices();});
   $("compare-experiment-b").addEventListener("change",()=>{chosenComparison.second=$("compare-experiment-b").value;refreshManualFromChoices();});

@@ -42,7 +42,9 @@ const ATIMALocalResults=(()=>{
       else {delete cfg[axis];if(["model","partition"].includes(axis)){delete cfg[axis+"_params"];delete condition.source["component/"+axis+"/"+value];}}
       const partition=axis==="partition"||axis.startsWith("partition_params.");
       if(partition)condition.dataset_hashes=Object.fromEntries(hashKeys.map(k=>[k,condition.dataset_hashes[k]]));
-      return {axis,value,key:key([axis,condition]),descriptive:partition||axis==="model"};
+      const protocol={config:Object.fromEntries(Object.entries(cfg).filter(([k])=>!["cpu_budget","client_cpus","client_gpu_fraction","compute_device"].includes(k))),
+        dataset_hashes:Object.fromEntries(hashKeys.map(k=>[k,base.dataset_hashes[k]])),task:base.task,classes:base.classes,round:base.round};
+      return {axis,value,key:key([axis,condition]),protocol_key:key([axis,protocol]),descriptive:partition||axis==="model"};
     });
   }
   function historyRows(history){
@@ -59,6 +61,28 @@ const ATIMALocalResults=(()=>{
       if(r.recall!==undefined&&(!Array.isArray(r.recall)||r.recall.length>100||r.recall.some(v=>!finite(v)||v<0||v>1)))throw Error("Invalid validation class recall");
       return r;
     });
+  }
+  // Check the built-in classification contract, without inventing missing metrics.
+  function integrity(test,classes){
+    const matrix=test?.confusion_matrix;
+    if(!matrix||!classOrder(classes))return [];
+    if(matrix.length!==classes.length)return ["Confusion matrix does not match audited class order"];
+    const rows=matrix.map(r=>r.reduce((a,b)=>a+b,0)),cols=classes.map((_,i)=>matrix.reduce((s,r)=>s+r[i],0));
+    const total=rows.reduce((a,b)=>a+b,0),errors=[];
+    if(!Number.isSafeInteger(total)||total<=0)return ["Invalid confusion matrix total"];
+    const eq=(name,actual,expected)=>{if(actual!==undefined&&(!finite(actual)||Math.abs(actual-expected)>1e-6))errors.push(name+" differs from confusion matrix");};
+    const recalls=[],f1s=[];
+    classes.forEach((name,i)=>{
+      const tp=matrix[i][i],recall=rows[i]?tp/rows[i]:0,precision=cols[i]?tp/cols[i]:0,f1=rows[i]+cols[i]?2*tp/(rows[i]+cols[i]):0;
+      recalls.push(recall);f1s.push(f1);const r=test.per_class?.[name];
+      if(r){eq(name+" support",r.support,rows[i]);eq(name+" recall",r.recall,recall);eq(name+" precision",r.precision,precision);eq(name+" F1",r["f1-score"],f1);}
+    });
+    eq("Samples",test.samples,total);
+    eq("Accuracy",test.accuracy,classes.reduce((s,_,i)=>s+matrix[i][i],0)/total);
+    eq("Macro-F1",test.macro_f1,f1s.reduce((a,b)=>a+b,0)/classes.length);
+    eq("Weighted F1",test.weighted_f1,f1s.reduce((s,v,i)=>s+v*rows[i],0)/total);
+    eq("Balanced accuracy",test.balanced_accuracy,recalls.reduce((a,b)=>a+b,0)/classes.length);
+    return errors;
   }
   function project(id,m,metrics={},history=[],updated=null){
     if(!object(m)||!object(m.config)||!object(metrics))throw Error("Invalid experiment manifest or metrics");
@@ -86,7 +110,7 @@ const ATIMALocalResults=(()=>{
     return {id,updated_at:updated,status:m.status||"unknown",round:m.last_valid_round??null,config:c,
       group:{family:c.attack==="none"?"Clean baseline":"Local experiments",attack:c.attack,distribution:c.partition==="iid"?"IID":c.partition==="dirichlet"?"Non-IID":"Unknown",partition_detail:c.partition==="dirichlet"?"Dirichlet alpha="+(c.partition_params?.alpha??"unknown"):c.partition,model:c.model,dataset:c.dataset,task:a.task,seed:c.seed},
       seed_condition:base?{key:key(base),protocol_key:protocolKey(base),reason:null}:{key:null,reason:"Incomplete audited local metadata"},
-      sensitivity_conditions:sensitivity(base,c),metrics,classes:classOrder(a.classes)?a.classes:[],
+      sensitivity_conditions:sensitivity(base,c),metrics,integrity_errors:(!c.metrics||c.metrics==="classification")?integrity(test,a.classes):[],classes:classOrder(a.classes)?a.classes:[],
       dataset_identity:{task:a.task??null,hashes:Object.fromEntries(hashKeys.map(k=>[k,a.hashes?.[k]??null]))},
       pair_id:typeof m.pair_id==="string"?m.pair_id:null,history:historyRows(history),baseline_id:null,
       _identity:object(m.source_identity)&&Object.keys(m.source_identity).length&&object(m.runtime)&&Object.keys(m.runtime).length?key([m.source_identity,m.runtime]):null};

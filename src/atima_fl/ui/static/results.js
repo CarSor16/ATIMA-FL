@@ -229,6 +229,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
 }
 function manualWarnings(first,second){
   const warnings=[],blockers=[];
+  for(const run of new Set([first,second]))if(run.integrity_errors?.length)blockers.push("Recorded test evidence is inconsistent: "+run.integrity_errors.join("; "));
   const ca=first.config||{},cb=second.config||{};
   const da=first.dataset_identity||{},db=second.dataset_identity||{};
   const taskA=da.task,taskB=db.task;
@@ -291,8 +292,12 @@ function manualWarnings(first,second){
 }
 let availableResults=[];
 let analysisMode="single",analysisTab="overview";
-const FILTER_KEYS=["dataset","task","model","attack","status"];
-function runField(run,key){return key==="task"?run.dataset_identity?.task:key==="status"?run.status:run.config?.[key];}
+const FILTER_KEYS=["dataset","task","model","attack","status",...(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?["partition","alpha","seed","training_method","malicious_count","aggregation"]:[])];
+function runField(run,key){
+  const c=run.config||{};
+  const value=key==="task"?run.dataset_identity?.task:key==="status"?run.status:key==="alpha"?c.partition_params?.alpha:key==="malicious_count"?(c.attack==="none"?0:c.malicious_clients?.length):key==="training_method"?(c.training_method||"standard"):c[key];
+  return value===null||value===undefined?"":String(value);
+}
 function resultMatches(run,query,filters){
   const haystack=[run.id,...FILTER_KEYS.map(key=>runField(run,key))].join(" ").toLocaleLowerCase();
   return haystack.includes(query.trim().toLocaleLowerCase()) && FILTER_KEYS.every(key=>!filters[key]||runField(run,key)===filters[key]);
@@ -618,7 +623,7 @@ function seedCohorts(values,strict=$("seed-strict-provenance")?.checked===true){
     const condition=run.seed_condition;
     if(run.status!=="complete"||!condition?.key||!Number.isInteger(run.config?.seed)
       ||!manualWarnings(run,run).compatible){
-      excluded.push({id:run.id,reason:condition?.reason||"Missing or invalid final test evidence"});
+      excluded.push({id:run.id,reason:run.integrity_errors?.length?run.integrity_errors.join("; "):condition?.reason||"Missing or invalid final test evidence"});
       continue;
     }
     const test=testMetrics(run);
@@ -759,13 +764,15 @@ function seedComparisonRows(pairs,descriptors){
   });
 }
 // Sensitivity: keep exact conditions separate and match the same seeds at every level.
-function sensitivityFamilies(values){
-  const {groups}=seedCohorts(values,true),families=new Map();
+function sensitivityFamilies(values,strict=true){
+  const {groups}=seedCohorts(values,strict),families=new Map();
   for(const [cohort,runs] of groups){
     for(const axis of runs[0].sensitivity_conditions||[]){
       if(!axis.key||!axis.axis)continue;
-      const key=axis.key+"|"+cohort.slice(cohort.indexOf("|")+1);
-      if(!families.has(key))families.set(key,{axis:axis.axis,descriptive:axis.descriptive,levels:new Map(),ambiguous:false});
+      // Do not infer a protocol family from a legacy exact-only axis.
+      if(!strict&&!axis.protocol_key)continue;
+      const key=(strict?axis.key:axis.protocol_key)+"|"+cohort.slice(cohort.indexOf("|")+1);
+      if(!families.has(key))families.set(key,{axis:axis.axis,descriptive:!strict||axis.descriptive,levels:new Map(),ambiguous:false});
       const family=families.get(key),level=JSON.stringify(axis.value);
       if(family.levels.has(level)){family.ambiguous=true;continue;}
       family.levels.set(level,{value:axis.value,cohort,runs});
@@ -786,13 +793,15 @@ function sensitivitySummary(family,allRuns,get){
     return {...level,stats:ATIMAAnalysis.pairedStats(pairs.map(({run,clean})=>[get(clean),get(run)])),observed:seedStats(level.chosen.map(get))};
   })};
 }
-let sensitivityChoice="";
+let sensitivityChoice="",sensitivityStrict=false;
 function renderSensitivityExplorer(root,values){
   root.replaceChildren();
   const details=node("details",undefined,"seed-block");details.append(node("summary","Parameter Sensitivity Explorer"));
   if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY)details.open=true;
   root.append(details);
-  const families=sensitivityFamilies(values);
+  const web=typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY;
+  if(web){const mode=checkControl("Strict provenance (fixed audited shards and implementation)",sensitivityStrict);details.append(mode.label);mode.input.addEventListener("change",()=>{sensitivityStrict=mode.input.checked;renderSensitivityExplorer(root,values);});}
+  const families=sensitivityFamilies(values,!web||sensitivityStrict);
   details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
   if(!families.length){details.append(node("p","No audited sensitivity family with at least two distinct levels is available."));return;}
   const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+shortConditionLabel(key)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
@@ -807,7 +816,7 @@ function renderSensitivityExplorer(root,values){
       :key.startsWith("recall:")?r=>{const row=testMetrics(r)?.per_class?.[key.slice(7)];return row?.support>0?row.recall:null;}
       :key.startsWith("evasion:")?r=>seedEvasion(r,key.slice(8)):r=>testMetrics(r)?.[key];
     const {common,rows}=sensitivitySummary(family,values,get);
-    output.append(node("p",family.descriptive?"Descriptive condition contrast: architecture or shard assignments can differ.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
+    output.append(node("p",family.descriptive?"Descriptive condition contrast: shard assignments, software or runtime may differ; not an isolated causal effect.":"Fixed audited partition and other recorded parameters; only the selected variable differs."));
     output.append(node("p",common.length?"Common matched seeds: "+common.join(", "):"No common matched seed population. Only descriptive observed means are shown."));
     output.append(dataTable(["Level","Observed mean","Selected seeds","Available pairs","Common clean mean","Common attack mean","Attack − clean","SD of delta"],rows.map(r=>[String(r.value),score(r.observed.mean,percent),r.observed.n+"/"+r.chosen.length,r.pairs.length,score(r.stats.clean.mean,percent),score(r.stats.attack.mean,percent),deltaScore(r.stats.attack.mean,r.stats.clean.mean,percent),numeric(r.stats.delta.sd)?(percent?(100*r.stats.delta.sd).toFixed(2)+" pp":score(r.stats.delta.sd,false)):"—"])));
     const exportButton=node("button","Export sensitivity CSV","secondary");exportButton.type="button";
@@ -816,17 +825,21 @@ function renderSensitivityExplorer(root,values){
        ...rows.map(r=>[family.axis,r.value,key,percent?"proportion":"native score",r.observed.n,r.observed.mean,r.pairs.length,r.stats.delta.n,r.stats.clean.mean,r.stats.attack.mean,r.stats.delta.mean,r.stats.delta.sd])],
       "atima_sensitivity.csv"));
     output.append(exportButton);
-    if(!common.length)return;
-    const all=rows.flatMap(r=>[r.stats.clean.mean,r.stats.attack.mean]),lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
-    const x=i=>65+i*660/Math.max(1,rows.length-1),y=v=>210-(v-lo)/(hi-lo)*175;
+    const all=rows.flatMap(r=>common.length?[r.stats.clean.mean,r.stats.attack.mean]:[r.observed.mean]).filter(numeric);if(!all.length)return;
+    const lo=percent?0:Math.min(0,...all),hi=percent?1:Math.max(lo+.001,...all);
+    const continuous=rows.every(r=>numeric(r.value)),first=rows[0].value,last=rows.at(-1).value;
+    const x=i=>65+(continuous?(rows[i].value-first)/(last-first):i/Math.max(1,rows.length-1))*660,y=v=>210-(v-lo)/(hi-lo)*175;
     const svg=svgElement("svg",{viewBox:"0 0 800 250",role:"img","aria-label":"Matched means by parameter level",class:"seed-curve"});
     svg.append(svgElement("line",{x1:65,y1:210,x2:725,y2:210,stroke:"currentColor"}),svgElement("line",{x1:65,y1:35,x2:65,y2:210,stroke:"currentColor"}),svgElement("text",{x:5,y:39,fill:"currentColor","font-size":11},score(hi,percent)),svgElement("text",{x:5,y:210,fill:"currentColor","font-size":11},score(lo,percent)));
-    for(const [field,color,dash] of [["attack","currentColor","none"],["clean","#64748b","6 4"]]){
-      svg.append(svgElement("polyline",{points:rows.map((r,i)=>x(i)+","+y(r.stats[field].mean)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-dasharray":dash}));
-      rows.forEach((r,i)=>svg.append(svgElement("circle",{cx:x(i),cy:y(r.stats[field].mean),r:3,fill:color})));
+    for(const [field,color,dash] of (common.length?[["attack","currentColor","none"],["clean","#64748b","6 4"]]:[["observed","currentColor","none"]])){
+      const get=r=>field==="observed"?r.observed.mean:r.stats[field].mean;
+      const points=rows.map((r,i)=>({round:i+1,value:get(r)})).filter(p=>numeric(p.value));
+      if(continuous)for(const segment of roundSegments(points))svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round-1)+","+y(p.value)).join(" "),fill:"none",stroke:color,"stroke-width":2.5,"stroke-dasharray":dash}));
+      for(const p of points){const i=p.round-1,label=String(rows[i].value)+" · "+field+": "+score(p.value,percent),dot=svgElement("circle",{cx:x(i),cy:y(p.value),r:4,fill:color,tabindex:0,"aria-label":label});dot.append(svgElement("title",{},label));svg.append(dot);}
     }
-    rows.forEach((r,i)=>svg.append(svgElement("text",{x:x(i),y:230,"text-anchor":"middle","font-size":10,fill:"currentColor"},String(i+1))));
-    output.append(svg,node("p","Solid: attacked · dashed: clean. Equally spaced level indices refer to the table, not a continuous numerical scale.","helper"));
+    rows.forEach((r,i)=>svg.append(svgElement("text",{x:x(i),y:230,"text-anchor":"middle","font-size":10,fill:"currentColor"},continuous?String(r.value):String(i+1))));
+    output.append(svg,node("p",(common.length?"Solid: attacked · dashed: clean. ":"Observed descriptive means only. ")+(continuous?"Numeric parameter scale.":"Categorical level indices refer to the table."),"helper"));
+    if(typeof attachWebChartExports==="function")attachWebChartExports(svg,output);
   }
   selector.select.addEventListener("change",redraw);metric.select.addEventListener("change",redraw);redraw();
 }
@@ -1144,6 +1157,12 @@ function updateLocalResultStatus(evidence){
   panel.classList.toggle("hidden",!evidence?.logits.size);
   status.textContent=evidence?evidence.runs.length+" experiments read locally · "+evidence.errors.length+" skipped · "+evidence.logits.size+" optional logit files. No files uploaded." :typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?"Choose a local folder to begin.":"Source: Studio workspace.";
   if(evidence?.errors.length)errors.append(dataTable(["Experiment","Read error"],evidence.errors.map(r=>[r.id,r.reason])));
+  if(evidence){
+    const bad=evidence.runs.filter(r=>r.integrity_errors?.length),audit=node("details",undefined,"web-advanced");
+    audit.append(node("summary","Data integrity · "+bad.length+" inconsistent runs"),node("p","Built-in classification metrics are checked against available confusion matrices. Inconsistent runs remain individually inspectable but are excluded from compatible comparisons. Missing matrices cannot be verified."));
+    if(bad.length)audit.append(dataTable(["Experiment","Inconsistency"],bad.map(r=>[r.id,r.integrity_errors.join("; ")])));
+    errors.append(audit);
+  }
   if(evidence)for(const id of evidence.logits.keys()){const option=node("option",id);option.value=id;select.append(option);}
   if(evidence?.logits.size)select.value=[...evidence.logits.keys()][0];
 }
