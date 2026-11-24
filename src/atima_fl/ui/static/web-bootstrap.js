@@ -30,5 +30,6 @@ function startStaticViewer(){
   updateLocalResultStatus(null);
   setupWebFolderAccess();
   setupWebDesigner();
+  setupStudyExchange();
 }
 document.addEventListener("DOMContentLoaded",startStaticViewer,{once:true});
