@@ -700,7 +700,12 @@ function seedCurve(runs,cleans=[]){
     if(full.length)body.append(svg);
     if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
     body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated."));
-    const details=node("details"),table=dataTable(["Round","Mean","SD","Min","Max","n"],rows.map(row=>[row.round,score(row.mean,percent),score(row.sd,percent),score(row.min,percent),score(row.max,percent),row.n+"/"+runs.length]));
+    const details=node("details"),table=cleans.length
+      ?dataTable(["Round","Clean mean","Attack mean","Attack − clean","Clean n","Attack n"],rows.map(row=>{
+        const clean=cleanByRound.get(row.round),matched=row.n===runs.length&&clean?.n===cleans.length;
+        return [row.round,score(clean?.mean,percent),score(row.mean,percent),matched?deltaScore(row.mean,clean.mean,percent):"—",(clean?.n||0)+"/"+cleans.length,row.n+"/"+runs.length];
+      }))
+      :dataTable(["Round","Mean","SD","Min","Max","n"],rows.map(row=>[row.round,score(row.mean,percent),score(row.sd,percent),score(row.min,percent),score(row.max,percent),row.n+"/"+runs.length]));
     details.append(node("summary","Round-by-round values and sample counts"),table);body.append(details);
   }
   metric.select.addEventListener("change",redraw);redraw();return root;
@@ -713,7 +718,7 @@ function seedLabel(r){
 function seedChosen(key,runs){
   return seedBuckets(runs).flatMap(([seed,items])=>{
     const saved=seedSelections.get(key+"|"+seed);
-    const run=items.find(r=>r.id===saved)||(saved===undefined&&items.length===1?items[0]:null);
+    const run=items.find(r=>r.id===saved)||(saved!==""&&items.length===1?items[0]:null);
     return run?[run]:[];
   });
 }
@@ -734,7 +739,8 @@ function seedComparisonRows(pairs,descriptors){
 }
 function seedSummary(root,runs,allRuns){
   root.replaceChildren();
-  if(runs.length<2){root.append(node("p","Select at least two distinct seeds to calculate a descriptive average."));return;}
+  if(!runs.length){root.append(node("p","Select at least one seed to inspect this condition."));return;}
+  if(runs.length===1)root.append(node("p","Only one seed selected; this is a single observation, not a replicated estimate."));
   const headings=["Metric","Mean","SD","Min","Max","Available seeds"];
   const final=node("section",undefined,"seed-block");
   final.append(node("h4","Final test metrics across seeds"),dataTable(headings,seedMetricRows(runs,[
