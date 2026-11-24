@@ -54,9 +54,9 @@ def write_fixture(root, seed, attack):
         }), encoding="utf-8")
 
 
-def check_browser(origin, root):
+def check_browser(origin, root, engine='chromium', expected=4, large=False):
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = getattr(p, engine).launch()
         page = browser.new_page(viewport={"width": 1280, "height": 850})
         errors, requests = [], []
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -82,7 +82,7 @@ def check_browser(origin, root):
         assert batch["seeds"] == list(range(11))
         page.locator("#web-designer summary").click()
         page.locator("#local-results-folder").set_input_files(str(root))
-        expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally")
+        expect(page.locator("#local-results-status")).to_contain_text(f"{expected} experiments read locally", timeout=60000)
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
@@ -94,7 +94,8 @@ def check_browser(origin, root):
         assert "Matched clean mean" in report and str(root) not in report
         # Exercise a real IndexedDB structured-cloned directory handle on this
         # secure loopback origin, without requiring an OS permission dialog.
-        assert page.evaluate("""async () => {
+        if page.evaluate("typeof navigator.storage?.getDirectory === 'function' && typeof window.showDirectoryPicker === 'function'"):
+            assert page.evaluate("""async () => {
           const root = await navigator.storage.getDirectory();
           const dir = await root.getDirectoryHandle('fixture-folder', {create:true});
           await ATIMAFolderAccess.remember(dir);
@@ -137,7 +138,7 @@ def check_browser(origin, root):
     print("Static viewer passed real-browser local import, aggregation, logits, reset and offline-network checks.")
 
 
-def main(site, live=False):
+def main(site, live=False, engine='chromium'):
     with TemporaryDirectory() as temp:
         root = Path(temp) / "fixtures"
         root.mkdir()
@@ -156,7 +157,7 @@ def main(site, live=False):
                 with urlopen(urljoin(origin, asset.name), timeout=20) as response:
                     assert response.geturl().startswith(origin)
                     assert response.read() == asset.read_bytes(), f"Deployed asset differs: {asset.name}"
-            check_browser(origin, root)
+            check_browser(origin, root, engine)
             print("Live HTTPS site matches the audited static build.")
             return
         www = Path(temp) / "www"
@@ -165,7 +166,7 @@ def main(site, live=False):
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            check_browser(f"http://127.0.0.1:{server.server_port}/ATIMA-FL/", root)
+            check_browser(f"http://127.0.0.1:{server.server_port}/ATIMA-FL/", root, engine)
         finally:
             server.shutdown()
             server.server_close()
@@ -175,5 +176,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("site", type=Path)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--browser", choices=("chromium", "firefox", "webkit"), default="chromium")
     args = parser.parse_args()
-    main(str(args.site.resolve()), args.live)
+    main(str(args.site.resolve()), args.live, args.browser)
