@@ -29,5 +29,6 @@ function startStaticViewer(){
   renderResults([]);
   updateLocalResultStatus(null);
   setupWebFolderAccess();
+  setupWebDesigner();
 }
 document.addEventListener("DOMContentLoaded",startStaticViewer,{once:true});
