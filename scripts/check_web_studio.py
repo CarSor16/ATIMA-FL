@@ -114,6 +114,7 @@ def check_browser(origin, root, engine="chromium"):
         assert len(summary["observations"]) == 4
         assert summary["version"] == 2
         assert all(len(r["condition_sha256"]) == 64 for r in summary["observations"])
+        assert sum("matched_clean_id" in r for r in summary["observations"]) == 2
         assert str(root) not in json.dumps(summary)
         first = root / "study-a.json"
         first.write_text(json.dumps(summary), encoding="utf-8")
@@ -125,6 +126,7 @@ def check_browser(origin, root, engine="chromium"):
         expect(page.locator("#web-study-output")).to_contain_text("8 matching observations")
         expect(page.locator("#web-study-output")).to_contain_text("2 matching recorded conditions")
         expect(page.locator("#web-study-output")).to_contain_text("Declared full-condition fingerprint match")
+        expect(page.locator("#web-study-output")).to_contain_text("SD of paired delta")
         page.locator("#web-study-clear").click()
         page.locator("#web-study > summary").click()
         page.locator("#local-logits-panel summary").click()
