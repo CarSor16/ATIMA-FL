@@ -166,20 +166,35 @@ def save_seed_batch(config, workspace, seeds):
     from atima_fl.core.seed_campaign import batch_profiles
 
     pairs = batch_profiles(config, seeds)
-    root = Path(workspace).resolve() / "plans" / (config.name + "_SeedBatch")
+    return _save_campaign(config, workspace, seeds, pairs, "_SeedBatch",
+                          "clean_only" if config.attack == "none" else "paired")
+
+
+def save_parameter_sweep(config, workspace, seeds, axis, values):
+    from atima_fl.core.parameter_sweep import sweep_profiles
+
+    groups = sweep_profiles(config, seeds, axis, values)
+    return _save_campaign(config, workspace, seeds, groups, "_Sweep", "parameter_sweep",
+                          {"axis": axis, "levels": values})
+
+
+def _save_campaign(config, workspace, seeds, pairs, suffix, mode, sweep=None):
+    root = Path(workspace).resolve() / "plans" / (config.name + suffix)
     root.mkdir(parents=True, exist_ok=False)
     try:
         entries = []
-        for clean, attack in pairs:
+        for group in pairs:
+            clean = group[0]
             order = []
-            for profile in (clean, attack):
+            for profile in group:
                 if profile is not None:
                     directory = save_plan(profile, root)
                     order.append(f"plans/{directory.name}/experiment.toml")
             entries.append({"seed": clean.seed, "profiles": order})
         atomic_json(root / "campaign.json", {
             "schema_version": 1,
-            "mode": "clean_only" if config.attack == "none" else "paired",
+            "mode": mode,
+            **({"sweep": sweep} if sweep else {}),
             "seeds": list(seeds),
             "rounds": config.rounds,
             "runs": sum(len(entry["profiles"]) for entry in entries),
