@@ -748,3 +748,21 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 #research-focus-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:7px 14px}
 .research-focus-choice{display:flex;align-items:center;gap:8px;font-size:13px}
 #research-focus-status{font-size:12px;color:var(--muted);margin:10px 0 0}
+
+/* Opt-in multi-seed summaries and rearrangeable evidence regions. */
+.results-workspace-tools{margin:16px 0;display:grid;gap:10px}
+#results-workspace-panels{display:flex;flex-direction:column;gap:16px;min-width:0}
+#results-layout-controls{max-width:600px;display:grid;gap:6px;padding:10px 14px;border:1px solid var(--line);border-radius:12px}
+#results-layout-controls.hidden,#seed-analysis-content.hidden{display:none}
+.layout-control-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.layout-control-row button{padding:6px 12px;min-width:40px}
+.seed-results-panel{border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;background:var(--surface-raised)}
+#seed-analysis-content{display:grid;gap:12px;min-width:0}
+.seed-selection-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.seed-selection-grid label{min-width:0;display:grid;gap:5px}
+.seed-selection-grid select,#seed-cohort-choice{width:100%;min-width:0}
+.seed-block{margin-top:16px;min-width:0}
+.seed-curve{display:block;width:100%;height:auto;max-height:320px;color:var(--teal)}
+#seed-analysis-output{min-width:0}
+#seed-analysis-selection pre{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:600px){.seed-results-panel{padding:12px}.seed-selection-grid{grid-template-columns:minmax(0,1fr)}}
