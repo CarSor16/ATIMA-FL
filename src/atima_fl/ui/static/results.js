@@ -661,9 +661,9 @@ function seedMetricRows(runs,descriptors,delta=false){
     return [label,format(v.mean),format(v.sd),format(v.min),format(v.max),v.n+"/"+runs.length];
   });
 }
-function seedCurve(runs){
+function seedCurve(runs,cleans=[]){
   const root=node("section",undefined,"seed-block");
-  root.append(node("h4","Mean validation trajectory"));
+  root.append(node("h4",cleans.length?"Matched mean validation trajectories: clean vs attack":"Mean validation trajectory"));
   const metrics=RESULT_METRICS.map(([key,label])=>[key,label]);
   const metric=choiceControl("Validation metric",metrics,"macro_f1"),body=node("div");
   root.append(metric.label,body);
@@ -673,9 +673,12 @@ function seedCurve(runs){
     const rows=seedRoundStats(runs,key);
     if(!rows.length){body.append(node("p","No recorded validation observations for this metric."));return;}
     // Plot only full-cohort points; partial observations remain visible in the table.
-    const full=rows.filter(row=>row.n===runs.length);
-    const lo=percent?0:Math.min(0,...rows.map(r=>r.min));
-    const hi=percent?1:Math.max(lo+.001,...rows.map(r=>r.max));
+    const cleanRows=seedRoundStats(cleans,key),cleanByRound=new Map(cleanRows.map(row=>[row.round,row]));
+    const full=rows.filter(row=>row.n===runs.length&&(!cleans.length||cleanByRound.get(row.round)?.n===cleans.length));
+    const cleanFull=full.map(row=>cleanByRound.get(row.round)).filter(Boolean);
+    const bounds=[...rows,...cleanRows];
+    const lo=percent?0:Math.min(0,...bounds.map(r=>r.min));
+    const hi=percent?1:Math.max(lo+.001,...bounds.map(r=>r.max));
     const maxRound=Math.max(1,...rows.map(r=>r.round));
     const x=round=>52+(round-1)/Math.max(1,maxRound-1)*710;
     const y=value=>232-(value-lo)/(hi-lo)*194;
@@ -690,12 +693,44 @@ function seedCurve(runs){
       svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"currentColor","stroke-width":2.5}));
       for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"currentColor"}));
     }
+    for(const segment of roundSegments(cleanFull.map(r=>({round:r.round,value:r.mean})))){
+      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"#64748b","stroke-width":2.5,"stroke-dasharray":"6 4"}));
+      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"#64748b"}));
+    }
     if(full.length)body.append(svg);
+    if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
     body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated."));
     const details=node("details"),table=dataTable(["Round","Mean","SD","Min","Max","n"],rows.map(row=>[row.round,score(row.mean,percent),score(row.sd,percent),score(row.min,percent),score(row.max,percent),row.n+"/"+runs.length]));
     details.append(node("summary","Round-by-round values and sample counts"),table);body.append(details);
   }
   metric.select.addEventListener("change",redraw);redraw();return root;
+}
+function seedLabel(r){
+  const c=r.config||{},names={local_class_gradient:"LCG",model_replacement:"ModelReplacement",class_withholding:"ClassWithholding",sample_weight_hijack:"SampleWeightHijack",update_scaling:"UpdateScaling",stale_replay:"StaleReplay",free_rider:"FreeRider",label_flip:"LabelFlip",none:"Clean"};
+  const distribution=c.partition==="iid"?"IID":c.partition==="dirichlet"?"Non-IID · α="+(c.partition_params?.alpha??"?"):r.group?.distribution||c.partition||"Unknown partition";
+  return [names[c.attack]||c.attack,distribution,classNames(r).length+" classes",c.attack==="none"?"0 malicious":(c.malicious_clients?.length??"?")+" malicious",c.model,c.training_method||"standard"].filter(Boolean).join(" · ");
+}
+function seedChosen(key,runs){
+  return seedBuckets(runs).flatMap(([seed,items])=>{
+    const saved=seedSelections.get(key+"|"+seed);
+    const run=items.find(r=>r.id===saved)||(saved===undefined&&items.length===1?items[0]:null);
+    return run?[run]:[];
+  });
+}
+function seedMatched(runs,allRuns){
+  const byId=new Map(allRuns.map(r=>[r.id,r]));
+  return runs.flatMap(run=>{
+    const clean=byId.get(run.baseline_id);
+    return clean&&Number.isInteger(run.config?.seed)&&clean.config?.seed===run.config.seed&&verifiedPair(run,byId)?[{run,clean}]:[];
+  });
+}
+function seedComparisonRows(pairs,descriptors){
+  return descriptors.map(([label,get,percent])=>{
+    const valid=pairs.map(({run,clean})=>[get(clean),get(run)]).filter(([a,b])=>numeric(a)&&numeric(b));
+    const a=seedStats(valid.map(v=>v[0])),b=seedStats(valid.map(v=>v[1])),d=seedStats(valid.map(v=>v[1]-v[0]));
+    return [label,score(a.mean,percent),score(b.mean,percent),deltaScore(b.mean,a.mean,percent),
+      numeric(d.sd)?(percent?(100*d.sd).toFixed(2)+" pp":score(d.sd,false)):"—",valid.length+"/"+pairs.length];
+  });
 }
 function seedSummary(root,runs,allRuns){
   root.replaceChildren();
@@ -712,20 +747,17 @@ function seedSummary(root,runs,allRuns){
     labels.flatMap(name=>[[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true],
       ...(!/^(benign|normal)$/i.test(name)?[[name+" · Predicted benign",r=>seedEvasion(r,name),true]]:[])]))));
   root.append(classes,seedCurve(runs));
-  const byId=new Map(allRuns.map(r=>[r.id,r]));
-  const pairs=runs.filter(r=>verifiedPair(r,byId));
+  const pairs=seedMatched(runs,allRuns);
   const paired=node("section",undefined,"seed-block");
   paired.append(node("h4","Metadata-matched attack minus clean"));
-  if(pairs.length>=2){
-    paired.append(node("p",pairs.length+"/"+runs.length+" selected seeds have compatible clean baselines. Initial weights are not verified from imported summaries; use the trajectory-based CLI for paired inference."),
-      dataTable(headings,seedMetricRows(pairs,[
-        ...RESULT_METRICS.map(([key,label,percent])=>["Δ "+label,r=>{
-          const a=testMetrics(byId.get(r.baseline_id))?.[key],b=testMetrics(r)?.[key];
-          return numeric(a)&&numeric(b)?b-a:null;
-        },percent]),
-        ["Δ intrusion-to-benign",r=>{const a=seedEvasion(byId.get(r.baseline_id)),b=seedEvasion(r);return numeric(a)&&numeric(b)?b-a:null;},true]
-      ],true)));
-  }else paired.append(node("p","Fewer than two selected seeds have a metadata-compatible clean baseline; no aggregate paired difference is shown."));
+  if(pairs.length){
+    const descriptors=[...FINAL_METRICS.map(([key,label,percent])=>[label,r=>testMetrics(r)?.[key],percent]),
+      ["Intrusions predicted benign",r=>seedEvasion(r),true],
+      ...labels.map(name=>[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true])];
+    paired.append(node("p",pairs.length+"/"+runs.length+" selected seeds have compatible clean baselines. Both means use exactly the same matched observations. Initial weights are not verified from imported summaries."),
+      dataTable(["Metric","Clean mean","Attack mean","Attack − clean","SD of paired delta","Matched seeds"],seedComparisonRows(pairs,descriptors)),
+      seedCurve(pairs.map(p=>p.run),pairs.map(p=>p.clean)));
+  }else paired.append(node("p",runs[0]?.config?.attack==="none"?"Clean cohort: no attacked reference is needed.":"No verified matching clean baseline. The attack averages above remain descriptive."));
   root.append(paired);
 }
 let seedWorkspaceReady=false;
@@ -741,12 +773,22 @@ function refreshSeedWorkspace(){
   const empty=node("option","Choose a condition");empty.value="";select.append(empty);
   for(const [key,runs] of groups){
     const r=runs[0],c=r.config,n=seedBuckets(runs).length;
-    const detail=[c.attack,c.attack==="none"?"0 malicious":c.malicious_clients?.length+" malicious",c.model,
-      c.training_method||"legacy method",c.evaluation_scope||"legacy scope",r.group?.partition_detail||c.partition,
-      r.dataset_identity?.task,n+" distinct seeds",key.slice(0,8)].join(" · ");
+    const detail=seedLabel(r)+" · "+n+" seeds · "+key.slice(0,8);
     const option=node("option",detail);option.value=key;select.append(option);
   }
-  select.value=groups.has(previous)?previous:"";
+  const first=[...groups.entries()].sort((a,b)=>Number(a[1][0].config.attack==="none")-Number(b[1][0].config.attack==="none")||seedBuckets(b[1]).length-seedBuckets(a[1]).length)[0];
+  select.value=groups.has(previous)?previous:first?.[0]||"";
+  const overview=$("seed-cohort-overview");overview.replaceChildren();
+  for(const [key,runs] of groups){
+    const chosen=seedChosen(key,runs),pairs=seedMatched(chosen,availableResults);
+    const metric=r=>testMetrics(r)?.macro_f1;
+    const avg=seedStats(chosen.map(metric)),valid=pairs.filter(p=>numeric(metric(p.clean))&&numeric(metric(p.run)));
+    const clean=seedStats(valid.map(p=>metric(p.clean))),attack=seedStats(valid.map(p=>metric(p.run)));
+    const card=node("article",undefined,"seed-cohort-card"),button=node("button",seedLabel(runs[0]),"text-button");button.type="button";
+    button.addEventListener("click",()=>{select.value=key;refreshSeedWorkspace();});
+    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds selected · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
+    overview.append(card);
+  }
   $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
   const selection=$("seed-analysis-selection"),output=$("seed-analysis-output");
   selection.replaceChildren();output.replaceChildren();
