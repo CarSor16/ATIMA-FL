@@ -299,4 +299,13 @@ check("sensitivity uses common matched seeds rather than unrelated cohort means"
   context.sweepB.baseline_id="missing";
   assert.deepEqual(plain(evaluate("sensitivitySummary(sensitivityFamilies([sweepA,sweepB,clean0])[0][1],[sweepA,sweepB,clean0],r=>testMetrics(r).macro_f1).common")),[]);
 });
+check("cohort CSV protects text cells and requires audited confusion axes",()=>{
+  const csv=evaluate("ATIMAAnalysis.csv([['=2+2','a,b',-2,null]])");
+  assert.equal(csv, "\"'=2+2\",\"a,b\",\"-2\",\"\"\r\n");
+  context.noAudit=structuredClone(context.a);context.noAudit.classes=[];
+  assert.equal(evaluate("validMatrix(noAudit)"),false);
+  const rows=plain(evaluate("cohortReportRows([lcg0],[lcg0,clean0])"));
+  assert.equal(rows[0][9],"Matched clean mean");
+  assert.ok(!JSON.stringify(rows).includes("CleanSeed0"));
+});
 console.log(checks+" functional Results checks passed.");
