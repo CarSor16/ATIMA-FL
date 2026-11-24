@@ -188,10 +188,48 @@ def save_seed_batch(config, workspace, seeds):
             "checks": {"configuration": "valid", "dataset": "not_checked",
                        "scheduler": "not_checked", "cuda": "not_checked"},
         })
+        runner = '''#!/usr/bin/env python3
+"""Run exported profiles sequentially; invoke explicitly inside an allocation."""
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+
+def main():
+    parser = argparse.ArgumentParser(description="ATIMA sequential seed batch")
+    parser.add_argument("mode", choices=("preflight", "train"))
+    parser.add_argument("--local", action="store_true", help="Use local CPU mode")
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parent
+    campaign = json.loads((root / "campaign.json").read_text(encoding="utf-8"))
+    for entry in campaign["entries"]:
+        for index, relative in enumerate(entry["profiles"]):
+            profile = (root / relative).resolve()
+            if not profile.is_relative_to(root / "plans") or profile.name != "experiment.toml":
+                raise ValueError("Invalid profile path in campaign")
+            if args.mode == "preflight" and index > 0:
+                print("Attack preflight deferred until its clean run completes:", profile)
+                continue
+            launcher = profile.parent / "run_experiment.py"
+            extra = ["--local"] if args.local else []
+            print("Seed", entry["seed"], profile.parent.name, flush=True)
+            subprocess.run([sys.executable, str(launcher), "preflight", *extra], check=True)
+            if args.mode == "train":
+                subprocess.run([sys.executable, str(launcher), "train", *extra], check=True)
+
+
+if __name__ == "__main__":
+    main()
+'''
+        (root / "run_batch.py").write_text(runner, encoding="utf-8", newline="\n")
         (root / "README.txt").write_text(
             "Extract this archive into a new directory. Use a matching ATIMA Runtime.\n"
             "For each seed, follow campaign.json in order: clean before attack.\n"
-            "Run each profile's preflight and then train inside an appropriate compute allocation.\n"
+            "Run python run_batch.py preflight to check clean profiles.\n"
+            "Inside an appropriate compute allocation, python run_batch.py train runs all profiles sequentially.\n"
+            "Each run is preflighted before training; a failure stops the batch.\n"
             "Use a consistent working directory for relative result paths.\n"
             "No jobs are submitted by the exporter. Check dataset, hardware and pairing first.\n",
             encoding="utf-8",
