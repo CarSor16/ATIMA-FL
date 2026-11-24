@@ -993,7 +993,7 @@ function renderResults(values){
   setupResearchFocus();setupResultsWorkspace();
   const target=$("results-list");target.replaceChildren();
   availableResults=values;updateResultsOverview(values);updateFilterChoices();updateManualComparison(values);refreshSeedWorkspace();
-  if(!values.length)target.append(node("p","No local results available. Import from the cluster."));
+  if(!values.length)target.append(node("p",typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?"No local results selected. Choose a folder above.":"No local results available. Import from the cluster."));
   const focused=values.filter(researchFocusedRun);
   $("research-focus-status").textContent=$("research-focus-enabled").checked
     ?"Showing "+focused.length+" of "+values.length+" runs (clean baselines included). Selected graph attacks: "+researchFocusSelected.size+"."
@@ -1085,7 +1085,7 @@ function updateLocalResultStatus(evidence){
   if(!status||!errors||!panel||!select)return;
   errors.replaceChildren();select.replaceChildren();$("local-logits-output").replaceChildren();
   panel.classList.toggle("hidden",!evidence?.logits.size);
-  status.textContent=evidence?evidence.runs.length+" experiments read locally · "+evidence.errors.length+" skipped · "+evidence.logits.size+" optional logit files. No files uploaded.":"Source: Studio workspace.";
+  status.textContent=evidence?evidence.runs.length+" experiments read locally · "+evidence.errors.length+" skipped · "+evidence.logits.size+" optional logit files. No files uploaded." :typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?"Choose a local folder to begin.":"Source: Studio workspace.";
   if(evidence?.errors.length)errors.append(dataTable(["Experiment","Read error"],evidence.errors.map(r=>[r.id,r.reason])));
   if(evidence)for(const id of evidence.logits.keys()){const option=node("option",id);option.value=id;select.append(option);}
   if(evidence?.logits.size)select.value=[...evidence.logits.keys()][0];
@@ -1111,7 +1111,7 @@ async function refreshResults(){
   $("experiment-filter-status").textContent=uiText("Loading results…");
   try{
     const evidence=localResultFiles?await ATIMALocalResults.load(localResultFiles):null;
-    const values=evidence?evidence.runs:await request("/api/results");
+    const values=evidence?evidence.runs:typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY?[]:await request("/api/results");
     if(requestId===resultsRequestId){localResultEvidence=evidence;updateLocalResultStatus(evidence);renderResults(values);}
   }catch(error){
     if(requestId!==resultsRequestId)return;
