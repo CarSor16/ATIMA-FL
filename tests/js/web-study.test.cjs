@@ -31,5 +31,25 @@ seed,clients:10,rounds:5,local_epochs:3,batch_size:128,learning_rate:.001,num_cl
  assert.equal(study.comparisonGroups([a,incomplete],"macro_f1").excluded.length,1);
  const invalid=JSON.parse(JSON.stringify(a));invalid.observations[0].metrics.macro_f1=2;
  assert.throws(()=>study.parse(invalid),/outside valid range/);
+ const pairedRuns=(cleanValues,attackValues)=>cleanValues.flatMap((value,i)=>{
+   const clean=fixture(i,value,"clean-condition");clean.id="clean-"+i;
+   clean.config.attack="none";clean.config.attack_params={};clean.config.malicious_clients=[];
+   const attack=fixture(i,attackValues[i],"attack-condition");attack.id="attack-"+i;attack.baseline_id=clean.id;
+   return [clean,attack];
+ });
+ const certify=(run,byId)=>run.config.attack!=="none"&&byId.get(run.baseline_id)?.config.attack==="none";
+ const p=study.parse(await study.createWithEvidence("Paired A",pairedRuns([.9,.8],[.5,.6]),certify));
+ const q=study.parse(await study.createWithEvidence("Paired B",pairedRuns([.8,.8],[.4,.6]),certify));
+ assert.equal(p.observations.filter(r=>r.matched_clean_id).length,2);
+ const effect=study.comparisonGroups([p,q],"macro_f1").matches.find(g=>g.condition.attack==="update_scaling");
+ assert.equal(effect.rows[0].paired.delta.n,2);
+ assert.ok(Math.abs(effect.rows[0].paired.delta.mean+.3)<1e-12);
+ assert.ok(Math.abs(effect.rows[0].paired.clean.mean-.85)<1e-12);
+ assert.equal(effect.baselineConditions.length,1);
+ const badPair=JSON.parse(JSON.stringify(p));badPair.observations[1].matched_clean_id="Run-3";
+ assert.throws(()=>study.parse(badPair),/Incompatible declared baseline/);
+ const ambiguous=JSON.parse(JSON.stringify(p));ambiguous.observations.push({...ambiguous.observations[0],id:"Run-5"});
+ const ambiguousEffect=study.comparisonGroups([study.parse(ambiguous),q],"macro_f1").matches.find(g=>g.condition.attack==="update_scaling");
+ assert.equal(ambiguousEffect.rows[0].paired.delta.n,1);
  console.log("Study evidence, compatibility and separate seed statistics checks passed.");
 })().catch(e=>{console.error(e);process.exitCode=1;});
