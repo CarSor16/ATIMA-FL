@@ -600,14 +600,7 @@ function researchFocusedRun(run){
   return id==="none"||researchFocusSelected.has(id);
 }
 // Multi-seed evidence is descriptive and never substitutes for trajectory-verified CLI statistics.
-function seedStats(values){
-  const valid=values.filter(numeric);
-  if(!valid.length)return {n:0,mean:null,sd:null,min:null,max:null};
-  const mean=average(valid);
-  return {n:valid.length,mean,sd:valid.length>1
-    ?Math.sqrt(valid.reduce((sum,x)=>sum+(x-mean)**2,0)/(valid.length-1)):null,
-    min:Math.min(...valid),max:Math.max(...valid)};
-}
+function seedStats(values){return ATIMAAnalysis.stats(values);}
 function seedCohorts(values){
   const groups=new Map(),excluded=[];
   for(const run of values){
@@ -731,11 +724,65 @@ function seedMatched(runs,allRuns){
 }
 function seedComparisonRows(pairs,descriptors){
   return descriptors.map(([label,get,percent])=>{
-    const valid=pairs.map(({run,clean})=>[get(clean),get(run)]).filter(([a,b])=>numeric(a)&&numeric(b));
-    const a=seedStats(valid.map(v=>v[0])),b=seedStats(valid.map(v=>v[1])),d=seedStats(valid.map(v=>v[1]-v[0]));
+    const {clean:a,attack:b,delta:d}=ATIMAAnalysis.pairedStats(pairs.map(({run,clean})=>[get(clean),get(run)]));
     return [label,score(a.mean,percent),score(b.mean,percent),deltaScore(b.mean,a.mean,percent),
-      numeric(d.sd)?(percent?(100*d.sd).toFixed(2)+" pp":score(d.sd,false)):"—",valid.length+"/"+pairs.length];
+      numeric(d.sd)?(percent?(100*d.sd).toFixed(2)+" pp":score(d.sd,false)):"—",d.n+"/"+pairs.length];
   });
+}
+function seedMatrixSummary(runs,pairs){
+  const section=node("section",undefined,"seed-block");
+  section.append(node("h4","Mean normalized confusion matrices"));
+  const classes=classNames(runs[0]),sameOrder=r=>JSON.stringify(classNames(r))===JSON.stringify(classes);
+  const usable=runs.filter(r=>validMatrix(r)&&sameOrder(r));
+  const matched=pairs.filter(({run,clean})=>validMatrix(run)&&validMatrix(clean)&&sameOrder(run)&&sameOrder(clean));
+  if(!usable.length){section.append(node("p","No valid confusion matrices."));return section;}
+  const matrix=r=>testMetrics(r).confusion_matrix;
+  const mean=ATIMAAnalysis.meanMatrices(usable.map(matrix));
+  const grid=node("div",undefined,"manual-matrix-grid");
+  grid.append(matrixView(classes,mean.map(row=>row.map(cell=>cell.mean)),
+    "Selected runs · "+usable.length+"/"+runs.length+" seeds",true));
+  section.append(node("p","Each seed has equal weight. Rows are normalized before averaging; zero-support rows are unavailable, never zero.","helper"),grid);
+  if(matched.length){
+    const cells=ATIMAAnalysis.pairedMatrices(matched.map(({run,clean})=>[matrix(clean),matrix(run)]));
+    for(const [label,key,difference] of [["Clean","clean",false],["Attack","attack",false],["Attack − clean","delta",true]]){
+      grid.append(matrixView(classes,cells.map(row=>row.map(cell=>cell[key].mean)),
+        label+" · "+matched.length+" matched seeds",true,difference));
+    }
+    section.append(node("p","Matched matrix means and differences use only seed pairs with support on both sides of each row.","helper"));
+    const counts=node("details");
+    counts.append(node("summary","Matched seed counts per true class"),
+      dataTable(["True class","Matched seeds with support"],classes.map((name,i)=>[name,cells[i][0].delta.n+"/"+matched.length])));
+    section.append(counts);
+  }
+  return section;
+}
+const seedExpectedByCondition=new Map();
+function campaignCoveragePanel(key,runs,chosen,allRuns){
+  const section=node("details",undefined,"seed-block");
+  section.append(node("summary","Campaign completeness"));
+  const field=node("input");field.type="text";field.value=seedExpectedByCondition.get(key)||"";
+  field.placeholder="0,1,2,…,10";
+  const label=node("label","Expected seeds (from your campaign plan)");label.append(field);
+  const apply=node("button","Check coverage","secondary"),preset=node("button","Use 0–10","secondary"),output=node("div");
+  apply.type=preset.type="button";
+  const render=()=>{
+    output.replaceChildren();seedExpectedByCondition.set(key,field.value);
+    if(!field.value.trim()){output.append(node("p","Enter planned seeds to identify missing runs; an observed seed list alone cannot prove completeness."));return;}
+    try{
+      const parts=field.value.split(",").map(s=>s.trim());
+      if(parts.some(s=>!/^\d+$/.test(s)))throw new Error("Enter comma-separated integers.");
+      const selected=new Set(chosen.map(r=>r.id)),matched=new Set(seedMatched(chosen,allRuns).map(p=>p.run.id));
+      const coverage=ATIMAAnalysis.campaignCoverage(parts.map(Number),runs.map(r=>({seed:r.config.seed,selected:selected.has(r.id),matched:matched.has(r.id)})));
+      const cleanOnly=runs[0]?.config?.attack==="none";
+      const missing=coverage.rows.filter(row=>!row.observed).length,unselected=coverage.rows.filter(row=>row.observed&&!row.selected).length;
+      output.append(node("p",missing+" planned seeds not observed in this compatible completed cohort · "+unselected+" observed seeds not selected"+(cleanOnly?"":" · "+coverage.rows.filter(row=>row.selected&&!row.matched).length+" selected seeds without matched clean")));
+      output.append(dataTable(["Seed","Compatible complete runs","Selection","Clean baseline"],coverage.rows.map(row=>[row.seed,row.observed,row.selected?"Selected":row.observed?"Not selected":"Not observed",cleanOnly?"Not applicable":row.matched?"Matched":row.selected?"Missing / incompatible":"—"])));
+      if(coverage.unexpected.length)output.append(node("p","Observed outside plan: "+coverage.unexpected.join(", ")));
+    }catch(error){output.append(node("p",error.message,"error"));}
+  };
+  apply.addEventListener("click",render);preset.addEventListener("click",()=>{field.value=Array.from({length:11},(_,i)=>i).join(",");render();});
+  section.append(node("p","Coverage is scoped to this exact compatible completed condition. Failed or excluded runs remain available in individual reports.","helper"),label,apply,preset,output);
+  render();return section;
 }
 function seedSummary(root,runs,allRuns){
   root.replaceChildren();
@@ -764,7 +811,7 @@ function seedSummary(root,runs,allRuns){
       dataTable(["Metric","Clean mean","Attack mean","Attack − clean","SD of paired delta","Matched seeds"],seedComparisonRows(pairs,descriptors)),
       seedCurve(pairs.map(p=>p.run),pairs.map(p=>p.clean)));
   }else paired.append(node("p",runs[0]?.config?.attack==="none"?"Clean cohort: no attacked reference is needed.":"No verified matching clean baseline. The attack averages above remain descriptive."));
-  root.append(paired);
+  root.append(paired,seedMatrixSummary(runs,pairs));
 }
 let seedWorkspaceReady=false;
 const seedSelections=new Map();
@@ -819,6 +866,7 @@ function refreshSeedWorkspace(){
     controls.append(choice.label);
   }
   selection.append(node("p",chosen.length+" distinct seeds selected; duplicate seeds are never counted twice. SD is sample standard deviation; missing metrics are not zero."),controls);
+  selection.append(campaignCoveragePanel(select.value,runs,chosen,availableResults));
   seedSummary(output,chosen,availableResults);
 }
 const RESULTS_LAYOUT_DEFAULT=["seed-results-panel","performance-region","detail-region","individual-reports-region"];
