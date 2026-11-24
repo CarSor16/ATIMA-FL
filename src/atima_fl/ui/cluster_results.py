@@ -83,7 +83,48 @@ def password_ssh(settings, script):
 ROUND_FIELDS = ("accuracy", "macro_f1", "weighted_f1", "balanced_accuracy", "mcc", "loss", "seconds")
 
 
-def round_summaries(history):
+def _classification_evidence(record, classes):
+    """Keep bounded confusion evidence only with an audited class order."""
+    if "confusion_matrix" not in record or "per_class" not in record:
+        return {}
+    if not isinstance(classes, list) or not 2 <= len(classes) <= 100:
+        return {}
+    if any(not isinstance(name, str) or not name or len(name) > 200 for name in classes):
+        raise ValueError("Invalid audited class names")
+    if len(set(classes)) != len(classes):
+        raise ValueError("Duplicate audited class names")
+    matrix, metrics = record["confusion_matrix"], record["per_class"]
+    if (not isinstance(matrix, list) or len(matrix) != len(classes)
+            or not isinstance(metrics, dict) or set(metrics) != set(classes)):
+        raise ValueError("Validation matrix or class report does not match audited classes")
+    if any(not isinstance(row, list) or len(row) != len(classes)
+           or any(type(value) is not int or value < 0 for value in row) for row in matrix):
+        raise ValueError("Invalid validation confusion matrix counts")
+    per_class = {}
+    for index, name in enumerate(classes):
+        values = metrics[name]
+        if not isinstance(values, dict):
+            raise ValueError("Invalid validation class metrics")
+        support = values.get("support")
+        if (type(support) not in (int, float) or not math.isfinite(support)
+                or support != sum(matrix[index])):
+            raise ValueError("Validation support does not match confusion matrix")
+        per_class[name] = {"support": int(support)}
+        for metric in ("recall", "precision", "f1-score"):
+            value = values.get(metric)
+            if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError("Invalid per-class validation score")
+            per_class[name][metric] = value
+    result = {"classes": list(classes), "confusion_matrix": matrix, "per_class": per_class}
+    if "samples" in record:
+        samples = record["samples"]
+        if type(samples) is not int or samples != sum(sum(row) for row in matrix):
+            raise ValueError("Validation sample count does not match confusion matrix")
+        result["samples"] = samples
+    return result
+
+
+def round_summaries(history, classes=None):
     """Strictly limit and normalize small per-round validation metrics."""
     if history is None:
         return None
@@ -120,17 +161,18 @@ def round_summaries(history):
             ):
                 raise ValueError("Invalid per-class validation recall")
             item["recall"] = values
+        item.update(_classification_evidence(record, classes))
         normalized.append(item)
     return normalized
 
 
-def read_local_history(path):
+def read_local_history(path, classes=None):
     """Legacy/local full histories are summarized without exposing weight data."""
     if not path.is_file():
         return []
     if path.is_symlink() or path.stat().st_size > 2 * 1024 * 1024:
         raise ValueError("Unsafe local validation history")
-    return round_summaries(json.loads(path.read_text(encoding="utf-8")))
+    return round_summaries(json.loads(path.read_text(encoding="utf-8")), classes=classes)
 
 
 def sync_cluster_results(workspace, runner=subprocess.run, *, offset=0):
@@ -181,7 +223,7 @@ for file in page:
             raise ValueError("Invalid validation history length")
         # Only export numerical summaries, never per-client data or model weights.
         allowed = ("round","accuracy","macro_f1","weighted_f1","balanced_accuracy",
-                   "mcc","loss","seconds","recall")
+                   "mcc","loss","seconds","recall","confusion_matrix","per_class","samples")
         rounds = [{{key: record[key] for key in allowed if key in record}}
                   for record in records if isinstance(record, dict)]
         if len(rounds) != len(records):
@@ -223,9 +265,12 @@ print(json.dumps({{"entries":out,"has_more":has_more}},allow_nan=False))
     if not isinstance(entries, list) or len(entries) > 100:
         raise ValueError("Invalid number of cluster results")
     target = Path(workspace) / "results"
+    if target.is_symlink():
+        raise ValueError("Local results root is a symlink")
     imported = 0
     # Fully validate all summaries before writing any.
     validated = []
+    seen_names = set()
     for row in entries:
         if not isinstance(row, dict) or set(row) not in (
             {"id", "manifest", "final_metrics"},
@@ -235,12 +280,16 @@ print(json.dumps({{"entries":out,"has_more":has_more}},allow_nan=False))
         name = row["id"]
         if not isinstance(name, str) or not _RUN.fullmatch(name) or name in {".", ".."}:
             raise ValueError("Invalid cluster experiment name")
+        if name in seen_names:
+            raise ValueError("Duplicate experiment name in cluster page")
+        seen_names.add(name)
         manifest, final = row["manifest"], row["final_metrics"]
         if not isinstance(manifest, dict) or not isinstance(manifest.get("status"), str):
             raise ValueError("Invalid cluster experiment manifest")
         if final is not None and not isinstance(final, dict):
             raise ValueError("Invalid cluster final metrics")
-        history = round_summaries(row.get("validation_history"))
+        audit = manifest.get("dataset_audit") or {}
+        history = round_summaries(row.get("validation_history"), classes=audit.get("classes"))
         if history and type(manifest.get("last_valid_round")) is int:
             if history[-1]["round"] > manifest["last_valid_round"]:
                 raise ValueError("History extends beyond last valid round")
