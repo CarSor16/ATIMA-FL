@@ -179,6 +179,7 @@ def check_archive(origin, root, engine="chromium", expected=None):
         expect(page.locator("#local-results-status")).to_contain_text("Choose a local folder")
         page.route("**/*", lambda route: route.abort())
         count = len(requests)
+        page.locator('[data-web-view="data"]').click()
         start = perf_counter()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("experiments read locally", timeout=90000)
