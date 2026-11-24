@@ -170,3 +170,31 @@ def test_report_reads_a_run_directory(tmp_path):
     assert math.isclose(data["window"]["macro_f1"], data["window"]["macro_f1"])
     with pytest.raises(FileNotFoundError):
         pattern.load_history(tmp_path / "missing")
+
+
+def test_detection_never_confirms_single_trailing_crossing():
+    attacked = _episodic(rounds=50, burst=(50,))
+    clean = [_clean() for _ in range(3)]
+    found = pattern.detect(attacked, clean, window=1, confirm=2)
+    assert found["miss_total_pct"]["rounds_above"] == 1
+    assert found["miss_total_pct"]["first_round"] is None
+
+
+def test_detection_aligns_real_rounds_and_never_bridges_missing_round():
+    attacked = _episodic(rounds=50, burst=(43, 44, 45))
+    attacked = [row for row in attacked if row["round"] != 44]
+    clean = [_clean() for _ in range(3)]
+    found = pattern.detect(attacked, clean, window=1, confirm=2)
+    assert found["miss_total_pct"]["first_round"] is None
+    assert found["miss_total_pct"]["longest_run"] == 1
+    # Short clean histories cannot cause indexing errors or fabricated evidence.
+    partial = pattern.detect(attacked, [_clean(rounds=40)], window=1, confirm=2)
+    assert partial["miss_total_pct"]["first_round"] is None
+    assert partial["miss_total_pct"]["rounds_evaluable"] == 31
+
+
+def test_pattern_series_enforces_metric_gate_for_every_consumer():
+    history = _clean(rounds=3)
+    history[1]["macro_f1"] += 0.1
+    with pytest.raises(ValueError, match="disagree"):
+        pattern.series(history)
