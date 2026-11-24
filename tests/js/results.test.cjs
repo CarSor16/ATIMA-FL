@@ -250,4 +250,38 @@ check("automatic cohorts show the matched clean mean using exactly the same seed
   ids.get("seed-analysis-enabled").dispatch("change");
   assert.ok(ids.get("seed-analysis-content").classList.contains("hidden"));
 });
+check("portable matrix analysis weights seeds equally and preserves unsupported classes",()=>{
+  const result=plain(evaluate("ATIMAAnalysis.meanMatrices([[[1,1],[0,0]],[[9,1],[2,2]]])"));
+  assert.ok(Math.abs(result[0][0].mean-.7)<1e-12);
+  assert.equal(result[1][0].mean,.5);assert.equal(result[1][0].n,1);
+  const paired=plain(evaluate("ATIMAAnalysis.pairedMatrices([[[[1,1],[0,0]],[[0,2],[1,1]]],[[[9,1],[2,2]],[[5,5],[0,4]]]])"));
+  assert.equal(paired[1][0].delta.n,1);assert.equal(paired[1][0].delta.mean,-.5);
+  assert.ok(Math.abs(paired[0][0].delta.mean+.45)<1e-12);
+  const view=evaluate("seedMatrixSummary([a,b],[{run:b,clean:a}])");
+  assert.ok(view.textContent.includes("Mean normalized confusion matrices"));
+  assert.ok(view.textContent.includes("Matched seed counts per true class"));
+  assert.equal(view.querySelectorAll("table").length,5);
+});
+check("campaign completeness distinguishes missing seeds, duplicates, selection and baseline coverage",()=>{
+  const coverage=plain(evaluate("ATIMAAnalysis.campaignCoverage([0,1,2,3],[{seed:0,selected:true,matched:true},{seed:1,selected:false},{seed:1,selected:false},{seed:2,selected:true,matched:false},{seed:9,selected:true,matched:true}])"));
+  assert.deepEqual(coverage.rows,[{seed:0,observed:1,selected:true,matched:true},{seed:1,observed:2,selected:false,matched:false},{seed:2,observed:1,selected:true,matched:false},{seed:3,observed:0,selected:false,matched:false}]);
+  assert.deepEqual(coverage.unexpected,[9]);
+  assert.equal(evaluate("(()=>{try{ATIMAAnalysis.campaignCoverage([1,1],[]);return false}catch{return true}})()"),true);
+  const view=evaluate("campaignCoveragePanel('fixture', [b], [b], [a,b])");
+  assert.ok(view.textContent.includes("cannot prove completeness"));
+  const field=view.querySelector("input");field.value="0,1,2";
+  view.querySelector("button").dispatch("click");
+  assert.ok(view.textContent.includes("2 planned seeds not observed"));
+});
+check("variability bands are optional and do not bridge gaps in validation history",()=>{
+  context.bandA=structuredClone(context.a);context.bandB=structuredClone(context.b);
+  context.bandA.history=[{round:1,macro_f1:.3},{round:2,macro_f1:.4},{round:4,macro_f1:.5}];
+  context.bandB.history=[{round:1,macro_f1:.7},{round:2,macro_f1:.8},{round:4,macro_f1:.9}];
+  const curve=evaluate("seedCurve([bandA,bandB])");
+  assert.equal(curve.querySelectorAll("polygon").length,1);
+  assert.ok(curve.textContent.includes("not a confidence interval"));
+  const toggle=curve.querySelector("input");toggle.checked=false;toggle.dispatch("change");
+  assert.equal(curve.querySelectorAll("polygon").length,0);
+  assert.equal(curve.querySelectorAll("polyline").length,2);
+});
 console.log(checks+" functional Results checks passed.");
