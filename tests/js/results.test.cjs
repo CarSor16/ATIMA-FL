@@ -308,4 +308,15 @@ check("cohort CSV protects text cells and requires audited confusion axes",()=>{
   assert.equal(rows[0][9],"Matched clean mean");
   assert.ok(!JSON.stringify(rows).includes("CleanSeed0"));
 });
+check("protocol grouping includes different provenance while strict grouping separates",()=>{
+  context.protA=structuredClone(context.lcg0);context.protB=structuredClone(context.lcg0);
+  context.protA.id="protocol-a";context.protB.id="protocol-b";context.protB.config.seed=1;
+  context.protA.seed_condition={key:"exact-a",protocol_key:"shared-protocol"};
+  context.protB.seed_condition={key:"exact-b",protocol_key:"shared-protocol"};
+  assert.equal(evaluate("seedCohorts([protA,protB],false).groups.size"),1);
+  assert.equal(evaluate("seedCohorts([protA,protB],true).groups.size"),2);
+  assert.equal(evaluate("seedChosen('shared',[protA,protB]).length"),2);
+  context.protB.seed_condition.protocol_key="different-protocol";
+  assert.equal(evaluate("seedCohorts([protA,protB],false).groups.size"),2);
+});
 console.log(checks+" functional Results checks passed.");
