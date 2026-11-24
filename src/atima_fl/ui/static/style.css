@@ -768,3 +768,8 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 @media(max-width:600px){.seed-results-panel{padding:12px}.seed-selection-grid{grid-template-columns:minmax(0,1fr)}}
 
 .component-description{white-space:pre-line}
+
+.seed-cohort-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
+.seed-cohort-card{padding:12px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.seed-cohort-card button{text-align:left;font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.seed-cohort-card p{margin:8px 0;font-size:13px}
