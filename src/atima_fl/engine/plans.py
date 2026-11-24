@@ -163,7 +163,7 @@ def save_defense_study(config, workspace):
 
 def save_seed_batch(config, workspace, seeds):
     """Export a clean-only or paired batch; never start training or submit jobs."""
-    from atima_fl.ui.campaign_preview import batch_profiles
+    from atima_fl.core.seed_campaign import batch_profiles
 
     pairs = batch_profiles(config, seeds)
     root = Path(workspace).resolve() / "plans" / (config.name + "_SeedBatch")
