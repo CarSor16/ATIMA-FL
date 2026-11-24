@@ -14,7 +14,7 @@ from atima_fl.ui.cluster_results import (
 )
 from atima_fl.ui.cluster_datasets import discover_cluster_datasets
 from atima_fl.ui.result_groups import result_group
-from atima_fl.ui.seed_analysis import seed_condition
+from atima_fl.ui.seed_analysis import seed_condition, sensitivity_conditions
 from atima_fl.ui.campaign_preview import paired_seed_preview
 
 STATIC = Path(__file__).parent / "static"
@@ -83,6 +83,7 @@ def results(workspace):
         final_path = path.parent / "final_metrics.json"
         final = json.loads(final_path.read_text(encoding="utf-8")) if final_path.exists() else {}
         config = manifest.get("config", {})
+        eligibility = seed_condition(manifest)
         values.append({
             "id": path.parent.name,
             "updated_at": datetime.fromtimestamp(
@@ -92,7 +93,8 @@ def results(workspace):
             "round": manifest.get("last_valid_round"),
             "config": config,
             "group": result_group(manifest, path.parent.name),
-            "seed_condition": seed_condition(manifest),
+            "seed_condition": eligibility,
+            "sensitivity_conditions": sensitivity_conditions(manifest, eligibility),
             "metrics": final,
             "pair_id": manifest.get("pair_id"),
             "classes": manifest.get("dataset_audit", {}).get("classes", []),
