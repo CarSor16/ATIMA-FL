@@ -119,9 +119,17 @@ def verify(history):
 
 
 def series(history):
-    """Verified per-round series, in round order."""
-    rows = [round_metrics(record) for record in history]
-    return sorted(rows, key=lambda row: row["round"])
+    """Verified per-round series, in round order; gaps remain explicit."""
+    if not history:
+        raise ValueError("Empty validation history")
+    verify(history)
+    rows = sorted((round_metrics(record) for record in history), key=lambda row: row["round"])
+    rounds = [row["round"] for row in rows]
+    if any(type(number) is not int or number < 1 for number in rounds) or len(set(rounds)) != len(rounds):
+        raise ValueError("Validation history requires unique positive round IDs")
+    if any(row["classes"] != rows[0]["classes"] for row in rows):
+        raise ValueError("Class order changes inside validation history")
+    return rows
 
 
 def window(rows, start=41, end=50):
@@ -251,83 +259,85 @@ def rolling(values, size):
     return out
 
 
-def _reference(clean_histories, size=10, floor_pp=0.05):
-    """Clean baseline matched to the round: mean and spread across runs of the rolling mean.
+def _rolling_by_round(rows, fn, size):
+    """Use actual round IDs and only complete contiguous windows."""
+    values = {row["round"]: fn(row) for row in rows}
+    return {
+        number: float(st.fmean(values[r] for r in range(number - size + 1, number + 1)))
+        for number in values
+        if all(r in values for r in range(number - size + 1, number + 1))
+    }
 
-    Everything is expressed in percentage points (macro-F1 too, multiplied by 100) so a single
-    floor means the same thing for every signal. The floor of 0,05 pp keeps a signal that never
-    varies in the clean runs from producing infinite deviations; with five runs the spread itself
-    is a noisy estimate, and a floor this small is already the conservative side of the trade.
-    """
+
+def _reference(clean_histories, size=10, floor_pp=0.05):
+    """Reference for actual round IDs, requiring a full window in each clean run."""
+    if not clean_histories:
+        raise ValueError("At least one clean history is required")
     runs = [series(history) for history in clean_histories]
+    if any(run[0]["classes"] != runs[0][0]["classes"] for run in runs):
+        raise ValueError("Clean histories have different class orders")
     reference = {}
     for name, fn in (
         ("macro_f1", lambda row: 100.0 * row["macro_f1"]),
         ("miss_total_pct", lambda row: row["miss_total_pct"]),
         ("benign_to_dos_pct", lambda row: row["benign_to_pct"].get("dos", 0.0)),
     ):
-        rolled = [rolling([fn(row) for row in run], size) for run in runs]
-        means, spreads = [], []
-        for index in range(len(rolled[0])):
-            values = [run[index] for run in rolled if run[index] is not None]
-            means.append(float(st.fmean(values)) if values else 0.0)
-            spreads.append(
-                max(float(st.stdev(values)), floor_pp) if len(values) > 1 else floor_pp
+        rolled = [_rolling_by_round(run, fn, size) for run in runs]
+        common = set.intersection(*(set(run) for run in rolled))
+        reference[name] = {}
+        for number in sorted(common):
+            values = [run[number] for run in rolled]
+            reference[name][number] = (
+                float(st.fmean(values)),
+                max(float(st.stdev(values)), floor_pp) if len(values) > 1 else floor_pp,
             )
-        reference[name] = {"mean": means, "sd": spreads}
     return reference
 
 
 def detect(history, clean_histories, window=10, threshold=3.0, confirm=2, attack_start=10):
-    """First round where a signal stays `threshold` deviations above the round-matched clean baseline.
+    """Find consecutive threshold crossings against actual round-matched clean windows.
 
-    The comparison is a rolling mean against the clean baseline of the same rounds, which is the
-    statistic whose noise is measured by `noise`. A stricter `confirm` (more consecutive rounds
-    above threshold) trades latency for tolerance of transients: a signal that only overshoots once
-    is not a detection.
+    Missing observations are not treated as clean evidence or consecutive rounds.
+    A final isolated crossing cannot satisfy a multi-round confirmation rule.
     """
-    reference = _reference(clean_histories, window)
+    if type(window) is not int or window < 1 or type(confirm) is not int or confirm < 1:
+        raise ValueError("Window and confirmation must be positive integers")
+    if not math.isfinite(threshold) or threshold <= 0:
+        raise ValueError("Threshold must be finite and positive")
     rows = series(history)
+    clean_rows = [series(clean) for clean in clean_histories]
+    if any(clean[0]["classes"] != rows[0]["classes"] for clean in clean_rows):
+        raise ValueError("Clean and attacked histories have different class orders")
+    reference = _reference(clean_histories, window)
     out = {}
     for name, fn in (
         ("macro_f1", lambda row: 100.0 * row["macro_f1"]),
         ("miss_total_pct", lambda row: row["miss_total_pct"]),
         ("benign_to_dos_pct", lambda row: row["benign_to_pct"].get("dos", 0.0)),
     ):
-        values = rolling([fn(row) for row in rows], window)
+        values = _rolling_by_round(rows, fn, window)
         sign = -1.0 if name == "macro_f1" else 1.0
-        deviations = [
-            None if value is None else sign * (value - reference[name]["mean"][i])
-            / reference[name]["sd"][i]
-            for i, value in enumerate(values)
-        ]
-        first = None
-        for i, row in enumerate(rows):
-            if row["round"] < attack_start or deviations[i] is None:
-                continue
-            if deviations[i] <= threshold:
-                continue
-            if all(
-                deviations[j] is not None and deviations[j] > threshold
-                for j in range(i, min(i + confirm, len(deviations)))
-            ):
-                first = row["round"]
-                break
-        above = [
-            value is not None and value > threshold
-            for row, value in zip(rows, deviations)
-            if row["round"] >= attack_start
-        ]
-        longest = run = 0
-        for flag in above:
-            run = run + 1 if flag else 0
-            longest = max(longest, run)
+        deviations = {
+            number: sign * (value - reference[name][number][0]) / reference[name][number][1]
+            for number, value in values.items() if number in reference[name]
+        }
+        above = {number for number, value in deviations.items()
+                 if number >= attack_start and value > threshold}
+        first = next((number for number in sorted(above)
+                      if all(r in above for r in range(number, number + confirm))), None)
+        longest = streak = 0
+        previous = None
+        for number in sorted(above):
+            streak = streak + 1 if previous is not None and number == previous + 1 else 1
+            longest = max(longest, streak)
+            previous = number
         out[name] = {
             "first_round": first,
-            "rounds_above": sum(above),
-            "rounds_attack": len(above),
+            "rounds_above": len(above),
+            "rounds_attack": sum(row["round"] >= attack_start for row in rows),
+            "rounds_evaluable": sum(number >= attack_start for number in deviations),
             "longest_run": longest,
-            "max_deviation": max((v for v in deviations if v is not None), default=0.0),
+            "max_deviation": max(deviations.values(), default=0.0),
         }
     return out
 
