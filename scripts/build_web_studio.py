@@ -67,7 +67,7 @@ def build(output):
         results = replace_once(results, metadata, '<details class="web-run-meta"><summary>Recorded configuration</summary>' + metadata + '</details>')
     results = replace_once(results, '<div id="results-workspace-panels">', '<div id="results-workspace-panels">')
     results = replace_once(results, '<section id="performance-region"', '<section id="performance-region"')
-    results = replace_once(results, '<div id="performance-overview"></div>', '<p class="web-selected-label"><span>Selected experiment</span><strong id="web-selected-experiment" aria-live="polite">No experiment selected</strong></p><div id="performance-overview"></div>')
+    results = replace_once(results, '<div id="performance-overview"></div>', '<p class="web-selected-label"><span>Selected experiment</span><strong id="web-selected-experiment" aria-live="polite">No experiment selected</strong></p><div class="web-quick-actions"><button type="button" class="secondary" id="web-open-cohort">Analyze selected condition across seeds</button></div><div id="performance-overview"></div>')
     start_seed = results.index('<section id="seed-results-panel"')
     end_seed = results.index('</section>', start_seed) + len('</section>')
     seed = results[start_seed:end_seed]
@@ -123,16 +123,30 @@ def build(output):
 </head><body class="web-viewer"><a class="skip-link" href="#main-content">Skip to analysis</a>
 <main id="main-content"><header class="web-header"><div class="web-brand">
 <img src="./atima-shield-hd.png" width="64" height="64" alt="">
-<div><span class="section-eyebrow">ATIMA-FL / WEB STUDIO</span><h1>Results Explorer</h1>
-<p>Compare federated intrusion-detection experiments on your device.</p></div></div>
+<div><span class="section-eyebrow">ATIMA-FL / WEB STUDIO</span><h1>ATIMA Web Studio</h1>
+<p>Federated learning security · local research workspace</p></div></div>
 <div class="header-tools"><label>Language<select id="web-language"><option value="en">English</option><option value="it">Italiano</option></select></label>
 <button type="button" class="theme-toggle" id="web-theme">Light mode</button></div></header>
 
 <noscript><p>JavaScript is required to read and analyze local files.</p></noscript>
-<nav class="web-nav" aria-label="Workspace sections"><a href="#results">Results</a><a href="#web-designer">Designer</a><a href="#web-study">Study Exchange</a><span>Local processing · no upload</span></nav>
+<nav class="web-nav" aria-label="Workspace sections">
+<button type="button" data-web-view="results" aria-current="page">Results</button>
+<button type="button" data-web-view="seeds">Multi-seed</button>
+<button type="button" data-web-view="sensitivity">Sensitivity</button>
+<button type="button" data-web-view="designer">Designer</button>
+<button type="button" data-web-view="studies">Studies</button>
+<button type="button" data-web-view="data" class="web-data-nav">Local data <span id="web-run-count">0</span></button>
+</nav>
+<div class="web-context"><div><h2 id="web-view-title">Results Explorer</h2><p id="web-view-description">Inspect a run or compare compatible experiments.</p></div><span class="web-local-label">On-device analysis · no upload</span></div>
+<section id="web-view-data" class="web-view" hidden><div class="web-data-intro"><h3>Choose your results</h3><p>Select a folder containing experiment summaries. You can return here to refresh or replace the data.</p></div></section>
+<div id="web-view-results" class="web-view">
+<div id="web-empty-results" class="web-empty card"><h3>Start with your experiment results</h3><p>Open a local folder to explore metrics, validation curves and clean/attack comparisons.</p><button type="button" id="web-open-data">Choose local results</button></div>
 {results}
-{designer}
-{study}
+</div>
+<section id="web-view-seeds" class="web-view" hidden></section>
+<section id="web-view-sensitivity" class="web-view" hidden></section>
+<section id="web-view-designer" class="web-view" hidden>{designer}</section>
+<section id="web-view-studies" class="web-view" hidden>{study}</section>
 <details class="card web-privacy"><summary>Privacy and research limitations</summary>
 <p>Choose an experiment or campaign folder. The site serves application files only; experiment data stays in this browser tab. No backend, SSH connection, account or cookie is required.</p>
 <p>Recorded summaries and metadata are not independent proof of experimental validity. Logit analysis requires a labeled test_logits.json file. Draft experiment design is available below; authoritative validation, plan export and training remain local.</p></details>

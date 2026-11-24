@@ -149,3 +149,14 @@ multi-seed drawer with a summary. Filters, configuration details and the
 complete cohort browser can be expanded when needed. The system font stack
 and amber accents require no external asset requests. The local Studio
 retains its original presentation.
+
+## Focused web navigation
+
+Results, Multi-seed, Sensitivity, Designer, Studies and Local data are separate
+views within one browser tab. Switching views preserves imported evidence.
+Local data provides folder selection, refresh, optional remembered directory
+access, logits and reset. Results opens with an empty-state action until data is
+loaded. From a compatible selected experiment, **Analyze selected condition
+across seeds** opens the corresponding cohort rather than an unrelated default.
+Provenance settings and the full cohort browser remain available on demand.
+No changes are made to the Runtime or local Studio layout.

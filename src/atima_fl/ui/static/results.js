@@ -530,6 +530,7 @@ function updateManualComparison(values){
   $("experiment-filter-status").textContent=visible.length+" / "+values.length+" "+uiText("experiments")+(compatibleOnly&&!single&&!paired?" · "+optionsB.length+" "+uiText("compatible with A"):"");
   const b=byId.get(chosenComparison.second);
   if($("web-selected-experiment"))$("web-selected-experiment").textContent=paired?"Choose a matched clean/attack pair":a?(single?a.id:a.id+" / "+(b?.id||"—")):"No experiment selected";
+  if($("web-open-cohort"))$("web-open-cohort").disabled=paired||!a||!a.seed_condition?.key||!manualWarnings(a,a).compatible;
   selectedRun($("experiment-a-metadata"),a,"A");selectedRun($("experiment-b-metadata"),b,"B");
   if(paired){$("manual-comparison-output").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));performanceOverview(null,null,false);$("analysis-panel").replaceChildren(node("p",pairEvidenceLabel("Choose a metadata-matched pair to open its A/B analysis.","Choose a verified pair to open its A/B analysis.")));}
   else manualComparison(a,single?null:b);
@@ -785,6 +786,7 @@ let sensitivityChoice="";
 function renderSensitivityExplorer(root,values){
   root.replaceChildren();
   const details=node("details",undefined,"seed-block");details.append(node("summary","Parameter Sensitivity Explorer"));
+  if(typeof ATIMA_WEB_ONLY!=="undefined"&&ATIMA_WEB_ONLY)details.open=true;
   root.append(details);
   const families=sensitivityFamilies(values);
   details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
