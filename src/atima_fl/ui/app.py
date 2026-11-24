@@ -8,7 +8,7 @@ import secrets
 from urllib.parse import urlparse, unquote
 from atima_fl.core.configuration import ExperimentConfig
 from atima_fl.core.registry import Registry
-from atima_fl.engine.plans import save_plan, save_defense_study, save_seed_batch
+from atima_fl.engine.plans import save_plan, save_defense_study, save_seed_batch, save_parameter_sweep
 from atima_fl.ui.cluster_results import (
     connection_settings, read_local_history, sync_cluster_results,
 )
@@ -295,6 +295,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(
                     200, sync_cluster_results(self.server.workspace, offset=body["offset"])
                 )
+            if self.path == "/api/parameter-sweep":
+                if not isinstance(body, dict) or set(body) != {"config", "seeds", "axis", "values"}:
+                    raise ValueError("Sweep export requires config, seeds, axis and values")
+                config = ExperimentConfig.from_dict(body["config"])
+                if str(config.plugin_directory or "") != str(self.server.plugins or ""):
+                    raise ValueError("Use the plugin directory chosen when starting the GUI")
+                directory = save_parameter_sweep(config, self.server.workspace, body["seeds"], body["axis"], body["values"])
+                campaign = json.loads((directory / "campaign.json").read_text(encoding="utf-8"))
+                return self.respond(201, {
+                    "name": directory.name, "runs": campaign["runs"],
+                    "download": f"/api/plans/{directory.name}/plan.zip",
+                })
             if self.path == "/api/seed-batch":
                 if not isinstance(body, dict) or set(body) != {"config", "seeds"}:
                     raise ValueError("Batch export requires config and seeds")
