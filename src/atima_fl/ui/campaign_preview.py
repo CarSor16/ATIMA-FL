@@ -12,11 +12,9 @@ _RUN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\Z")
 SEEDS_0_TO_10 = tuple(range(11))
 
 
-def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
-    """Describe one clean and one attacked profile per independent seed."""
+def batch_profiles(config, seeds=SEEDS_0_TO_10):
+    """Validate all profiles before exporting anything; clean-only or paired."""
     config.validate()
-    if config.attack == "none":
-        raise ValueError("Select an attack to preview a paired seed campaign")
     if config.paired_clean:
         raise ValueError("Remove the existing paired_clean path before planning a new campaign")
     if type(seeds) not in (tuple, list) or not seeds or len(seeds) > 50:
@@ -25,11 +23,8 @@ def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
         raise ValueError("Campaign seeds must be non-negative 32-bit integers")
     if len(set(seeds)) != len(seeds):
         raise ValueError("Duplicate campaign seeds")
-    # A fixed horizon prevents post-hoc differences from clean early stopping.
-    if config.minimum_rounds > config.rounds:
-        raise ValueError("Minimum rounds exceed the campaign horizon")
     output = PurePosixPath(config.output_root)
-    entries = []
+    pairs = []
     for seed in seeds:
         stem = f"{config.name}_Seed{seed}"
         clean = replace(
@@ -37,22 +32,35 @@ def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
             attack_params={}, malicious_clients=(), paired_clean="",
             minimum_rounds=config.rounds, paired_rounds=config.rounds,
         )
-        attack = replace(
+        attack = None if config.attack == "none" else replace(
             config, name=stem + "_Attack", seed=seed,
             minimum_rounds=config.rounds, paired_rounds=config.rounds,
             paired_clean=str(output / clean.name),
         )
-        if not _RUN_NAME.fullmatch(clean.name) or not _RUN_NAME.fullmatch(attack.name):
-            raise ValueError("Generated run names must be ASCII-safe and at most 120 characters")
-        clean.validate()
-        attack.validate()
-        entries.append({
-            "seed": seed,
-            "clean_name": clean.name,
-            "attack_name": attack.name,
-            "paired_clean": attack.paired_clean,
-            "execution_order": [clean.name, attack.name],
-        })
+        for profile in (clean, attack):
+            if profile is None:
+                continue
+            if not _RUN_NAME.fullmatch(profile.name):
+                raise ValueError("Generated run names must be ASCII-safe and at most 120 characters")
+            profile.validate()
+        pairs.append((clean, attack))
+    return pairs
+
+
+def paired_seed_preview(config, seeds=SEEDS_0_TO_10):
+    """Describe one clean and one attacked profile per seed; legacy API."""
+    if config.attack == "none":
+        raise ValueError("Select an attack to preview a paired seed campaign")
+    if config.minimum_rounds > config.rounds:
+        raise ValueError("Minimum rounds exceed the campaign horizon")
+    pairs = batch_profiles(config, seeds)
+    entries = [{
+        "seed": clean.seed,
+        "clean_name": clean.name,
+        "attack_name": attack.name,
+        "paired_clean": attack.paired_clean,
+        "execution_order": [clean.name, attack.name],
+    } for clean, attack in pairs]
     return {
         "mode": "preview_only",
         "attack": config.attack,
