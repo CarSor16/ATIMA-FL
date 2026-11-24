@@ -79,7 +79,9 @@ def check_browser(origin, root, engine="chromium"):
         draft = json.loads(Path(draft_event.value.path()).read_text(encoding="utf-8"))
         assert draft["schema_version"] == 1 and draft["mode"] == "single"
         assert not {"dataset_root", "output_root", "plugin_directory"} & set(draft["config"])
+        expect(page.locator("#web-design-seeds")).not_to_be_visible()
         page.locator("#web-design-mode").select_option("batch")
+        expect(page.locator("#web-design-seeds")).to_be_visible()
         with page.expect_download() as batch_event:
             page.locator("#web-design-download").click()
         batch = json.loads(Path(batch_event.value.path()).read_text(encoding="utf-8"))
@@ -103,6 +105,12 @@ def check_browser(origin, root, engine="chromium"):
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")
+        for extension in ("SVG", "PNG"):
+            with page.expect_download() as figure:
+                page.get_by_role("button", name=f"Export Mean validation trajectory for rounds with all selected seeds as {extension}").first.click()
+            assert figure.value.suggested_filename.endswith("." + extension.lower())
+            payload = Path(figure.value.path()).read_bytes()
+            assert payload.startswith(b"\x89PNG") if extension == "PNG" else b"<svg" in payload
         with page.expect_download() as event:
             page.get_by_role("button", name="Export aggregate metrics CSV").click()
         download = event.value

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src/atima_fl/ui/static"
 ASSETS = (
     "style.css", "i18n.js", "analysis-core.js", "local-results.js",
-    "results.js", "fl-diagnostics.js", "web-folder.js", "web-designer.js", "web-study.js", "web-bootstrap.js", "atima-shield-hd.png",
+    "results.js", "fl-diagnostics.js", "web-exports.js", "web-folder.js", "web-designer.js", "web-study.js", "web-bootstrap.js", "atima-shield-hd.png",
 )
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -89,7 +89,7 @@ def build(output):
 <p>Design a single run, multi-seed batch or parameter sweep. No data or credentials are required. Browser checks cover schema and common bounds; plugin hooks and deployment preflight require Local Studio.</p>
 <div class="fields" id="web-design-fields"></div>
 <div class="component-grid" id="web-design-components"></div>
-<label>Ordered defense stages (JSON array of id and params)<textarea id="web-design-defenses" rows="3">[]</textarea></label>
+<details class="web-advanced"><summary>Defense pipeline (optional)</summary><p>Stages run in the displayed order.</p><div id="web-defense-stages"></div><button type="button" class="secondary" id="web-add-defense">Add defense</button></details>
 <div class="fields">
 <label>Mode<select id="web-design-mode"><option value="single">Single experiment</option><option value="batch">Multi-seed batch</option><option value="sweep">Parameter sweep</option></select></label>
 <label>Campaign seeds<input id="web-design-seeds" value="0,1,2,3,4,5,6,7,8,9,10"></label>

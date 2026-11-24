@@ -177,3 +177,10 @@ seeds. Mixed provenance is not a controlled causal effect. The local viewer
 retains strict sensitivity by default. Built-in classification summaries are
 checked against their confusion matrices when present; inconsistent records
 remain visible individually but cannot enter compatible comparisons.
+
+The web Designer now generates typed component controls from the registry schema,
+with parameter details collapsed by default and optional ordered defense stages.
+Campaign fields appear only for the applicable mode. Validation remains
+authoritative in local Studio. Validation, federated and sensitivity SVG
+charts support standalone SVG and 3x PNG export, preserving current chart
+styles and theme. The files are generated in the browser.

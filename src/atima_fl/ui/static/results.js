@@ -189,6 +189,7 @@ function roundChart(value,baseline,manual=false,alignedClasses=true){
       }
     }
     drawing.append(svg);
+    if(typeof attachWebChartExports==="function")attachWebChartExports(svg,drawing);
   }
   function redraw(){
     classChoice.label.classList.toggle("hidden",metricSelect.value!=="class_recall");drawing.replaceChildren();
@@ -720,7 +721,7 @@ function seedCurve(runs,cleans=[]){
       svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"#64748b","stroke-width":2.5,"stroke-dasharray":"6 4"}));
       for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"#64748b"}));
     }
-    if(full.length)body.append(svg);
+    if(full.length){body.append(svg);if(typeof attachWebChartExports==="function")attachWebChartExports(svg,body);}
     if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
     body.append(node("p","Only rounds observed in every selected seed are plotted. Missing observations are not interpolated. "+(bands.input.checked?"Shading: mean ± one sample SD (not a confidence interval); proportion bands are clipped to 0–100%.":"")));
     const details=node("details"),table=cleans.length
