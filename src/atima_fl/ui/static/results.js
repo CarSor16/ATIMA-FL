@@ -392,7 +392,8 @@ function perClassAnalysis(first,second,compatible,supportOnly=false){
 function validMatrix(run){
   const classes=classNames(run),matrix=testMetrics(run)?.confusion_matrix;
   return classes.length>=2 && Array.isArray(matrix)&&matrix.length===classes.length
-    &&matrix.every((row,i)=>Array.isArray(row)&&row.length===classes.length&&row.every(value=>Number.isInteger(value)&&value>=0)
+    &&matrix.every((row,i)=>Array.isArray(row)&&row.length===classes.length&&row.every(value=>Number.isSafeInteger(value)&&value>=0)
+      &&Number.isSafeInteger(row.reduce((a,b)=>a+b,0))
       &&row.reduce((a,b)=>a+b,0)===testMetrics(run)?.per_class?.[classes[i]]?.support);
 }
 function matrixCells(matrix,normalized){
