@@ -28,9 +28,10 @@ const ATIMALocalResults=(()=>{
     for(const group of ["attack_params","partition_params"])for(const [name,value] of Object.entries(c[group]))if(finite(value))axes.push([group+"."+name,value]);
     for(const field of ["model","partition","attack_start","attack_end"])axes.push([field,c[field]]);
     if([...c.malicious_clients].sort((a,b)=>a-b).every((id,i)=>id===i))axes.push(["malicious_count",c.malicious_clients.length]);
+    if(axes.length>64)throw Error("Too many sensitivity axes in manifest");
     return axes.map(([axis,value])=>{
       const condition=JSON.parse(JSON.stringify(base)),cfg=condition.config;
-      if(axis.includes(".")){const [group,name]=axis.split(".");delete cfg[group][name];}
+      if(axis.includes(".")){const dot=axis.indexOf("."),group=axis.slice(0,dot),name=axis.slice(dot+1);delete cfg[group][name];}
       else if(axis==="malicious_count")delete cfg.malicious_clients;
       else {delete cfg[axis];if(["model","partition"].includes(axis))delete cfg[axis+"_params"];}
       const partition=axis==="partition"||axis.startsWith("partition_params.");
@@ -49,12 +50,17 @@ const ATIMALocalResults=(()=>{
         const v=r[name],valid=finite(v)&&(name==="mcc"?v>=-1&&v<=1:["loss","seconds"].includes(name)?v>=0:v>=0&&v<=1);
         if(!valid)throw Error("Invalid validation metric: "+name);
       }
+      if(r.recall!==undefined&&(!Array.isArray(r.recall)||r.recall.length>100||r.recall.some(v=>!finite(v)||v<0||v>1)))throw Error("Invalid validation class recall");
       return r;
     });
   }
   function project(id,m,metrics={},history=[],updated=null){
     if(!object(m)||!object(m.config)||!object(metrics))throw Error("Invalid experiment manifest or metrics");
     const c=m.config,a=object(m.dataset_audit)?m.dataset_audit:{},base=audited(m);
+    if(metrics.federated!==undefined){
+      const rows=metrics.federated?.rounds;
+      if(!object(metrics.federated)||(rows!==undefined&&(!Array.isArray(rows)||rows.length>200||rows.some(row=>!object(row)||!Number.isInteger(row.round)||row.round<1||row.round>1000))))throw Error("Invalid federated telemetry");
+    }
     const test=metrics.test;
     if(test!==undefined){
       if(!object(test))throw Error("Invalid final test metrics");
