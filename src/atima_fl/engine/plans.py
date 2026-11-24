@@ -3,6 +3,7 @@
 from pathlib import Path, PurePosixPath
 import json
 import zipfile
+import shutil
 from dataclasses import replace
 from atima_fl.core.io import atomic_json
 
@@ -157,4 +158,50 @@ def save_defense_study(config, workspace):
             if path.is_file() and path.name != "plan.zip"
         ),
     )
+    return root
+
+
+def save_seed_batch(config, workspace, seeds):
+    """Export a clean-only or paired batch; never start training or submit jobs."""
+    from atima_fl.ui.campaign_preview import batch_profiles
+
+    pairs = batch_profiles(config, seeds)
+    root = Path(workspace).resolve() / "plans" / (config.name + "_SeedBatch")
+    root.mkdir(parents=True, exist_ok=False)
+    try:
+        entries = []
+        for clean, attack in pairs:
+            order = []
+            for profile in (clean, attack):
+                if profile is not None:
+                    directory = save_plan(profile, root)
+                    order.append(f"plans/{directory.name}/experiment.toml")
+            entries.append({"seed": clean.seed, "profiles": order})
+        atomic_json(root / "campaign.json", {
+            "schema_version": 1,
+            "mode": "clean_only" if config.attack == "none" else "paired",
+            "seeds": list(seeds),
+            "rounds": config.rounds,
+            "runs": sum(len(entry["profiles"]) for entry in entries),
+            "entries": entries,
+            "stopping": "fixed common horizon",
+            "checks": {"configuration": "valid", "dataset": "not_checked",
+                       "scheduler": "not_checked", "cuda": "not_checked"},
+        })
+        (root / "README.txt").write_text(
+            "Extract this archive into a new directory. Use a matching ATIMA Runtime.\n"
+            "For each seed, follow campaign.json in order: clean before attack.\n"
+            "Run each profile's preflight and then train inside an appropriate compute allocation.\n"
+            "Use a consistent working directory for relative result paths.\n"
+            "No jobs are submitted by the exporter. Check dataset, hardware and pairing first.\n",
+            encoding="utf-8",
+        )
+        _archive_files(root / "plan.zip", (
+            (path, path.relative_to(root).as_posix())
+            for path in sorted(root.rglob("*"))
+            if path.is_file() and path.name != "plan.zip"
+        ))
+    except Exception:
+        shutil.rmtree(root)
+        raise
     return root
