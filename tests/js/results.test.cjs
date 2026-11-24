@@ -199,7 +199,7 @@ check("multi-seed curves count observed seed values per actual round and preserv
   assert.ok(Math.abs(rows[0].mean-.6)<1e-12);
   assert.equal(evaluate("seedEvasion(s0)"),.5);
 });
-check("automatic multi-seed panel can be disabled and duplicate seed requires explicit selection",()=>{
+check("automatic multi-seed panel uses all unambiguous seeds with no manual seed controls",()=>{
   ids.get("seed-analysis-enabled").checked=false;
   evaluate("renderResults([s0,s1,dup,other,invalid])");
   assert.equal(ids.get("seed-analysis-content").classList.contains("hidden"),true);
@@ -207,11 +207,12 @@ check("automatic multi-seed panel can be disabled and duplicate seed requires ex
   ids.get("seed-analysis-enabled").dispatch("change");
   const cohort=ids.get("seed-cohort-choice");
   cohort.value=cohort.options[1].value;cohort.dispatch("change");
-  assert.ok(ids.get("seed-analysis-output").textContent.includes("Only one seed selected"));
-  const select=ids.get("seed-analysis-selection").querySelectorAll("select")[1];
-  select.value="LCG_seed1";select.dispatch("change");
+  assert.ok(ids.get("seed-analysis-output").textContent.includes("Only one seed available"));
+  assert.ok(ids.get("seed-analysis-selection").textContent.includes("Ambiguous duplicate seeds excluded"));
+  assert.equal(ids.get("seed-analysis-selection").querySelectorAll("select").length,0);
+  assert.deepEqual(plain(evaluate("seedChosen('fixture',[s0,s1,dup]).map(r=>r.config.seed)")),[0]);
+  assert.deepEqual(plain(evaluate("seedChosen('fixture',[s0,s1]).map(r=>r.config.seed)")),[0,1]);
   assert.ok(ids.get("seed-analysis-output").textContent.includes("Final test metrics across seeds"));
-  assert.ok(ids.get("seed-analysis-output").textContent.includes("Mean validation trajectory"));
   assert.ok(ids.get("seed-analysis-output").textContent.includes("Metadata-matched attack minus clean"));
   ids.get("seed-analysis-enabled").checked=false;
   ids.get("seed-analysis-enabled").dispatch("change");
