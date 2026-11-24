@@ -394,7 +394,7 @@ function perClassAnalysis(first,second,compatible,supportOnly=false){
 }
 function validMatrix(run){
   const classes=classNames(run),matrix=testMetrics(run)?.confusion_matrix;
-  return classes.length>=2 && Array.isArray(matrix)&&matrix.length===classes.length
+  return classes.length>=2 && Array.isArray(run?.classes)&&run.classes.length===classes.length&&run.classes.every((name,i)=>name===classes[i]) && Array.isArray(matrix)&&matrix.length===classes.length
     &&matrix.every((row,i)=>Array.isArray(row)&&row.length===classes.length&&row.every(value=>Number.isSafeInteger(value)&&value>=0)
       &&Number.isSafeInteger(row.reduce((a,b)=>a+b,0))
       &&row.reduce((a,b)=>a+b,0)===testMetrics(run)?.per_class?.[classes[i]]?.support);
@@ -721,6 +721,13 @@ function seedCurve(runs,cleans=[]){
   }
   metric.select.addEventListener("change",redraw);bands.input.addEventListener("change",redraw);redraw();return root;
 }
+// Short display-only identifier; exact cohort equality always uses the complete key.
+function shortConditionLabel(key){
+  if(/^[a-f0-9]{64}(?:\||$)/.test(key))return key.slice(0,8);
+  let hash=2166136261;
+  for(let i=0;i<key.length;i++)hash=Math.imul(hash^key.charCodeAt(i),16777619);
+  return (hash>>>0).toString(16).padStart(8,"0");
+}
 function seedLabel(r){
   const c=r.config||{},names={local_class_gradient:"LCG",model_replacement:"ModelReplacement",class_withholding:"ClassWithholding",sample_weight_hijack:"SampleWeightHijack",update_scaling:"UpdateScaling",stale_replay:"StaleReplay",free_rider:"FreeRider",label_flip:"LabelFlip",none:"Clean"};
   const distribution=c.partition==="iid"?"IID":c.partition==="dirichlet"?"Non-IID · α="+(c.partition_params?.alpha??"?"):r.group?.distribution||c.partition||"Unknown partition";
@@ -780,7 +787,7 @@ function renderSensitivityExplorer(root,values){
   const families=sensitivityFamilies(values);
   details.append(node("p","Compare recorded parameter levels using the same matched clean/attack seeds at every level. Conditions with ambiguous levels are not pooled.","helper"));
   if(!families.length){details.append(node("p","No audited sensitivity family with at least two distinct levels is available."));return;}
-  const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+key.slice(0,8)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
+  const selector=choiceControl("Comparison family",families.map(([key,f])=>[key,f.axis+" · "+seedLabel([...f.levels.values()][0].runs[0])+" · "+f.levels.size+" levels · "+shortConditionLabel(key)]),families.some(([key])=>key===sensitivityChoice)?sensitivityChoice:families[0][0]);
   const labels=[...new Set(families.flatMap(([,f])=>classNames([...f.levels.values()][0].runs[0])))];
   const metric=choiceControl("Metric",[...FINAL_METRICS.map(([key,label])=>[key,label]),["intrusion_to_benign","Intrusions predicted benign"],...labels.map(name=>["recall:"+name,name+" · Recall"]),...labels.filter(name=>!/^(benign|normal)$/i.test(name)).map(name=>["evasion:"+name,name+" · Predicted benign"])],"macro_f1");
   const output=node("div");details.append(selector.label,metric.label,output);
@@ -906,7 +913,7 @@ function refreshSeedWorkspace(){
   const empty=node("option","Choose a condition");empty.value="";select.append(empty);
   for(const [key,runs] of groups){
     const r=runs[0],c=r.config,n=seedBuckets(runs).length;
-    const detail=seedLabel(r)+" · "+n+" seeds · "+key.slice(0,8);
+    const detail=seedLabel(r)+" · "+n+" seeds · "+shortConditionLabel(key);
     const option=node("option",detail);option.value=key;select.append(option);
   }
   const first=[...groups.entries()].sort((a,b)=>Number(a[1][0].config.attack==="none")-Number(b[1][0].config.attack==="none")||seedBuckets(b[1]).length-seedBuckets(a[1]).length)[0];
@@ -917,7 +924,7 @@ function refreshSeedWorkspace(){
     const metric=r=>testMetrics(r)?.macro_f1;
     const avg=seedStats(chosen.map(metric)),valid=pairs.filter(p=>numeric(metric(p.clean))&&numeric(metric(p.run)));
     const clean=seedStats(valid.map(p=>metric(p.clean))),attack=seedStats(valid.map(p=>metric(p.run)));
-    const card=node("article",undefined,"seed-cohort-card"),button=node("button",seedLabel(runs[0]),"text-button");button.type="button";
+    const card=node("article",undefined,"seed-cohort-card"),button=node("button",seedLabel(runs[0])+" · "+shortConditionLabel(key),"text-button");button.type="button";
     button.addEventListener("click",()=>{select.value=key;refreshSeedWorkspace();});
     card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
     overview.append(card);
