@@ -8,6 +8,11 @@ on:
       - 'scripts/check_web_studio.py'
       - '.github/workflows/web-studio.yml'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested site to GitHub Pages
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -47,7 +52,7 @@ jobs:
           path: _site
   deploy:
     needs: build
-    if: github.repository == 'CarSor16/ATIMA-FL' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/multiseed-results-workspace')
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true && github.repository == 'CarSor16/ATIMA-FL' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -58,10 +63,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Configure Pages (enable if repository token is authorized)
+      - name: Configure already enabled Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Deploy tested static assets
         id: deployment
         uses: actions/deploy-pages@v4
