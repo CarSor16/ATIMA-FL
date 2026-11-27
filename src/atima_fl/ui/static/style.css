@@ -787,3 +787,10 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 
 .component-description{white-space:pre-line}
 
+
+.seed-cohort-browser{margin-top:4px;border-top:1px solid var(--line);padding-top:10px}
+.seed-cohort-browser>summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:600}
+.seed-cohort-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px;max-height:min(420px,60vh);overflow:auto;padding:12px 4px 4px}
+.seed-cohort-card{padding:10px;border:1px solid var(--line);border-radius:8px;min-width:0}
+.seed-cohort-card button{text-align:left;font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.seed-cohort-card p{margin:7px 0;font-size:12px}
