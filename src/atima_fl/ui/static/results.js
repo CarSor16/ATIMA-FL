@@ -980,6 +980,21 @@ function refreshSeedWorkspace(){
     ||(Number(b.isAttack)-Number(a.isAttack))||b.n-a.n||a.label.localeCompare(b.label));
   const visible=candidates.filter(item=>!query||item.label.toLocaleLowerCase().includes(query));
   for(const item of visible){const option=node("option",item.label);option.value=item.key;select.append(option);}
+  const overview=$("seed-cohort-overview");overview.replaceChildren();
+  for(const item of candidates){
+    const {key,runs}=item,chosen=seedChosen(key,runs),pairs=seedMatched(chosen,availableResults);
+    const metric=run=>testMetrics(run)?.macro_f1,avg=seedStats(chosen.map(metric));
+    const valid=pairs.filter(pair=>numeric(metric(pair.clean))&&numeric(metric(pair.run)));
+    const clean=seedStats(valid.map(pair=>metric(pair.clean))),attack=seedStats(valid.map(pair=>metric(pair.run)));
+    const card=node("article",undefined,"seed-cohort-card");
+    const button=node("button",seedLabel(runs[0])+" · "+shortConditionLabel(key),"text-button");button.type="button";
+    button.addEventListener("click",()=>{select.value=key;refreshSeedWorkspace();});
+    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),
+      node("p",runs[0].config.attack==="none"?"Clean reference":valid.length
+        ?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean)
+        :"No matched clean evidence"));
+    overview.append(card);
+  }
   const preferred=visible.find(item=>item.key===previous)||visible[0];
   select.value=preferred?.key||"";
   const summary=$("seed-analysis-summary");
