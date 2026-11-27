@@ -84,6 +84,7 @@ def check_browser(origin, root, engine="chromium"):
         page.locator("#web-designer summary").click()
         page.locator("#local-results-folder").set_input_files(str(root))
         expect(page.locator("#local-results-status")).to_contain_text("4 experiments read locally", timeout=60000)
+        page.locator("#seed-results-panel > summary").click()
         expect(page.locator("#seed-analysis-output")).to_contain_text("2/2")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Metadata-matched attack minus clean")
         expect(page.locator("#seed-analysis-output")).to_contain_text("Mean normalized confusion matrices")

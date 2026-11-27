@@ -587,14 +587,14 @@ input[type=checkbox]{min-height:initial;accent-color:var(--teal)}
   --ink:#20313f;--muted:#536977;--line:#cedae1;--teal:#216f68;--side:#101d2b;
   --accent-soft:#e1efec;--accent-strong:#216f68;--border-soft:#cedae1;--shadow:none;
   --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;
-  --series-a:#ad7127;--series-b:#247e78;--series-delta:#6d66a3;
+  --series-a:#2673a6;--series-b:#cc5e3a;--series-delta:#7659b5;
   --improved:#246c52;--degraded:#9b4446;--notice:#78591d;
 }
 :root[data-theme="dark"]{
   --bg:#0a1420;--surface:#142330;--surface-raised:#1a2b3a;--surface-soft:#101d2b;
   --ink:#e8f1f4;--muted:#a4bac6;--line:#304553;--teal:#79c9bb;--side:#101d2b;
   --accent-soft:#1a4542;--accent-strong:#79c9bb;--border-soft:#304553;--shadow:none;
-  --series-a:#e0ac65;--series-b:#79c9bb;--series-delta:#b1a7e0;
+  --series-a:#7ec1ee;--series-b:#ff9078;--series-delta:#bdabff;
   --improved:#99d9b5;--degraded:#ed9b9e;--notice:#dfc28a;
 }
 body{background:var(--bg);font-size:13px;line-height:1.5}
@@ -756,7 +756,25 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 #results-layout-controls.hidden,#seed-analysis-content.hidden{display:none}
 .layout-control-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
 .layout-control-row button{padding:6px 12px;min-width:40px}
-.seed-results-panel{border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;background:var(--surface-raised)}
+.seed-results-panel{border:1px solid var(--line);border-radius:12px;padding:0;min-width:0;background:var(--surface-raised);overflow:hidden}
+.seed-panel-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;cursor:pointer;list-style:none}
+.seed-panel-summary::-webkit-details-marker{display:none}
+.seed-panel-summary:after{content:"+";font-size:22px;color:var(--muted);line-height:1}
+.seed-results-panel[open]>.seed-panel-summary:after{content:"−"}
+.seed-panel-heading{display:grid;gap:3px;min-width:0}
+.seed-panel-title{font-size:15px;font-weight:700}
+.seed-panel-description{font-size:12px;color:var(--muted)}
+.seed-panel-status{flex:none;font-size:12px;color:var(--muted);text-align:right}
+.seed-panel-body{padding:0 20px 20px}
+.seed-cohort-controls{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(300px,1.2fr);gap:14px}
+.seed-cohort-controls label{display:grid;gap:6px;color:var(--muted);font-size:12px;font-weight:600}
+.seed-final-f1-chart{display:block;width:100%;max-width:780px;height:auto;margin:8px 0}
+.seed-f1-axis{stroke:var(--line);stroke-width:1}
+.seed-f1-axis-label{fill:var(--muted);font:11px system-ui}
+.seed-f1-label,.seed-f1-value{fill:var(--ink);font:12px system-ui}
+.seed-f1-track{fill:var(--line);opacity:.6}
+.seed-f1-clean{fill:var(--series-a)}
+.seed-f1-attack{fill:var(--series-b)}
 #seed-analysis-content{display:grid;gap:12px;min-width:0}
 .seed-selection-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
 .seed-selection-grid label{min-width:0;display:grid;gap:5px}
@@ -765,11 +783,14 @@ button:disabled{opacity:.5;cursor:not-allowed}.review .card{border-color:var(--l
 .seed-curve{display:block;width:100%;height:auto;max-height:320px;color:var(--teal)}
 #seed-analysis-output{min-width:0}
 #seed-analysis-selection pre{white-space:pre-wrap;overflow-wrap:anywhere}
-@media(max-width:600px){.seed-results-panel{padding:12px}.seed-selection-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.seed-panel-summary{align-items:flex-start;flex-wrap:wrap;padding:14px}.seed-panel-status{width:100%;text-align:left}.seed-panel-body{padding:0 14px 14px}.seed-cohort-controls,.seed-selection-grid{grid-template-columns:minmax(0,1fr)}}
 
 .component-description{white-space:pre-line}
 
-.seed-cohort-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
-.seed-cohort-card{padding:12px;border:1px solid var(--line);border-radius:10px;min-width:0}
+
+.seed-cohort-browser{margin-top:4px;border-top:1px solid var(--line);padding-top:10px}
+.seed-cohort-browser>summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:600}
+.seed-cohort-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px;max-height:min(420px,60vh);overflow:auto;padding:12px 4px 4px}
+.seed-cohort-card{padding:10px;border:1px solid var(--line);border-radius:8px;min-width:0}
 .seed-cohort-card button{text-align:left;font-weight:600;white-space:normal;overflow-wrap:anywhere}
-.seed-cohort-card p{margin:8px 0;font-size:13px}
+.seed-cohort-card p{margin:7px 0;font-size:12px}

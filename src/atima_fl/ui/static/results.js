@@ -689,7 +689,7 @@ function seedCurve(runs,cleans=[]){
       svgElement("text",{x:52,y:250,fill:"currentColor","font-size":11},"1"),
       svgElement("text",{x:738,y:250,fill:"currentColor","font-size":11},String(maxRound)));
     if(bands.input.checked){
-      for(const [series,color] of [[full,"currentColor"],[cleanFull,"#64748b"]]){
+      for(const [series,color] of [[full,"var(--series-b)"],[cleanFull,"var(--series-a)"]]){
         const byRound=new Map(series.map(row=>[row.round,row]));
         for(const segment of roundSegments(series.filter(row=>numeric(row.sd)).map(row=>({round:row.round,value:row.mean})))){
           const clip=value=>Math.max(lo,Math.min(hi,value));
@@ -701,12 +701,12 @@ function seedCurve(runs,cleans=[]){
       }
     }
     for(const segment of roundSegments(full.map(r=>({round:r.round,value:r.mean})))){
-      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"currentColor","stroke-width":2.5}));
-      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"currentColor"}));
+      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"var(--series-b)","stroke-width":2.5}));
+      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"var(--series-b)"}));
     }
     for(const segment of roundSegments(cleanFull.map(r=>({round:r.round,value:r.mean})))){
-      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"#64748b","stroke-width":2.5,"stroke-dasharray":"6 4"}));
-      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"#64748b"}));
+      svg.append(svgElement("polyline",{points:segment.map(p=>x(p.round)+","+y(p.value)).join(" "),fill:"none",stroke:"var(--series-a)","stroke-width":2.5,"stroke-dasharray":"6 4"}));
+      for(const p of segment)svg.append(svgElement("circle",{cx:x(p.round),cy:y(p.value),r:2.5,fill:"var(--series-a)"}));
     }
     if(full.length)body.append(svg);
     if(cleans.length)body.append(node("p","Solid: attacked mean. Dashed: clean mean. Same matched seeds and common rounds."));
@@ -750,6 +750,34 @@ function seedComparisonRows(pairs,descriptors){
     return [label,score(a.mean,percent),score(b.mean,percent),deltaScore(b.mean,a.mean,percent),
       numeric(d.sd)?(percent?(100*d.sd).toFixed(2)+" pp":score(d.sd,false)):"—",d.n+"/"+pairs.length];
   });
+}
+function seedFinalTestF1(pairs){
+  const section=node("section",undefined,"seed-block");
+  section.append(node("h4","Final test Macro-F1 across matched seeds"));
+  const clean=seedStats(pairs.map(pair=>testMetrics(pair.clean)?.macro_f1));
+  const attack=seedStats(pairs.map(pair=>testMetrics(pair.run)?.macro_f1));
+  if(!numeric(clean.mean)||!numeric(attack.mean)){
+    section.append(node("p","Matched final test Macro-F1 is unavailable for this seed group."));
+    return section;
+  }
+  const svg=svgElement("svg",{viewBox:"0 0 760 190",role:"img",
+    "aria-label":uiText("Final test Macro-F1 across matched seeds"),class:"seed-final-f1-chart"});
+  const left=170,barWidth=450,axisTop=38,axisBottom=162;
+  for(let tick=0;tick<=4;tick++){
+    const x=left+barWidth*tick/4;
+    svg.append(svgElement("line",{x1:x,y1:axisTop,x2:x,y2:axisBottom,class:"seed-f1-axis"}),
+      svgElement("text",{x,y:25,"text-anchor":"middle",class:"seed-f1-axis-label"},score(tick/4)));
+  }
+  for(const [index,item] of [[0,{label:"Clean baseline",mean:clean.mean,className:"seed-f1-clean"}],
+    [1,{label:"Attack",mean:attack.mean,className:"seed-f1-attack"}]]){
+    const y=56+index*58,width=barWidth*Math.max(0,Math.min(1,item.mean));
+    svg.append(svgElement("text",{x:8,y:y+19,class:"seed-f1-label"},uiText(item.label)),
+      svgElement("rect",{x:left,y,width:barWidth,height:28,rx:6,class:"seed-f1-track"}),
+      svgElement("rect",{x:left,y,width,height:28,rx:6,class:item.className}),
+      svgElement("text",{x:left+barWidth+12,y:y+19,class:"seed-f1-value"},score(item.mean)));
+  }
+  section.append(svg,node("p",pairs.length+" matched seed pairs. Both means use the same observations.","helper"));
+  return section;
 }
 // Sensitivity: keep exact conditions separate and match the same seeds at every level.
 function sensitivityFamilies(values){
@@ -924,6 +952,7 @@ function seedSummary(root,runs,allRuns){
       ["Intrusions predicted benign",r=>seedEvasion(r),true],
       ...labels.map(name=>[name+" · Recall",r=>testMetrics(r)?.per_class?.[name]?.support>0?testMetrics(r).per_class[name].recall:null,true])];
     paired.append(node("p",pairs.length+"/"+runs.length+" selected seeds have compatible clean baselines. Both means use exactly the same matched observations. Initial weights are not verified from imported summaries."),
+      seedFinalTestF1(pairs),
       dataTable(["Metric","Clean mean","Attack mean","Attack − clean","SD of paired delta","Matched seeds"],seedComparisonRows(pairs,descriptors)),
       seedCurve(pairs.map(p=>p.run),pairs.map(p=>p.clean)));
   }else paired.append(node("p",runs[0]?.config?.attack==="none"?"Clean cohort: no attacked reference is needed.":"No verified matching clean baseline. The attack averages above remain descriptive."));
@@ -938,26 +967,39 @@ function refreshSeedWorkspace(){
   renderSensitivityExplorer($("sensitivity-explorer"),availableResults);
   const {groups,excluded}=seedCohorts(availableResults);
   const select=$("seed-cohort-choice"),previous=select.value;
+  const query=$("seed-cohort-search")?.value.trim().toLocaleLowerCase()||"";
   select.replaceChildren();
   const empty=node("option","Choose a condition");empty.value="";select.append(empty);
-  for(const [key,runs] of groups){
-    const r=runs[0],c=r.config,n=seedBuckets(runs).length;
-    const detail=seedLabel(r)+" · "+n+" seeds · "+shortConditionLabel(key);
-    const option=node("option",detail);option.value=key;select.append(option);
-  }
-  const first=[...groups.entries()].sort((a,b)=>Number(a[1][0].config.attack==="none")-Number(b[1][0].config.attack==="none")||seedBuckets(b[1]).length-seedBuckets(a[1]).length)[0];
-  select.value=groups.has(previous)?previous:first?.[0]||"";
+  const candidates=[...groups.entries()].map(([key,runs])=>{
+    const selected=seedChosen(key,runs),matched=seedMatched(selected,availableResults)
+      .filter(pair=>numeric(testMetrics(pair.clean)?.macro_f1)&&numeric(testMetrics(pair.run)?.macro_f1));
+    const seeds=seedBuckets(runs).map(([seed])=>seed);
+    return {key,runs,n:seeds.length,matched:matched.length,isAttack:runs[0].config.attack!=="none",
+      label:seedLabel(runs[0])+" · "+seeds.length+" seeds · "+shortConditionLabel(key)+" · seeds "+seeds.join(", ")};
+  }).sort((a,b)=>(Number(b.matched>0)-Number(a.matched>0))||b.matched-a.matched
+    ||(Number(b.isAttack)-Number(a.isAttack))||b.n-a.n||a.label.localeCompare(b.label));
+  const visible=candidates.filter(item=>!query||item.label.toLocaleLowerCase().includes(query));
+  for(const item of visible){const option=node("option",item.label);option.value=item.key;select.append(option);}
   const overview=$("seed-cohort-overview");overview.replaceChildren();
-  for(const [key,runs] of groups){
-    const chosen=seedChosen(key,runs),pairs=seedMatched(chosen,availableResults);
-    const metric=r=>testMetrics(r)?.macro_f1;
-    const avg=seedStats(chosen.map(metric)),valid=pairs.filter(p=>numeric(metric(p.clean))&&numeric(metric(p.run)));
-    const clean=seedStats(valid.map(p=>metric(p.clean))),attack=seedStats(valid.map(p=>metric(p.run)));
-    const card=node("article",undefined,"seed-cohort-card"),button=node("button",seedLabel(runs[0])+" · "+shortConditionLabel(key),"text-button");button.type="button";
+  for(const item of candidates){
+    const {key,runs}=item,chosen=seedChosen(key,runs),pairs=seedMatched(chosen,availableResults);
+    const metric=run=>testMetrics(run)?.macro_f1,avg=seedStats(chosen.map(metric));
+    const valid=pairs.filter(pair=>numeric(metric(pair.clean))&&numeric(metric(pair.run)));
+    const clean=seedStats(valid.map(pair=>metric(pair.clean))),attack=seedStats(valid.map(pair=>metric(pair.run)));
+    const card=node("article",undefined,"seed-cohort-card");
+    const button=node("button",seedLabel(runs[0])+" · "+shortConditionLabel(key),"text-button");button.type="button";
     button.addEventListener("click",()=>{select.value=key;refreshSeedWorkspace();});
-    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),node("p",runs[0].config.attack==="none"?"Clean reference":valid.length?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean):"No matched clean evidence"));
+    card.append(button,node("p",chosen.length+"/"+seedBuckets(runs).length+" seeds included · Mean macro-F1 "+score(avg.mean)),
+      node("p",runs[0].config.attack==="none"?"Clean reference":valid.length
+        ?"Matched "+valid.length+" seeds: clean "+score(clean.mean)+" · attack "+score(attack.mean)+" · Δ "+deltaScore(attack.mean,clean.mean)
+        :"No matched clean evidence"));
     overview.append(card);
   }
+  const preferred=visible.find(item=>item.key===previous)||visible[0];
+  select.value=preferred?.key||"";
+  const summary=$("seed-analysis-summary");
+  summary.textContent=preferred?preferred.n+" seeds · "+preferred.matched+"/"+preferred.n+" matched to clean baseline"
+    :groups.size?uiText("No matching seed groups"):uiText("No compatible seed groups");
   $("seed-analysis-status").textContent=groups.size+" compatible conditions · "+excluded.length+" excluded runs. Conditions require identical audited shards, configuration and source/runtime identities.";
   const selection=$("seed-analysis-selection"),output=$("seed-analysis-output");
   selection.replaceChildren();output.replaceChildren();
@@ -1021,6 +1063,7 @@ function setupResultsWorkspace(){
   seedWorkspaceReady=true;
   $("seed-analysis-enabled")?.addEventListener("change",refreshSeedWorkspace);
   $("seed-cohort-choice")?.addEventListener("change",refreshSeedWorkspace);
+  $("seed-cohort-search")?.addEventListener("input",refreshSeedWorkspace);
   $("local-results-folder")?.addEventListener("change",()=>{const files=Array.from($("local-results-folder").files||[]);if(files.length){localResultFiles=files;refreshResults();}});
   $("local-results-reset")?.addEventListener("click",()=>{localResultFiles=null;localResultEvidence=null;$("local-results-folder").value="";refreshResults();});
   $("local-logits-analyze")?.addEventListener("click",analyzeLocalLogits);

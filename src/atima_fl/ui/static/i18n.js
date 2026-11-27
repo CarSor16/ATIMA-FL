@@ -1,5 +1,15 @@
 "use strict";
 const UI_TRANSLATIONS = {
+  "Multi-seed analysis": "Analisi multi-seed",
+  "Browse all compatible seed groups": "Sfoglia tutti i gruppi di seed compatibili",
+  "Open to select a compatible seed group and compare final test Macro-F1 means.": "Apri per selezionare un gruppo di seed compatibile e confrontare le medie di Macro-F1 sul test finale.",
+  "Search compatible seed groups": "Cerca gruppi di seed compatibili",
+  "Attack, model, task, partition, or seed count": "Attacco, modello, task, partizione o numero di seed",
+  "Final test Macro-F1 across matched seeds": "Macro-F1 del test finale sui seed abbinati",
+  "No matching seed groups": "Nessun gruppo di seed corrisponde alla ricerca",
+  "No compatible seed groups": "Nessun gruppo di seed compatibile",
+  "matched to clean baseline": "abbinati alla baseline clean",
+
   "Loading results…": "Caricamento risultati…",
   "Cluster configured": "Cluster configurato",
   "SSH settings present · import on demand": "SSH configurato · importazione su richiesta",
