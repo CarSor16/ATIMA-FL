@@ -1,6 +1,7 @@
 "use strict";
 const UI_TRANSLATIONS = {
   "Multi-seed analysis": "Analisi multi-seed",
+  "Browse all compatible seed groups": "Sfoglia tutti i gruppi di seed compatibili",
   "Open to select a compatible seed group and compare final test Macro-F1 means.": "Apri per selezionare un gruppo di seed compatibile e confrontare le medie di Macro-F1 sul test finale.",
   "Search compatible seed groups": "Cerca gruppi di seed compatibili",
   "Attack, model, task, partition, or seed count": "Attacco, modello, task, partizione o numero di seed",
